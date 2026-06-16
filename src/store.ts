@@ -4,20 +4,27 @@ import i18n from './i18n';
 
 export type Lang = 'sv' | 'en';
 
+/** The operator is a user (is_staff). `uid` is the FK recorded on every logged
+ *  action; `name` is for display. */
+export interface Operator {
+  uid: number;
+  name: string;
+}
+
 interface AppState {
-  /** Operator chosen at launch. Never persisted — must be re-selected each session. */
-  operatorName: string | null;
+  /** Chosen at launch. Never persisted — must be re-selected each session. */
+  operator: Operator | null;
   language: Lang;
-  setOperator: (name: string | null) => void;
+  setOperator: (op: Operator | null) => void;
   setLanguage: (lang: Lang) => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      operatorName: null,
+      operator: null,
       language: 'sv',
-      setOperator: (name) => set({ operatorName: name }),
+      setOperator: (op) => set({ operator: op }),
       setLanguage: (language) => {
         i18n.changeLanguage(language);
         set({ language });

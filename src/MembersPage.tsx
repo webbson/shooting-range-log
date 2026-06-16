@@ -24,6 +24,7 @@ import {
   setUserActive,
   type User,
 } from './api';
+import { errorMessage } from './errors';
 
 interface MemberForm {
   displayId: string;
@@ -71,7 +72,7 @@ export function MembersPage() {
       close();
       notifications.show({ message: t('saved') });
     },
-    onError: (e) => notifications.show({ color: 'red', message: String(e) }),
+    onError: (e) => notifications.show({ color: 'red', message: errorMessage(e, t) }),
   });
 
   const toggleActive = useMutation({
@@ -80,7 +81,7 @@ export function MembersPage() {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['operators'] });
     },
-    onError: (e) => notifications.show({ color: 'red', message: String(e) }),
+    onError: (e) => notifications.show({ color: 'red', message: errorMessage(e, t) }),
   });
 
   const openCreate = () => {

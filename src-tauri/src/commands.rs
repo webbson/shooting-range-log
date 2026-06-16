@@ -25,15 +25,13 @@ fn norm(s: Option<String>) -> Option<String> {
 fn require_name(name: String) -> Result<String, AppError> {
     let n = name.trim().to_string();
     if n.is_empty() {
-        return Err(AppError::Other("Name is required.".into()));
+        return Err(AppError::name_required());
     }
     Ok(n)
 }
 
 fn lock<'a>(db: &'a State<'_, Db>) -> Result<std::sync::MutexGuard<'a, Connection>, AppError> {
-    db.0
-        .lock()
-        .map_err(|_| AppError::Other("db lock poisoned".into()))
+    db.0.lock().map_err(|_| AppError::internal("db lock poisoned"))
 }
 
 /// A display_id may belong to at most one ACTIVE row per table, so a retired
@@ -52,9 +50,7 @@ fn ensure_display_id_free(
         .optional()?
         .is_some();
     if taken {
-        return Err(AppError::Other(format!(
-            "Display ID '{did}' is already in use by another active record."
-        )));
+        return Err(AppError::display_id_taken(did));
     }
     Ok(())
 }
@@ -75,9 +71,7 @@ fn ensure_serial_free(
         .optional()?
         .is_some();
     if taken {
-        return Err(AppError::Other(format!(
-            "Serial '{s}' is already registered to another weapon."
-        )));
+        return Err(AppError::serial_taken(s));
     }
     Ok(())
 }
@@ -108,7 +102,7 @@ fn user_get(conn: &Connection, uid: i64) -> Result<Option<User>, AppError> {
 }
 
 fn user_require(conn: &Connection, uid: i64) -> Result<User, AppError> {
-    user_get(conn, uid)?.ok_or_else(|| AppError::Other(format!("User {uid} not found.")))
+    user_get(conn, uid)?.ok_or_else(|| AppError::user_not_found(uid))
 }
 
 fn user_create(conn: &Connection, input: NewUser) -> Result<User, AppError> {
@@ -160,7 +154,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
         ],
     )?;
     if affected == 0 {
-        return Err(AppError::Other(format!("User {} not found.", input.uid)));
+        return Err(AppError::user_not_found(input.uid));
     }
     user_require(conn, input.uid)
 }
@@ -197,7 +191,7 @@ fn weapon_get(conn: &Connection, uid: i64) -> Result<Option<Weapon>, AppError> {
 }
 
 fn weapon_require(conn: &Connection, uid: i64) -> Result<Weapon, AppError> {
-    weapon_get(conn, uid)?.ok_or_else(|| AppError::Other(format!("Weapon {uid} not found.")))
+    weapon_get(conn, uid)?.ok_or_else(|| AppError::weapon_not_found(uid))
 }
 
 fn weapon_create(conn: &Connection, input: NewWeapon) -> Result<Weapon, AppError> {
@@ -242,7 +236,7 @@ fn weapon_update(conn: &Connection, input: UpdateWeapon) -> Result<Weapon, AppEr
         ],
     )?;
     if affected == 0 {
-        return Err(AppError::Other(format!("Weapon {} not found.", input.uid)));
+        return Err(AppError::weapon_not_found(input.uid));
     }
     weapon_require(conn, input.uid)
 }

@@ -125,8 +125,9 @@ pub fn init(app: &AppHandle) -> Result<Db, AppError> {
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| AppError::Other(format!("app_data_dir: {e}")))?;
-    std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(format!("create data dir: {e}")))?;
+        .map_err(|e| AppError::internal(format!("app_data_dir: {e}")))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| AppError::internal(format!("create data dir: {e}")))?;
 
     let path = dir.join("shooting-range-log.sqlite");
     let mut conn = Connection::open(path)?;

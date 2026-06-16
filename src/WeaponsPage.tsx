@@ -23,6 +23,7 @@ import {
   setWeaponActive,
   type Weapon,
 } from './api';
+import { errorMessage } from './errors';
 
 interface WeaponForm {
   displayId: string;
@@ -49,7 +50,7 @@ export function WeaponsPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['weapons'] });
   const onError = (e: unknown) =>
-    notifications.show({ color: 'red', message: String(e) });
+    notifications.show({ color: 'red', message: errorMessage(e, t) });
 
   const save = useMutation({
     mutationFn: (v: WeaponForm) =>
