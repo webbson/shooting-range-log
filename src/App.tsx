@@ -1,9 +1,12 @@
 import '@mantine/core/styles.css';
 // ‼️ notifications styles must be imported after core styles
 import '@mantine/notifications/styles.css';
+import '@mantine/dates/styles.css';
+import 'dayjs/locale/sv';
 
 import { ColorSchemeScript, MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
+import { DatesProvider } from '@mantine/dates';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
@@ -24,8 +27,9 @@ export default function App() {
       <ColorSchemeScript defaultColorScheme="light" />
       <MantineProvider theme={theme} defaultColorScheme="light">
         <Notifications position="top-right" />
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
+        <DatesProvider settings={{ locale: 'sv', firstDayOfWeek: 1 }}>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
             <Routes>
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Navigate to="/checkout" replace />} />
@@ -36,8 +40,9 @@ export default function App() {
                 <Route path="backup" element={<Placeholder titleKey="nav_backup" />} />
               </Route>
             </Routes>
-          </BrowserRouter>
-        </QueryClientProvider>
+            </BrowserRouter>
+          </QueryClientProvider>
+        </DatesProvider>
       </MantineProvider>
     </>
   );
