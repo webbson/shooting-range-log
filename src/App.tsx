@@ -11,6 +11,8 @@ import './i18n';
 import { theme } from './theme';
 import { AppLayout } from './AppLayout';
 import { Placeholder } from './pages';
+import { MembersPage } from './MembersPage';
+import { WeaponsPage } from './WeaponsPage';
 
 const queryClient = new QueryClient();
 
@@ -26,8 +28,8 @@ export default function App() {
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Navigate to="/checkout" replace />} />
                 <Route path="checkout" element={<Placeholder titleKey="nav_checkout" />} />
-                <Route path="members" element={<Placeholder titleKey="nav_members" />} />
-                <Route path="weapons" element={<Placeholder titleKey="nav_weapons" />} />
+                <Route path="members" element={<MembersPage />} />
+                <Route path="weapons" element={<WeaponsPage />} />
                 <Route path="logs" element={<Placeholder titleKey="nav_logs" />} />
                 <Route path="backup" element={<Placeholder titleKey="nav_backup" />} />
               </Route>
