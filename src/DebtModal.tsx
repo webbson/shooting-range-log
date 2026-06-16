@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { listUserDebts, addDebt, settleDebt } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
+import { fmtDate } from './format';
 
 export function DebtModal({
   userUid,
@@ -121,7 +122,7 @@ export function DebtModal({
                       {d.amountKr} kr {d.reason && `· ${d.reason}`}
                     </Text>
                     <Text size="xs" c="dimmed">
-                      {new Date(d.createdAt).toLocaleDateString()}
+                      {fmtDate(d.createdAt)}
                     </Text>
                   </Stack>
                   {d.settledAt ? (

@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { listWeapons, listUsers, listOperators, listCheckouts } from './api';
+import { fmtDateTime } from './format';
 
 export function LogsPage() {
   const { t } = useTranslation();
@@ -66,7 +67,7 @@ export function LogsPage() {
 
   const rows = (logs.data ?? []).map((c) => (
     <Table.Tr key={c.id}>
-      <Table.Td>{new Date(c.checkedOutAt).toLocaleString()}</Table.Td>
+      <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
       <Table.Td>
         {c.weaponDisplay} {c.weaponLabel && `· ${c.weaponLabel}`}
       </Table.Td>
@@ -77,7 +78,7 @@ export function LogsPage() {
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>
         {c.checkedInAt ? (
-          new Date(c.checkedInAt).toLocaleString()
+          fmtDateTime(c.checkedInAt)
         ) : (
           <Badge color="orange" variant="light">
             {t('status_out')}
