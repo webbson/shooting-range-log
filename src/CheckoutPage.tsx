@@ -13,7 +13,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   listUsers,
   listWeapons,
@@ -45,16 +45,28 @@ export function CheckoutPage() {
   });
   const ev = evalQ.data;
 
-  // Autopopulate the other side when one is picked (overridable):
-  // weapon → its most-recent user, member → their most-recent weapon.
-  useEffect(() => {
-    if (userUid == null && ev?.suggestedUserUid != null) setUserUid(ev.suggestedUserUid);
-  }, [ev?.suggestedUserUid, userUid]);
+  // Autopopulate happens once, on explicit selection (not reactively) — so a
+  // manual clear sticks instead of being re-filled. We skip autofill when the
+  // suggested counterpart is unavailable (busy member / weapon already out);
+  // the reactive eval below surfaces a warning banner for that case.
+  const onWeaponChange = async (v: string | null) => {
+    const wid = v ? Number(v) : null;
+    setWeaponUid(wid);
+    if (wid != null && userUid == null) {
+      const e = await evaluateCheckout(wid, null);
+      if (e.suggestedUserUid != null && !e.suggestedUserBusy) setUserUid(e.suggestedUserUid);
+    }
+  };
 
-  useEffect(() => {
-    if (weaponUid == null && ev?.suggestedWeaponUid != null)
-      setWeaponUid(ev.suggestedWeaponUid);
-  }, [ev?.suggestedWeaponUid, weaponUid]);
+  const onMemberChange = async (v: string | null) => {
+    const uid = v ? Number(v) : null;
+    setUserUid(uid);
+    if (uid != null && weaponUid == null) {
+      const e = await evaluateCheckout(null, uid);
+      if (e.suggestedWeaponUid != null && !e.suggestedWeaponOut)
+        setWeaponUid(e.suggestedWeaponUid);
+    }
+  };
 
   const reset = () => {
     setWeaponUid(null);
@@ -120,7 +132,7 @@ export function CheckoutPage() {
             placeholder={t('select_weapon_ph')}
             data={weaponData}
             value={weaponUid != null ? String(weaponUid) : null}
-            onChange={(v) => setWeaponUid(v ? Number(v) : null)}
+            onChange={onWeaponChange}
             searchable
             clearable
           />
@@ -129,7 +141,7 @@ export function CheckoutPage() {
             placeholder={t('select_member_ph')}
             data={userData}
             value={userUid != null ? String(userUid) : null}
-            onChange={(v) => setUserUid(v ? Number(v) : null)}
+            onChange={onMemberChange}
             searchable
             clearable
           />
@@ -159,6 +171,16 @@ export function CheckoutPage() {
           )}
           {ev?.fresherUserName && (
             <Alert color="orange">{t('banner_fresher', { name: ev.fresherUserName })}</Alert>
+          )}
+          {weaponUid != null && userUid == null && ev?.suggestedUserBusy && (
+            <Alert color="orange">
+              {t('banner_suggested_user_busy', { name: ev.suggestedUserName })}
+            </Alert>
+          )}
+          {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
+            <Alert color="orange">
+              {t('banner_suggested_weapon_out', { label: ev.suggestedWeaponLabel })}
+            </Alert>
           )}
 
           <TextInput
