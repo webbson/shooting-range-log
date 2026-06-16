@@ -30,7 +30,7 @@ export function AppLayout() {
   const { t } = useTranslation();
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
-  const operatorName = useAppStore((s) => s.operatorName);
+  const operator = useAppStore((s) => s.operator);
   const setOperator = useAppStore((s) => s.setOperator);
 
   const { toggleColorScheme } = useMantineColorScheme();
@@ -73,12 +73,12 @@ export function AppLayout() {
             </Text>
             <Tooltip label={t('change_operator')}>
               <Badge
-                color={operatorName ? 'blue' : 'gray'}
+                color={operator ? 'blue' : 'gray'}
                 variant="light"
                 style={{ cursor: 'pointer' }}
                 onClick={() => setOperator(null)}
               >
-                {operatorName ?? t('no_operator')}
+                {operator?.name ?? t('no_operator')}
               </Badge>
             </Tooltip>
           </Group>

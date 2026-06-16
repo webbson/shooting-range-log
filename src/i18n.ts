@@ -25,6 +25,7 @@ const resources = {
       pick_operator: 'Välj operatör',
       no_operators_hint:
         'Inga operatörer. Lägg till en medlem med personalbehörighet först.',
+      add_first_operator: 'Lägg till operatör',
       change_operator: 'Byt operatör',
 
       // Generic actions / status
@@ -65,6 +66,14 @@ const resources = {
       field_model: 'Modell',
       field_serial: 'Serienummer',
       name_required: 'Namn krävs.',
+
+      // Error codes from Rust
+      err_display_id_taken: "ID '{{displayId}}' används redan av en annan aktiv post.",
+      err_serial_taken:
+        "Serienummer '{{serial}}' är redan registrerat på ett annat vapen.",
+      err_name_required: 'Namn krävs.',
+      err_user_not_found: 'Medlem {{uid}} hittades inte.',
+      err_weapon_not_found: 'Vapen {{uid}} hittades inte.',
     },
   },
   en: {
@@ -87,6 +96,7 @@ const resources = {
       // Operator picker
       pick_operator: 'Select operator',
       no_operators_hint: 'No operators. Add a member with staff access first.',
+      add_first_operator: 'Add operator',
       change_operator: 'Change operator',
 
       // Generic actions / status
@@ -127,6 +137,14 @@ const resources = {
       field_model: 'Model',
       field_serial: 'Serial number',
       name_required: 'Name is required.',
+
+      // Error codes from Rust
+      err_display_id_taken:
+        "Display ID '{{displayId}}' is already in use by another active record.",
+      err_serial_taken: "Serial '{{serial}}' is already registered to another weapon.",
+      err_name_required: 'Name is required.',
+      err_user_not_found: 'Member {{uid}} not found.',
+      err_weapon_not_found: 'Weapon {{uid}} not found.',
     },
   },
 };

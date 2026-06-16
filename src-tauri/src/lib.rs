@@ -13,7 +13,7 @@ fn db_health(db: tauri::State<db::Db>) -> Result<String, AppError> {
     let conn = db
         .0
         .lock()
-        .map_err(|_| AppError::Other("db lock poisoned".into()))?;
+        .map_err(|_| AppError::internal("db lock poisoned"))?;
     let user_version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     Ok(format!("DB OK — schema v{user_version}"))
 }
