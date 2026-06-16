@@ -9,7 +9,8 @@ English). Developed on macOS, shipped to Windows.
   physical tag) is separate from the hidden internal key. An ID is **required while active**,
   auto-fillable to the next free number, and can be **freed on deactivation** so it's reusable
   on another weapon/member. Weapons also track serial + caliber. Identity in logs/lists is
-  resolved **live** (shown `name (id)`, or `name (disabled)` once retired) — never snapshotted.
+  resolved **live** (shown `name [id]`, or `name [disabled]` once retired) — never snapshotted.
+  Member/weapon lists show **active only** by default, with a text search and a *show inactive* toggle.
 - **Checkout / checkin** — enter a weapon or a member; the other side autopopulates
   (overridable). Loud, colour-coded banners warn about: outstanding **debt**, **inactive**
   weapon/member, a weapon that's **already checked out** (with the holder), and a

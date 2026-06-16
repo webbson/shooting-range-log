@@ -64,6 +64,10 @@ export function MembersPage() {
   const [deactivating, setDeactivating] = useState<User | null>(null);
   const [clearId, setClearId] = useState(false);
 
+  // List view: active-only by default, with a search box + show-inactive toggle.
+  const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
@@ -173,7 +177,16 @@ export function MembersPage() {
     close();
   };
 
-  const rows = (users.data ?? []).map((u) => (
+  const q = search.trim().toLowerCase();
+  const filtered = (users.data ?? []).filter((u) => {
+    if (!showInactive && !u.active) return false;
+    if (!q) return true;
+    return [u.displayId, u.name, u.email, u.phone].some((f) =>
+      f?.toLowerCase().includes(q),
+    );
+  });
+
+  const rows = filtered.map((u) => (
     <Table.Tr key={u.uid} opacity={u.active ? 1 : 0.5}>
       <Table.Td>{u.displayId}</Table.Td>
       <Table.Td>
@@ -216,21 +229,40 @@ export function MembersPage() {
       {(users.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_members')}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={700}>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('field_display_id')}</Table.Th>
-                <Table.Th>{t('field_name')}</Table.Th>
-                <Table.Th>{t('field_phone')}</Table.Th>
-                <Table.Th />
-                <Table.Th>{t('status')}</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>{rows}</Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <>
+          <Group>
+            <TextInput
+              placeholder={t('search')}
+              value={search}
+              onChange={(e) => setSearch(e.currentTarget.value)}
+              style={{ flex: 1 }}
+            />
+            <Switch
+              label={t('show_inactive')}
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.currentTarget.checked)}
+            />
+          </Group>
+          {filtered.length === 0 ? (
+            <Text c="dimmed">{t('no_results')}</Text>
+          ) : (
+            <Table.ScrollContainer minWidth={700}>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{t('field_display_id')}</Table.Th>
+                    <Table.Th>{t('field_name')}</Table.Th>
+                    <Table.Th>{t('field_phone')}</Table.Th>
+                    <Table.Th />
+                    <Table.Th>{t('status')}</Table.Th>
+                    <Table.Th />
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>{rows}</Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </>
       )}
 
       {/* Create / edit */}

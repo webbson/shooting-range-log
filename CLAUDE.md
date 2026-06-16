@@ -34,7 +34,8 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   `set_active(false)`) and tags are reusable, log read views resolve identity **live by uid**
   via JOIN — history reflects each entity's *current* name/status, not a point-in-time value
   (a snapshotted tag would mis-attribute after reassignment). Display composes
-  `name (id)` when active, `name (disabled)` when not (`src/labels.ts`). Log rows store
+  `name [id]` when active, `name [disabled]` when not (`src/labels.ts`); weapons compose
+  `brand model [id]` where `[id]` is the **display_id (tag)**, not the serial. Log rows store
   **only uids** — there are no `*_snapshot` columns (removed during dev; schema squashed to a
   single migration 0001). Never reintroduce snapshots. Log tables (checkouts,
   weapon_service_log, debts) stay **append-only** — corrections/returns/settles are new rows

@@ -40,6 +40,8 @@ const resources = {
       inactive: 'Inaktiv',
       label_disabled: 'inaktiverad',
       status: 'Status',
+      search: 'Sök',
+      show_inactive: 'Visa inaktiva',
 
       // Members
       new_member: 'Ny medlem',
@@ -180,6 +182,8 @@ const resources = {
       inactive: 'Inactive',
       label_disabled: 'disabled',
       status: 'Status',
+      search: 'Search',
+      show_inactive: 'Show inactive',
 
       // Members
       new_member: 'New member',

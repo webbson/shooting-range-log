@@ -44,13 +44,20 @@ export function LogsPage() {
       }),
   });
 
+  // Filters span retired entities too, so render the raw tag (not the active-aware
+  // helper) — an inactive row must keep its id, not collapse to "[disabled]".
   const weaponData = (weapons.data ?? []).map((w) => ({
     value: String(w.uid),
-    label: [w.displayId, [w.brand, w.model].filter(Boolean).join(' ')].filter(Boolean).join(' · '),
+    label: [
+      [w.brand, w.model].filter(Boolean).join(' '),
+      w.displayId ? `[${w.displayId}]` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
   }));
   const userData = (users.data ?? []).map((u) => ({
     value: String(u.uid),
-    label: [u.displayId, u.name].filter(Boolean).join(' · '),
+    label: [u.name, u.displayId ? `[${u.displayId}]` : ''].filter(Boolean).join(' '),
   }));
   const operatorData = (operators.data ?? []).map((o) => ({
     value: String(o.uid),
@@ -70,7 +77,7 @@ export function LogsPage() {
     <Table.Tr key={c.id}>
       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
       <Table.Td>
-        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponSerial, c.weaponActive, t)}
+        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponDisplayId, c.weaponActive, t)}
       </Table.Td>
       <Table.Td>{userLabel(c.userName, c.userDisplayId, c.userActive, t)}</Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
