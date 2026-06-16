@@ -288,7 +288,7 @@ fn evaluate(
     Ok(eval)
 }
 
-fn do_checkout(
+pub(crate) fn do_checkout(
     conn: &Connection,
     weapon_uid: i64,
     user_uid: i64,
@@ -329,7 +329,11 @@ fn do_checkout(
         .ok_or_else(|| AppError::internal("inserted checkout not found"))
 }
 
-fn do_checkin(conn: &Connection, checkout_id: i64, operator_uid: i64) -> Result<Checkout, AppError> {
+pub(crate) fn do_checkin(
+    conn: &Connection,
+    checkout_id: i64,
+    operator_uid: i64,
+) -> Result<Checkout, AppError> {
     let row =
         checkout_get(conn, checkout_id)?.ok_or_else(|| AppError::checkout_not_found(checkout_id))?;
     if row.checked_in_at.is_some() {

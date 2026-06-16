@@ -178,3 +178,39 @@ export const settleDebt = (debtId: number, operatorUid: number) =>
   invoke<Debt>('settle_debt', { debtId, operatorUid });
 
 export const outstandingDebts = () => invoke<OutstandingDebt[]>('outstanding_debts');
+
+// ---- Logs ----
+
+export interface CheckoutLog {
+  id: number;
+  weaponUid: number;
+  userUid: number;
+  weaponDisplay: string | null;
+  weaponLabel: string | null;
+  userDisplay: string | null;
+  userName: string | null;
+  checkedOutAt: string;
+  checkedInAt: string | null;
+  operatorOutName: string | null;
+  operatorInName: string | null;
+  notes: string | null;
+}
+
+export interface CheckoutFilters {
+  weaponUid?: number | null;
+  userUid?: number | null;
+  operatorUid?: number | null;
+  from?: string | null;
+  to?: string | null;
+  onlyOpen?: boolean;
+}
+
+export const listCheckouts = (f: CheckoutFilters) =>
+  invoke<CheckoutLog[]>('list_checkouts', {
+    weaponUid: f.weaponUid ?? null,
+    userUid: f.userUid ?? null,
+    operatorUid: f.operatorUid ?? null,
+    from: f.from ?? null,
+    to: f.to ?? null,
+    onlyOpen: f.onlyOpen ?? false,
+  });

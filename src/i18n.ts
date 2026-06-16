@@ -119,6 +119,17 @@ const resources = {
       settled: 'Reglerad',
       settle: 'Reglera',
       checkout_debt: 'Lägg till skuld vid utlämning (kr)',
+
+      // Logs (M4)
+      label_from: 'Från',
+      label_to: 'Till',
+      only_open: 'Endast utlånade',
+      clear_filters: 'Rensa filter',
+      no_results: 'Inga resultat.',
+      status_out: 'Ute',
+      label_checked_in_at: 'Återlämnat',
+      operator_out: 'Operatör (ut)',
+      operator_in: 'Operatör (in)',
     },
   },
   en: {
@@ -235,6 +246,17 @@ const resources = {
       settled: 'Settled',
       settle: 'Settle',
       checkout_debt: 'Add debt at checkout (kr)',
+
+      // Logs (M4)
+      label_from: 'From',
+      label_to: 'To',
+      only_open: 'Only checked out',
+      clear_filters: 'Clear filters',
+      no_results: 'No results.',
+      status_out: 'Out',
+      label_checked_in_at: 'Returned',
+      operator_out: 'Operator (out)',
+      operator_in: 'Operator (in)',
     },
   },
 };
