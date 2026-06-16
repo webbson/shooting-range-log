@@ -3,13 +3,13 @@ import {
   Group,
   Title,
   Select,
-  TextInput,
   Switch,
   Button,
   Table,
   Badge,
   Text,
 } from '@mantine/core';
+import { DateInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -122,17 +122,21 @@ export function LogsPage() {
           clearable
           w={180}
         />
-        <TextInput
+        <DateInput
           label={t('label_from')}
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.currentTarget.value)}
+          valueFormat="YYYY-MM-DD"
+          value={from || null}
+          onChange={(v) => setFrom(v ?? '')}
+          clearable
+          w={150}
         />
-        <TextInput
+        <DateInput
           label={t('label_to')}
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.currentTarget.value)}
+          valueFormat="YYYY-MM-DD"
+          value={to || null}
+          onChange={(v) => setTo(v ?? '')}
+          clearable
+          w={150}
         />
         <Switch
           label={t('only_open')}
