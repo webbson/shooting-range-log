@@ -29,6 +29,14 @@ pub fn run() {
         .setup(|app| {
             let db = db::init(app.handle())?;
             app.manage(db);
+            // Production kiosk: maximize and grab focus once at startup. In dev the
+            // window stays small and unfocused (config `focus: false`) so the
+            // rebuild-driven relaunch on each Rust change doesn't steal focus.
+            #[cfg(not(debug_assertions))]
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.maximize();
+                let _ = win.set_focus();
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
