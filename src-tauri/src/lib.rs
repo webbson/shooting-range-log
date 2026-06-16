@@ -1,6 +1,7 @@
 mod checkout;
 mod commands;
 mod db;
+mod debt;
 mod error;
 mod models;
 
@@ -45,6 +46,10 @@ pub fn run() {
             checkout::checkout,
             checkout::checkin,
             checkout::list_open_checkouts,
+            debt::add_debt,
+            debt::list_user_debts,
+            debt::settle_debt,
+            debt::outstanding_debts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

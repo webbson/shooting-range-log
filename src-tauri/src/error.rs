@@ -102,6 +102,30 @@ impl AppError {
             json!({}),
         )
     }
+
+    pub fn debt_amount_invalid() -> Self {
+        AppError::new(
+            "err_debt_amount_invalid",
+            "Debt amount must be greater than zero.",
+            json!({}),
+        )
+    }
+
+    pub fn debt_not_found(id: i64) -> Self {
+        AppError::new(
+            "err_debt_not_found",
+            format!("Debt {id} not found."),
+            json!({ "id": id }),
+        )
+    }
+
+    pub fn debt_already_settled() -> Self {
+        AppError::new(
+            "err_debt_already_settled",
+            "Debt is already settled.",
+            json!({}),
+        )
+    }
 }
 
 impl From<rusqlite::Error> for AppError {
