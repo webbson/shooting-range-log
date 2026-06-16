@@ -80,3 +80,61 @@ export const createWeapon = (input: NewWeapon) => invoke<Weapon>('create_weapon'
 export const updateWeapon = (input: UpdateWeapon) => invoke<Weapon>('update_weapon', { input });
 export const setWeaponActive = (uid: number, active: boolean, inactiveReason?: string) =>
   invoke<Weapon>('set_weapon_active', { uid, active, inactiveReason });
+
+// ---- Checkout / checkin ----
+
+export interface CheckoutEval {
+  suggestedUserUid: number | null;
+  suggestedUserName: string | null;
+  weaponInactive: boolean;
+  weaponInactiveReason: string | null;
+  weaponAlreadyOut: boolean;
+  openHolderName: string | null;
+  openCheckoutId: number | null;
+  userInactive: boolean;
+  userOutstandingDebtKr: number;
+  fresherUserName: string | null;
+  fresherUserAt: string | null;
+  canCheckout: boolean;
+}
+
+export interface Checkout {
+  id: number;
+  weaponUid: number;
+  userUid: number;
+  weaponDisplaySnapshot: string | null;
+  weaponLabelSnapshot: string | null;
+  userDisplaySnapshot: string | null;
+  userNameSnapshot: string | null;
+  operatorOutUid: number;
+  checkedOutAt: string;
+  operatorInUid: number | null;
+  checkedInAt: string | null;
+  notes: string | null;
+}
+
+export interface OpenCheckout {
+  id: number;
+  weaponUid: number;
+  userUid: number;
+  weaponDisplay: string | null;
+  weaponLabel: string | null;
+  userDisplay: string | null;
+  userName: string | null;
+  checkedOutAt: string;
+}
+
+export const evaluateCheckout = (weaponUid: number | null, userUid: number | null) =>
+  invoke<CheckoutEval>('evaluate_checkout', { weaponUid, userUid });
+
+export const doCheckout = (
+  weaponUid: number,
+  userUid: number,
+  operatorUid: number,
+  notes?: string,
+) => invoke<Checkout>('checkout', { weaponUid, userUid, operatorUid, notes });
+
+export const doCheckin = (checkoutId: number, operatorUid: number) =>
+  invoke<Checkout>('checkin', { checkoutId, operatorUid });
+
+export const listOpenCheckouts = () => invoke<OpenCheckout[]>('list_open_checkouts');

@@ -1,3 +1,4 @@
+mod checkout;
 mod commands;
 mod db;
 mod error;
@@ -40,6 +41,10 @@ pub fn run() {
             commands::create_weapon,
             commands::update_weapon,
             commands::set_weapon_active,
+            checkout::evaluate_checkout,
+            checkout::checkout,
+            checkout::checkin,
+            checkout::list_open_checkouts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

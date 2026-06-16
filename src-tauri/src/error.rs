@@ -70,6 +70,38 @@ impl AppError {
             json!({ "uid": uid }),
         )
     }
+
+    pub fn weapon_inactive() -> Self {
+        AppError::new("err_weapon_inactive", "Weapon is inactive.", json!({}))
+    }
+
+    pub fn user_inactive() -> Self {
+        AppError::new("err_user_inactive", "Member is inactive.", json!({}))
+    }
+
+    pub fn weapon_already_out() -> Self {
+        AppError::new(
+            "err_weapon_already_out",
+            "Weapon is already checked out.",
+            json!({}),
+        )
+    }
+
+    pub fn checkout_not_found(id: i64) -> Self {
+        AppError::new(
+            "err_checkout_not_found",
+            format!("Checkout {id} not found."),
+            json!({ "id": id }),
+        )
+    }
+
+    pub fn already_checked_in() -> Self {
+        AppError::new(
+            "err_already_checked_in",
+            "Weapon is already checked in.",
+            json!({}),
+        )
+    }
 }
 
 impl From<rusqlite::Error> for AppError {
