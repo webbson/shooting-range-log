@@ -214,3 +214,27 @@ export const listCheckouts = (f: CheckoutFilters) =>
     to: f.to ?? null,
     onlyOpen: f.onlyOpen ?? false,
   });
+
+// ---- Weapon service log ----
+
+export interface ServiceLog {
+  id: number;
+  weaponUid: number;
+  weaponDisplaySnapshot: string | null;
+  operatorUid: number;
+  operatorName: string | null;
+  servicedAt: string;
+  description: string;
+  notes: string | null;
+}
+
+export const addService = (
+  weaponUid: number,
+  operatorUid: number,
+  description: string,
+  notes?: string,
+  servicedAt?: string,
+) => invoke<ServiceLog>('add_service', { weaponUid, operatorUid, description, notes, servicedAt });
+
+export const listWeaponService = (weaponUid: number) =>
+  invoke<ServiceLog[]>('list_weapon_service', { weaponUid });

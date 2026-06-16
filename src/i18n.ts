@@ -130,6 +130,15 @@ const resources = {
       label_checked_in_at: 'Återlämnat',
       operator_out: 'Operatör (ut)',
       operator_in: 'Operatör (in)',
+
+      // Service log (M5)
+      err_service_description_required: 'Servicebeskrivning krävs.',
+      service: 'Service',
+      service_for: 'Service för',
+      add_service_entry: 'Lägg till service',
+      field_description: 'Beskrivning',
+      field_serviced_at: 'Servicedatum',
+      no_service: 'Ingen servicehistorik.',
     },
   },
   en: {
@@ -257,6 +266,15 @@ const resources = {
       label_checked_in_at: 'Returned',
       operator_out: 'Operator (out)',
       operator_in: 'Operator (in)',
+
+      // Service log (M5)
+      err_service_description_required: 'Service description is required.',
+      service: 'Service',
+      service_for: 'Service for',
+      add_service_entry: 'Add service entry',
+      field_description: 'Description',
+      field_serviced_at: 'Service date',
+      no_service: 'No service history.',
     },
   },
 };
