@@ -26,6 +26,7 @@ import {
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
+import { fmtDateTime } from './format';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -246,7 +247,7 @@ export function CheckoutPage() {
                     </Text>
                     <Text size="sm">{o.userName}</Text>
                     <Text size="xs" c="dimmed">
-                      {t('label_checked_out_at')}: {new Date(o.checkedOutAt).toLocaleString()}
+                      {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
                     </Text>
                   </Stack>
                   <Button
