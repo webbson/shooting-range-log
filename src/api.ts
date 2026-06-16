@@ -86,8 +86,10 @@ export const setWeaponActive = (uid: number, active: boolean, inactiveReason?: s
 export interface CheckoutEval {
   suggestedUserUid: number | null;
   suggestedUserName: string | null;
+  suggestedUserBusy: boolean;
   suggestedWeaponUid: number | null;
   suggestedWeaponLabel: string | null;
+  suggestedWeaponOut: boolean;
   weaponInactive: boolean;
   weaponInactiveReason: string | null;
   weaponAlreadyOut: boolean;
