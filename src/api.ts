@@ -142,3 +142,39 @@ export const doCheckin = (checkoutId: number, operatorUid: number) =>
   invoke<Checkout>('checkin', { checkoutId, operatorUid });
 
 export const listOpenCheckouts = () => invoke<OpenCheckout[]>('list_open_checkouts');
+
+// ---- Debt ----
+
+export interface Debt {
+  id: number;
+  userUid: number;
+  userNameSnapshot: string | null;
+  operatorUid: number;
+  amountKr: number;
+  reason: string | null;
+  createdAt: string;
+  settledAt: string | null;
+  settledOperatorUid: number | null;
+  checkoutId: number | null;
+}
+
+export interface OutstandingDebt {
+  userUid: number;
+  amountKr: number;
+}
+
+export const addDebt = (
+  userUid: number,
+  operatorUid: number,
+  amountKr: number,
+  reason?: string,
+  checkoutId?: number,
+) => invoke<Debt>('add_debt', { userUid, operatorUid, amountKr, reason, checkoutId });
+
+export const listUserDebts = (userUid: number) =>
+  invoke<Debt[]>('list_user_debts', { userUid });
+
+export const settleDebt = (debtId: number, operatorUid: number) =>
+  invoke<Debt>('settle_debt', { debtId, operatorUid });
+
+export const outstandingDebts = () => invoke<OutstandingDebt[]>('outstanding_debts');

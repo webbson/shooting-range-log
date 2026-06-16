@@ -7,6 +7,7 @@ import {
   Text,
   Select,
   TextInput,
+  NumberInput,
   Button,
   Alert,
 } from '@mantine/core';
@@ -21,6 +22,7 @@ import {
   evaluateCheckout,
   doCheckout,
   doCheckin,
+  addDebt,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -33,6 +35,8 @@ export function CheckoutPage() {
   const [weaponUid, setWeaponUid] = useState<number | null>(null);
   const [userUid, setUserUid] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
+  const [debtAmount, setDebtAmount] = useState<number | string>('');
+  const [debtReason, setDebtReason] = useState('');
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -72,18 +76,28 @@ export function CheckoutPage() {
     setWeaponUid(null);
     setUserUid(null);
     setNotes('');
+    setDebtAmount('');
+    setDebtReason('');
   };
 
   const onError = (e: unknown) =>
     notifications.show({ color: 'red', message: errorMessage(e, t) });
 
   const checkoutMut = useMutation({
-    mutationFn: () => doCheckout(weaponUid!, userUid!, operator!.uid, notes || undefined),
+    mutationFn: async () => {
+      const c = await doCheckout(weaponUid!, userUid!, operator!.uid, notes || undefined);
+      // Optionally record a debt incurred at this checkout.
+      if (debtAmount && Number(debtAmount) > 0) {
+        await addDebt(userUid!, operator!.uid, Number(debtAmount), debtReason || undefined, c.id);
+      }
+      return c;
+    },
     onSuccess: () => {
       notifications.show({ message: t('checked_out_ok') });
       reset();
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
+      qc.invalidateQueries({ queryKey: ['outstandingDebts'] });
     },
     onError,
   });
@@ -188,6 +202,22 @@ export function CheckoutPage() {
             value={notes}
             onChange={(e) => setNotes(e.currentTarget.value)}
           />
+
+          <Group align="flex-end" grow>
+            <NumberInput
+              label={t('checkout_debt')}
+              value={debtAmount}
+              onChange={setDebtAmount}
+              min={0}
+              allowDecimal={false}
+              suffix=" kr"
+            />
+            <TextInput
+              label={t('field_reason')}
+              value={debtReason}
+              onChange={(e) => setDebtReason(e.currentTarget.value)}
+            />
+          </Group>
 
           <Button
             size="lg"

@@ -22,9 +22,11 @@ import {
   createUser,
   updateUser,
   setUserActive,
+  outstandingDebts,
   type User,
 } from './api';
 import { errorMessage } from './errors';
+import { DebtModal } from './DebtModal';
 
 interface MemberForm {
   displayId: string;
@@ -55,8 +57,11 @@ export function MembersPage() {
   const qc = useQueryClient();
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
+  const [debtUser, setDebtUser] = useState<User | null>(null);
 
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
+  const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
+  const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
 
   const form = useForm<MemberForm>({
     initialValues: EMPTY,
@@ -110,7 +115,16 @@ export function MembersPage() {
   const rows = (users.data ?? []).map((u) => (
     <Table.Tr key={u.uid} opacity={u.active ? 1 : 0.5}>
       <Table.Td>{u.displayId}</Table.Td>
-      <Table.Td>{u.name}</Table.Td>
+      <Table.Td>
+        <Group gap="xs" wrap="nowrap">
+          {u.name}
+          {debtMap.has(u.uid) && (
+            <Badge color="red" variant="filled">
+              {t('debt_badge', { amount: debtMap.get(u.uid) })}
+            </Badge>
+          )}
+        </Group>
+      </Table.Td>
       <Table.Td>{u.memberNumber}</Table.Td>
       <Table.Td>{u.phone}</Table.Td>
       <Table.Td>{u.isStaff && <Badge color="grape">{t('staff')}</Badge>}</Table.Td>
@@ -121,6 +135,9 @@ export function MembersPage() {
       </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="flex-end" wrap="nowrap">
+          <Button size="xs" variant="subtle" color="red" onClick={() => setDebtUser(u)}>
+            {t('debt')}
+          </Button>
           <Button size="xs" variant="default" onClick={() => openEdit(u)}>
             {t('edit')}
           </Button>
@@ -215,6 +232,13 @@ export function MembersPage() {
           </Stack>
         </form>
       </Modal>
+
+      <DebtModal
+        userUid={debtUser?.uid ?? null}
+        userName={debtUser?.name ?? ''}
+        opened={debtUser != null}
+        onClose={() => setDebtUser(null)}
+      />
     </Stack>
   );
 }
