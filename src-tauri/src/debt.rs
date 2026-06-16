@@ -11,7 +11,7 @@ use crate::commands::user_get;
 use crate::db::Db;
 use crate::error::AppError;
 
-pub const DEBT_COLS: &str = "id, user_uid, user_name_snapshot, operator_uid, amount_kr, reason, created_at, settled_at, settled_operator_uid, checkout_id";
+pub const DEBT_COLS: &str = "id, user_uid, operator_uid, amount_kr, reason, created_at, settled_at, settled_operator_uid, checkout_id";
 
 fn now_utc() -> String {
     chrono::Utc::now().to_rfc3339()
@@ -30,7 +30,6 @@ fn lock<'a>(db: &'a State<'_, Db>) -> Result<std::sync::MutexGuard<'a, Connectio
 pub struct Debt {
     pub id: i64,
     pub user_uid: i64,
-    pub user_name_snapshot: Option<String>,
     pub operator_uid: i64,
     pub amount_kr: i64,
     pub reason: Option<String>,
@@ -45,7 +44,6 @@ impl Debt {
         Ok(Debt {
             id: row.get("id")?,
             user_uid: row.get("user_uid")?,
-            user_name_snapshot: row.get("user_name_snapshot")?,
             operator_uid: row.get("operator_uid")?,
             amount_kr: row.get("amount_kr")?,
             reason: row.get("reason")?,
@@ -86,14 +84,13 @@ fn add(
     if amount_kr <= 0 {
         return Err(AppError::debt_amount_invalid());
     }
-    let user = user_get(conn, user_uid)?.ok_or_else(|| AppError::user_not_found(user_uid))?;
+    user_get(conn, user_uid)?.ok_or_else(|| AppError::user_not_found(user_uid))?;
     conn.execute(
         "INSERT INTO debts
-           (user_uid, user_name_snapshot, operator_uid, amount_kr, reason, created_at, checkout_id)
-         VALUES (?1,?2,?3,?4,?5,?6,?7)",
+           (user_uid, operator_uid, amount_kr, reason, created_at, checkout_id)
+         VALUES (?1,?2,?3,?4,?5,?6)",
         params![
             user_uid,
-            user.name,
             operator_uid,
             amount_kr,
             norm(reason),
@@ -185,8 +182,7 @@ mod tests {
         user_create(
             conn,
             NewUser {
-                display_id: None,
-                member_number: None,
+                display_id: Some(name.into()),
                 name: name.into(),
                 email: None,
                 phone: None,
@@ -201,14 +197,13 @@ mod tests {
     }
 
     #[test]
-    fn add_lists_and_snapshots_name() {
+    fn add_lists_debt() {
         let conn = migrated_in_memory();
         let op = mk_user(&conn, "Op");
         let anna = mk_user(&conn, "Anna");
 
         let d = add(&conn, anna, op, 150, Some("range fee".into()), None).unwrap();
         assert_eq!(d.amount_kr, 150);
-        assert_eq!(d.user_name_snapshot.as_deref(), Some("Anna"));
         assert!(d.settled_at.is_none());
 
         let list = list_for_user(&conn, anna).unwrap();

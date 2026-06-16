@@ -4,6 +4,8 @@
 //! unit-testable without a Tauri runtime; thin `#[tauri::command]` wrappers lock
 //! the shared connection and delegate.
 
+use std::collections::HashSet;
+
 use rusqlite::{params, Connection, OptionalExtension};
 use tauri::State;
 
@@ -108,15 +110,18 @@ fn user_require(conn: &Connection, uid: i64) -> Result<User, AppError> {
 pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, AppError> {
     let display_id = norm(input.display_id);
     let name = require_name(input.name)?;
+    // New members are active; an active member must carry a tag.
+    if display_id.is_none() {
+        return Err(AppError::display_id_required());
+    }
     ensure_display_id_free(conn, "users", &display_id, None)?;
     let now = now_utc();
     conn.execute(
         "INSERT INTO users
-           (display_id, member_number, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,1,?9,?10,?10)",
+           (display_id, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,1,?8,?9,?9)",
         params![
             display_id,
-            norm(input.member_number),
             name,
             norm(input.email),
             norm(input.phone),
@@ -131,18 +136,22 @@ pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, App
 }
 
 fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
+    let current = user_require(conn, input.uid)?;
     let display_id = norm(input.display_id);
     let name = require_name(input.name)?;
+    // An active member must keep a tag; inactive members may have it cleared.
+    if current.active && display_id.is_none() {
+        return Err(AppError::display_id_required());
+    }
     ensure_display_id_free(conn, "users", &display_id, Some(input.uid))?;
-    let affected = conn.execute(
+    conn.execute(
         "UPDATE users SET
-           display_id = ?2, member_number = ?3, name = ?4, email = ?5, phone = ?6,
-           address = ?7, ssn = ?8, is_staff = ?9, notes = ?10, updated_at = ?11
+           display_id = ?2, name = ?3, email = ?4, phone = ?5,
+           address = ?6, ssn = ?7, is_staff = ?8, notes = ?9, updated_at = ?10
          WHERE uid = ?1",
         params![
             input.uid,
             display_id,
-            norm(input.member_number),
             name,
             norm(input.email),
             norm(input.phone),
@@ -153,22 +162,38 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
             now_utc(),
         ],
     )?;
-    if affected == 0 {
-        return Err(AppError::user_not_found(input.uid));
-    }
     user_require(conn, input.uid)
 }
 
-pub(crate) fn user_set_active(conn: &Connection, uid: i64, active: bool) -> Result<User, AppError> {
+pub(crate) fn user_set_active(
+    conn: &Connection,
+    uid: i64,
+    active: bool,
+    clear_display_id: bool,
+) -> Result<User, AppError> {
     let current = user_require(conn, uid)?;
     if active {
-        // Reactivating: the tag must still be free among other active users.
+        // Reactivating: an active member must carry a tag, still free.
+        if current.display_id.is_none() {
+            return Err(AppError::display_id_required());
+        }
         ensure_display_id_free(conn, "users", &current.display_id, Some(uid))?;
+        conn.execute(
+            "UPDATE users SET active = 1, updated_at = ?2 WHERE uid = ?1",
+            params![uid, now_utc()],
+        )?;
+    } else if clear_display_id {
+        // Free the physical tag so it can be reassigned to another member.
+        conn.execute(
+            "UPDATE users SET active = 0, display_id = NULL, updated_at = ?2 WHERE uid = ?1",
+            params![uid, now_utc()],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE users SET active = 0, updated_at = ?2 WHERE uid = ?1",
+            params![uid, now_utc()],
+        )?;
     }
-    conn.execute(
-        "UPDATE users SET active = ?2, updated_at = ?3 WHERE uid = ?1",
-        params![uid, active, now_utc()],
-    )?;
     user_require(conn, uid)
 }
 
@@ -181,6 +206,32 @@ fn weapons_list(conn: &Connection) -> Result<Vec<Weapon>, AppError> {
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([], Weapon::from_row)?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Smallest positive integer not held as a tag in `table` — by an active row, or
+/// an inactive row that has not been cleared (a retained tag is still physically
+/// in use). Non-numeric tags are ignored. `table` is an internal constant.
+fn next_free_display_id(conn: &Connection, table: &str) -> Result<String, AppError> {
+    let sql = format!("SELECT display_id FROM {table} WHERE display_id IS NOT NULL");
+    let mut stmt = conn.prepare(&sql)?;
+    let taken: HashSet<i64> = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .filter_map(|s| s.trim().parse::<i64>().ok())
+        .collect();
+    let mut n = 1i64;
+    while taken.contains(&n) {
+        n += 1;
+    }
+    Ok(n.to_string())
+}
+
+pub(crate) fn next_free_weapon_display_id(conn: &Connection) -> Result<String, AppError> {
+    next_free_display_id(conn, "weapons")
+}
+
+pub(crate) fn next_free_user_display_id(conn: &Connection) -> Result<String, AppError> {
+    next_free_display_id(conn, "users")
 }
 
 pub(crate) fn weapon_get(conn: &Connection, uid: i64) -> Result<Option<Weapon>, AppError> {
@@ -197,18 +248,23 @@ fn weapon_require(conn: &Connection, uid: i64) -> Result<Weapon, AppError> {
 pub(crate) fn weapon_create(conn: &Connection, input: NewWeapon) -> Result<Weapon, AppError> {
     let display_id = norm(input.display_id);
     let serial = norm(input.serial);
+    // New weapons are active; an active weapon must carry a tag.
+    if display_id.is_none() {
+        return Err(AppError::display_id_required());
+    }
     ensure_display_id_free(conn, "weapons", &display_id, None)?;
     ensure_serial_free(conn, &serial, None)?;
     let now = now_utc();
     conn.execute(
         "INSERT INTO weapons
-           (display_id, brand, model, serial, active, inactive_reason, notes, created_at, updated_at)
-         VALUES (?1,?2,?3,?4,1,NULL,?5,?6,?6)",
+           (display_id, brand, model, serial, caliber, active, inactive_reason, notes, created_at, updated_at)
+         VALUES (?1,?2,?3,?4,?5,1,NULL,?6,?7,?7)",
         params![
             display_id,
             norm(input.brand),
             norm(input.model),
             serial,
+            norm(input.caliber),
             norm(input.notes),
             now,
         ],
@@ -217,13 +273,18 @@ pub(crate) fn weapon_create(conn: &Connection, input: NewWeapon) -> Result<Weapo
 }
 
 fn weapon_update(conn: &Connection, input: UpdateWeapon) -> Result<Weapon, AppError> {
+    let current = weapon_require(conn, input.uid)?;
     let display_id = norm(input.display_id);
     let serial = norm(input.serial);
+    // An active weapon must keep a tag; inactive weapons may have it cleared.
+    if current.active && display_id.is_none() {
+        return Err(AppError::display_id_required());
+    }
     ensure_display_id_free(conn, "weapons", &display_id, Some(input.uid))?;
     ensure_serial_free(conn, &serial, Some(input.uid))?;
-    let affected = conn.execute(
+    conn.execute(
         "UPDATE weapons SET
-           display_id = ?2, brand = ?3, model = ?4, serial = ?5, notes = ?6, updated_at = ?7
+           display_id = ?2, brand = ?3, model = ?4, serial = ?5, caliber = ?6, notes = ?7, updated_at = ?8
          WHERE uid = ?1",
         params![
             input.uid,
@@ -231,13 +292,11 @@ fn weapon_update(conn: &Connection, input: UpdateWeapon) -> Result<Weapon, AppEr
             norm(input.brand),
             norm(input.model),
             serial,
+            norm(input.caliber),
             norm(input.notes),
             now_utc(),
         ],
     )?;
-    if affected == 0 {
-        return Err(AppError::weapon_not_found(input.uid));
-    }
     weapon_require(conn, input.uid)
 }
 
@@ -246,15 +305,25 @@ pub(crate) fn weapon_set_active(
     uid: i64,
     active: bool,
     inactive_reason: Option<String>,
+    clear_display_id: bool,
 ) -> Result<Weapon, AppError> {
     let current = weapon_require(conn, uid)?;
     if active {
-        // Reactivating: tag + serial must still be free.
+        // Reactivating: an active weapon must carry a tag, still free.
+        if current.display_id.is_none() {
+            return Err(AppError::display_id_required());
+        }
         ensure_display_id_free(conn, "weapons", &current.display_id, Some(uid))?;
         ensure_serial_free(conn, &current.serial, Some(uid))?;
         conn.execute(
             "UPDATE weapons SET active = 1, inactive_reason = NULL, updated_at = ?2 WHERE uid = ?1",
             params![uid, now_utc()],
+        )?;
+    } else if clear_display_id {
+        // Free the physical tag so it can be reassigned to another weapon.
+        conn.execute(
+            "UPDATE weapons SET active = 0, display_id = NULL, inactive_reason = ?2, updated_at = ?3 WHERE uid = ?1",
+            params![uid, norm(inactive_reason), now_utc()],
         )?;
     } else {
         conn.execute(
@@ -298,9 +367,20 @@ pub fn update_user(db: State<Db>, input: UpdateUser) -> Result<User, AppError> {
 }
 
 #[tauri::command]
-pub fn set_user_active(db: State<Db>, uid: i64, active: bool) -> Result<User, AppError> {
+pub fn set_user_active(
+    db: State<Db>,
+    uid: i64,
+    active: bool,
+    clear_display_id: bool,
+) -> Result<User, AppError> {
     let conn = lock(&db)?;
-    user_set_active(&conn, uid, active)
+    user_set_active(&conn, uid, active, clear_display_id)
+}
+
+#[tauri::command]
+pub fn next_user_display_id(db: State<Db>) -> Result<String, AppError> {
+    let conn = lock(&db)?;
+    next_free_user_display_id(&conn)
 }
 
 #[tauri::command]
@@ -313,6 +393,12 @@ pub fn list_weapons(db: State<Db>) -> Result<Vec<Weapon>, AppError> {
 pub fn get_weapon(db: State<Db>, uid: i64) -> Result<Option<Weapon>, AppError> {
     let conn = lock(&db)?;
     weapon_get(&conn, uid)
+}
+
+#[tauri::command]
+pub fn next_weapon_display_id(db: State<Db>) -> Result<String, AppError> {
+    let conn = lock(&db)?;
+    next_free_weapon_display_id(&conn)
 }
 
 #[tauri::command]
@@ -333,9 +419,10 @@ pub fn set_weapon_active(
     uid: i64,
     active: bool,
     inactive_reason: Option<String>,
+    clear_display_id: bool,
 ) -> Result<Weapon, AppError> {
     let conn = lock(&db)?;
-    weapon_set_active(&conn, uid, active, inactive_reason)
+    weapon_set_active(&conn, uid, active, inactive_reason, clear_display_id)
 }
 
 #[cfg(test)]
@@ -346,7 +433,6 @@ mod tests {
     fn new_user(name: &str, display_id: Option<&str>, is_staff: bool) -> NewUser {
         NewUser {
             display_id: display_id.map(String::from),
-            member_number: None,
             name: name.into(),
             email: None,
             phone: None,
@@ -363,6 +449,7 @@ mod tests {
             brand: Some("Glock".into()),
             model: Some("17".into()),
             serial: serial.map(String::from),
+            caliber: Some("9mm".into()),
             notes: None,
         }
     }
@@ -379,7 +466,7 @@ mod tests {
     fn display_id_reusable_after_retire() {
         let conn = migrated_in_memory();
         let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
-        user_set_active(&conn, a.uid, false).unwrap();
+        user_set_active(&conn, a.uid, false, false).unwrap();
         // Tag "10" is now free for a new active user.
         let c = user_create(&conn, new_user("Cecilia", Some("10"), false)).unwrap();
         assert_eq!(c.display_id.as_deref(), Some("10"));
@@ -389,10 +476,42 @@ mod tests {
     fn reactivating_into_taken_display_id_fails() {
         let conn = migrated_in_memory();
         let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
-        user_set_active(&conn, a.uid, false).unwrap();
+        user_set_active(&conn, a.uid, false, false).unwrap();
         user_create(&conn, new_user("Cecilia", Some("10"), false)).unwrap();
-        let err = user_set_active(&conn, a.uid, true).unwrap_err();
+        let err = user_set_active(&conn, a.uid, true, false).unwrap_err();
         assert!(err.to_string().contains("already in use"), "{err}");
+    }
+
+    #[test]
+    fn user_create_requires_display_id() {
+        let conn = migrated_in_memory();
+        let err = user_create(&conn, new_user("Anna", None, false)).unwrap_err();
+        assert_eq!(err.code, "err_display_id_required");
+    }
+
+    #[test]
+    fn user_deactivate_clear_frees_tag_and_reactivate_requires_one() {
+        let conn = migrated_in_memory();
+        let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        // Deactivate retaining the tag → still occupies "10".
+        let a1 = user_set_active(&conn, a.uid, false, false).unwrap();
+        assert_eq!(a1.display_id.as_deref(), Some("10"));
+        // Clear the tag → "10" freed; reactivating now needs a fresh tag.
+        let a2 = user_set_active(&conn, a.uid, false, true).unwrap();
+        assert_eq!(a2.display_id, None);
+        let err = user_set_active(&conn, a.uid, true, false).unwrap_err();
+        assert_eq!(err.code, "err_display_id_required");
+    }
+
+    #[test]
+    fn next_free_user_display_id_skips_retained_tags() {
+        let conn = migrated_in_memory();
+        assert_eq!(next_free_user_display_id(&conn).unwrap(), "1");
+        user_create(&conn, new_user("Anna", Some("1"), false)).unwrap();
+        let b = user_create(&conn, new_user("Björn", Some("2"), false)).unwrap();
+        // Deactivate Björn without clearing → "2" still taken.
+        user_set_active(&conn, b.uid, false, false).unwrap();
+        assert_eq!(next_free_user_display_id(&conn).unwrap(), "3");
     }
 
     #[test]
@@ -409,7 +528,7 @@ mod tests {
         user_create(&conn, new_user("Staff Sara", Some("1"), true)).unwrap();
         user_create(&conn, new_user("Member Mats", Some("2"), false)).unwrap();
         let retired = user_create(&conn, new_user("Old Olle", Some("3"), true)).unwrap();
-        user_set_active(&conn, retired.uid, false).unwrap();
+        user_set_active(&conn, retired.uid, false, false).unwrap();
 
         let ops = operators_list(&conn).unwrap();
         assert_eq!(ops.len(), 1);
@@ -420,11 +539,96 @@ mod tests {
     fn deactivating_weapon_records_reason_and_reactivating_clears_it() {
         let conn = migrated_in_memory();
         let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
-        let w = weapon_set_active(&conn, w.uid, false, Some("barrel wear".into())).unwrap();
+        let w = weapon_set_active(&conn, w.uid, false, Some("barrel wear".into()), false).unwrap();
         assert!(!w.active);
         assert_eq!(w.inactive_reason.as_deref(), Some("barrel wear"));
-        let w = weapon_set_active(&conn, w.uid, true, None).unwrap();
+        // Tag retained while inactive.
+        assert_eq!(w.display_id.as_deref(), Some("W1"));
+        let w = weapon_set_active(&conn, w.uid, true, None, false).unwrap();
         assert!(w.active);
         assert_eq!(w.inactive_reason, None);
+    }
+
+    #[test]
+    fn weapon_create_requires_display_id() {
+        let conn = migrated_in_memory();
+        let err = weapon_create(&conn, new_weapon(None, Some("S-1"))).unwrap_err();
+        assert_eq!(err.code, "err_display_id_required");
+    }
+
+    #[test]
+    fn active_weapon_update_cannot_clear_display_id() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        let mut upd = UpdateWeapon {
+            uid: w.uid,
+            display_id: None,
+            brand: w.brand.clone(),
+            model: w.model.clone(),
+            serial: w.serial.clone(),
+            caliber: w.caliber.clone(),
+            notes: None,
+        };
+        let err = weapon_update(&conn, upd).unwrap_err();
+        assert_eq!(err.code, "err_display_id_required");
+        // Inactive weapons may have the tag cleared.
+        weapon_set_active(&conn, w.uid, false, None, false).unwrap();
+        upd = UpdateWeapon {
+            uid: w.uid,
+            display_id: None,
+            brand: w.brand,
+            model: w.model,
+            serial: w.serial,
+            caliber: w.caliber,
+            notes: None,
+        };
+        let w = weapon_update(&conn, upd).unwrap();
+        assert_eq!(w.display_id, None);
+    }
+
+    #[test]
+    fn deactivate_can_clear_tag_and_reactivate_requires_one() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        // Clear the tag so it frees up for another weapon.
+        let w = weapon_set_active(&conn, w.uid, false, Some("retired".into()), true).unwrap();
+        assert_eq!(w.display_id, None);
+        // The freed tag is usable on a new active weapon.
+        weapon_create(&conn, new_weapon(Some("W1"), Some("S-2"))).unwrap();
+        // Reactivating the tagless weapon is rejected until it gets a tag.
+        let err = weapon_set_active(&conn, w.uid, true, None, false).unwrap_err();
+        assert_eq!(err.code, "err_display_id_required");
+    }
+
+    #[test]
+    fn next_free_display_id_finds_first_gap() {
+        let conn = migrated_in_memory();
+        assert_eq!(next_free_weapon_display_id(&conn).unwrap(), "1");
+        weapon_create(&conn, new_weapon(Some("1"), Some("S-1"))).unwrap();
+        weapon_create(&conn, new_weapon(Some("3"), Some("S-3"))).unwrap();
+        // Non-numeric tag is ignored.
+        weapon_create(&conn, new_weapon(Some("ABC"), Some("S-9"))).unwrap();
+        assert_eq!(next_free_weapon_display_id(&conn).unwrap(), "2");
+        weapon_create(&conn, new_weapon(Some("2"), Some("S-2"))).unwrap();
+        assert_eq!(next_free_weapon_display_id(&conn).unwrap(), "4");
+    }
+
+    #[test]
+    fn next_free_display_id_counts_retained_inactive_tags() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("1"), Some("S-1"))).unwrap();
+        // Deactivated but tag retained → "1" is still physically in use.
+        weapon_set_active(&conn, w.uid, false, None, false).unwrap();
+        assert_eq!(next_free_weapon_display_id(&conn).unwrap(), "2");
+        // Clearing the tag frees it again.
+        weapon_set_active(&conn, w.uid, false, None, true).unwrap();
+        assert_eq!(next_free_weapon_display_id(&conn).unwrap(), "1");
+    }
+
+    #[test]
+    fn weapon_caliber_round_trips() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        assert_eq!(w.caliber.as_deref(), Some("9mm"));
     }
 }

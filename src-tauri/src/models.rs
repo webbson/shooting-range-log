@@ -8,16 +8,15 @@ use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 
 pub const USER_COLS: &str =
-    "uid, display_id, member_number, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at";
+    "uid, display_id, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at";
 pub const WEAPON_COLS: &str =
-    "uid, display_id, brand, model, serial, active, inactive_reason, notes, created_at, updated_at";
+    "uid, display_id, brand, model, serial, caliber, active, inactive_reason, notes, created_at, updated_at";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
     pub uid: i64,
     pub display_id: Option<String>,
-    pub member_number: Option<String>,
     pub name: String,
     pub email: Option<String>,
     pub phone: Option<String>,
@@ -35,7 +34,6 @@ impl User {
         Ok(User {
             uid: row.get("uid")?,
             display_id: row.get("display_id")?,
-            member_number: row.get("member_number")?,
             name: row.get("name")?,
             email: row.get("email")?,
             phone: row.get("phone")?,
@@ -54,7 +52,6 @@ impl User {
 #[serde(rename_all = "camelCase")]
 pub struct NewUser {
     pub display_id: Option<String>,
-    pub member_number: Option<String>,
     pub name: String,
     pub email: Option<String>,
     pub phone: Option<String>,
@@ -70,7 +67,6 @@ pub struct NewUser {
 pub struct UpdateUser {
     pub uid: i64,
     pub display_id: Option<String>,
-    pub member_number: Option<String>,
     pub name: String,
     pub email: Option<String>,
     pub phone: Option<String>,
@@ -89,6 +85,7 @@ pub struct Weapon {
     pub brand: Option<String>,
     pub model: Option<String>,
     pub serial: Option<String>,
+    pub caliber: Option<String>,
     pub active: bool,
     pub inactive_reason: Option<String>,
     pub notes: Option<String>,
@@ -104,6 +101,7 @@ impl Weapon {
             brand: row.get("brand")?,
             model: row.get("model")?,
             serial: row.get("serial")?,
+            caliber: row.get("caliber")?,
             active: row.get("active")?,
             inactive_reason: row.get("inactive_reason")?,
             notes: row.get("notes")?,
@@ -120,6 +118,7 @@ pub struct NewWeapon {
     pub brand: Option<String>,
     pub model: Option<String>,
     pub serial: Option<String>,
+    pub caliber: Option<String>,
     pub notes: Option<String>,
 }
 
@@ -131,5 +130,6 @@ pub struct UpdateWeapon {
     pub brand: Option<String>,
     pub model: Option<String>,
     pub serial: Option<String>,
+    pub caliber: Option<String>,
     pub notes: Option<String>,
 }

@@ -55,6 +55,14 @@ impl AppError {
         AppError::new("err_name_required", "Name is required.", json!({}))
     }
 
+    pub fn display_id_required() -> Self {
+        AppError::new(
+            "err_display_id_required",
+            "An ID is required for an active record.",
+            json!({}),
+        )
+    }
+
     pub fn user_not_found(uid: i64) -> Self {
         AppError::new(
             "err_user_not_found",

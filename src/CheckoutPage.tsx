@@ -7,7 +7,6 @@ import {
   Text,
   Select,
   TextInput,
-  NumberInput,
   Button,
   Alert,
 } from '@mantine/core';
@@ -22,11 +21,12 @@ import {
   evaluateCheckout,
   doCheckout,
   doCheckin,
-  addDebt,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
 import { fmtDateTime } from './format';
+import { userLabel, weaponLabel } from './labels';
+import { DebtModal } from './DebtModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -36,8 +36,7 @@ export function CheckoutPage() {
   const [weaponUid, setWeaponUid] = useState<number | null>(null);
   const [userUid, setUserUid] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
-  const [debtAmount, setDebtAmount] = useState<number | string>('');
-  const [debtReason, setDebtReason] = useState('');
+  const [debtUser, setDebtUser] = useState<{ uid: number; name: string } | null>(null);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -77,28 +76,18 @@ export function CheckoutPage() {
     setWeaponUid(null);
     setUserUid(null);
     setNotes('');
-    setDebtAmount('');
-    setDebtReason('');
   };
 
   const onError = (e: unknown) =>
     notifications.show({ color: 'red', message: errorMessage(e, t) });
 
   const checkoutMut = useMutation({
-    mutationFn: async () => {
-      const c = await doCheckout(weaponUid!, userUid!, operator!.uid, notes || undefined);
-      // Optionally record a debt incurred at this checkout.
-      if (debtAmount && Number(debtAmount) > 0) {
-        await addDebt(userUid!, operator!.uid, Number(debtAmount), debtReason || undefined, c.id);
-      }
-      return c;
-    },
+    mutationFn: () => doCheckout(weaponUid!, userUid!, operator!.uid, notes || undefined),
     onSuccess: () => {
       notifications.show({ message: t('checked_out_ok') });
       reset();
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
-      qc.invalidateQueries({ queryKey: ['outstandingDebts'] });
     },
     onError,
   });
@@ -117,23 +106,23 @@ export function CheckoutPage() {
     (open.data ?? []).map((o) => [o.weaponUid, o.userName ?? ''] as const),
   );
 
-  const weaponData = (weapons.data ?? []).map((w) => {
-    const base = [w.displayId, [w.brand, w.model].filter(Boolean).join(' ')]
-      .filter(Boolean)
-      .join(' · ');
-    const out = outMap.has(w.uid);
-    const label = out
-      ? `${base} — ${t('held_by', { name: outMap.get(w.uid) })}`
-      : !w.active
-        ? `${base} (${t('inactive')})`
-        : base;
-    return { value: String(w.uid), label, disabled: out };
-  });
+  // Only available weapons (active and not currently out) and active members
+  // are offered for checkout.
+  const weaponData = (weapons.data ?? [])
+    .filter((w) => w.active && !outMap.has(w.uid))
+    .map((w) => {
+      const label = [w.displayId, [w.brand, w.model].filter(Boolean).join(' ')]
+        .filter(Boolean)
+        .join(' · ');
+      return { value: String(w.uid), label };
+    });
 
-  const userData = (users.data ?? []).map((u) => {
-    const base = [u.displayId, u.name, u.memberNumber].filter(Boolean).join(' · ');
-    return { value: String(u.uid), label: !u.active ? `${base} (${t('inactive')})` : base };
-  });
+  const userData = (users.data ?? [])
+    .filter((u) => u.active)
+    .map((u) => ({
+      value: String(u.uid),
+      label: [u.displayId, u.name].filter(Boolean).join(' · '),
+    }));
 
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
@@ -171,7 +160,14 @@ export function CheckoutPage() {
           )}
           {ev?.weaponAlreadyOut && (
             <Alert color="gray">
-              {t('banner_weapon_already_out', { name: ev.openHolderName })}
+              {t('banner_weapon_already_out', {
+                name: userLabel(
+                  ev.openHolderName,
+                  ev.openHolderDisplay,
+                  ev.openHolderActive,
+                  t,
+                ),
+              })}
             </Alert>
           )}
           {ev?.userInactive && (
@@ -185,7 +181,17 @@ export function CheckoutPage() {
             </Alert>
           )}
           {ev?.fresherUserName && (
-            <Alert color="orange">{t('banner_fresher', { name: ev.fresherUserName })}</Alert>
+            <Alert color="orange">
+              {t('banner_fresher', {
+                name: userLabel(
+                  ev.fresherUserName,
+                  ev.fresherUserDisplay,
+                  ev.fresherUserActive,
+                  t,
+                ),
+                date: ev.fresherUserAt ? fmtDateTime(ev.fresherUserAt) : '',
+              })}
+            </Alert>
           )}
           {weaponUid != null && userUid == null && ev?.suggestedUserBusy && (
             <Alert color="orange">
@@ -194,7 +200,15 @@ export function CheckoutPage() {
           )}
           {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
             <Alert color="orange">
-              {t('banner_suggested_weapon_out', { label: ev.suggestedWeaponLabel })}
+              {t('banner_suggested_weapon_out', {
+                label: weaponLabel(
+                  ev.suggestedWeaponBrand,
+                  ev.suggestedWeaponModel,
+                  ev.suggestedWeaponSerial,
+                  ev.suggestedWeaponActive,
+                  t,
+                ),
+              })}
             </Alert>
           )}
 
@@ -203,22 +217,6 @@ export function CheckoutPage() {
             value={notes}
             onChange={(e) => setNotes(e.currentTarget.value)}
           />
-
-          <Group align="flex-end" grow>
-            <NumberInput
-              label={t('checkout_debt')}
-              value={debtAmount}
-              onChange={setDebtAmount}
-              min={0}
-              allowDecimal={false}
-              suffix=" kr"
-            />
-            <TextInput
-              label={t('field_reason')}
-              value={debtReason}
-              onChange={(e) => setDebtReason(e.currentTarget.value)}
-            />
-          </Group>
 
           <Button
             size="lg"
@@ -243,27 +241,50 @@ export function CheckoutPage() {
                 <Group justify="space-between" wrap="nowrap">
                   <Stack gap={2}>
                     <Text fw={600}>
-                      {o.weaponDisplay} {o.weaponLabel && `· ${o.weaponLabel}`}
+                      {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponSerial, o.weaponActive, t)}
                     </Text>
-                    <Text size="sm">{o.userName}</Text>
+                    <Text size="sm">
+                      {userLabel(o.userName, o.userDisplayId, o.userActive, t)}
+                    </Text>
                     <Text size="xs" c="dimmed">
                       {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
                     </Text>
                   </Stack>
-                  <Button
-                    variant="light"
-                    color="teal"
-                    loading={checkinMut.isPending}
-                    onClick={() => checkinMut.mutate(o.id)}
-                  >
-                    {t('return_weapon')}
-                  </Button>
+                  <Group gap="xs" wrap="nowrap">
+                    <Button
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        setDebtUser({
+                          uid: o.userUid,
+                          name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
+                        })
+                      }
+                    >
+                      {t('add_debt')}
+                    </Button>
+                    <Button
+                      variant="light"
+                      color="teal"
+                      loading={checkinMut.isPending}
+                      onClick={() => checkinMut.mutate(o.id)}
+                    >
+                      {t('return_weapon')}
+                    </Button>
+                  </Group>
                 </Group>
               </Card>
             ))
           )}
         </Stack>
       </Card>
+
+      <DebtModal
+        userUid={debtUser?.uid ?? null}
+        userName={debtUser?.name ?? ''}
+        opened={debtUser != null}
+        onClose={() => setDebtUser(null)}
+      />
     </SimpleGrid>
   );
 }

@@ -53,8 +53,8 @@ export function DebtModal({
   const addMut = useMutation({
     mutationFn: () => addDebt(userUid!, operator!.uid, Number(amount), reason || undefined),
     onSuccess: () => {
+      // Keep the reason prefilled with the last value for quick repeat entries.
       setAmount('');
-      setReason('');
       invalidate();
       notifications.show({ message: t('saved') });
     },

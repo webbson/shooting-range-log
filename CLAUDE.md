@@ -25,15 +25,24 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 - **Validation/business rules live in Rust**, not JS (JS is convenience only).
 - **Identity model:** every entity has hidden `uid` (INTEGER PK, the only FK target) +
   movable `display_id` (the physical tag). `display_id` is unique only among **active**
-  rows (partial unique index) so a tag is reusable once its holder is retired. `serial`
-  (weapons) is globally unique. Durable legal identity = serial / member_number via uid.
-- **Log rows snapshot identity** (`*_display_snapshot`, `*_name_snapshot`) at event time so
-  history reads correctly after a tag moves. Log tables (checkouts, weapon_service_log,
-  debts) are **append-only** — corrections/returns/settles are new rows or field updates,
-  never deletes.
-- **Migrations:** the full schema is `SCHEMA_V1` in `src-tauri/src/db.rs`. Once a migration
-  has shipped/run, **never edit it — append a new `M::up` (0002, …)** to the `migrations()`
-  vec. Editing a released migration silently diverges existing DBs.
+  rows (partial unique index) so a tag is reusable once its holder is retired; it is
+  **required while active** (create/update/reactivate enforce it), and may be cleared on
+  deactivation to free the tag. `serial` (weapons) is globally unique. Durable legal
+  identity = serial via uid. (Members no longer carry a `member_number` — column remains in
+  the shipped migration but is unused.)
+- **Live identity, not snapshots:** because entities are never hard-deleted (only
+  `set_active(false)`) and tags are reusable, log read views resolve identity **live by uid**
+  via JOIN — history reflects each entity's *current* name/status, not a point-in-time value
+  (a snapshotted tag would mis-attribute after reassignment). Display composes
+  `name (id)` when active, `name (disabled)` when not (`src/labels.ts`). Log rows store
+  **only uids** — there are no `*_snapshot` columns (removed during dev; schema squashed to a
+  single migration 0001). Never reintroduce snapshots. Log tables (checkouts,
+  weapon_service_log, debts) stay **append-only** — corrections/returns/settles are new rows
+  or field updates, never deletes.
+- **Migrations:** the full schema is `SCHEMA_V1` in `src-tauri/src/db.rs` — currently the
+  **only** migration (0002/0003 were squashed back into it while still dev-only). Once a
+  migration has shipped to a real install, **never edit it — append a new `M::up` (0002, …)**
+  to the `migrations()` vec. Editing a released migration silently diverges existing DBs.
 - **Money:** integer whole **kronor** (`amount_kr`). No floats, no öre.
 - **Time:** store UTC RFC3339; display via `src/format.ts` (sv-SE, e.g. `2026-06-16 14:30`).
 - **Operators** are users with `is_staff`. The frontend store holds `{uid, name}`; `uid` is

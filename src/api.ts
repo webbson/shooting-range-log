@@ -8,7 +8,6 @@ export const dbHealth = () => invoke<string>('db_health');
 export interface User {
   uid: number;
   displayId: string | null;
-  memberNumber: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -23,7 +22,6 @@ export interface User {
 
 export interface NewUser {
   displayId?: string | null;
-  memberNumber?: string | null;
   name: string;
   email?: string | null;
   phone?: string | null;
@@ -43,6 +41,7 @@ export interface Weapon {
   brand: string | null;
   model: string | null;
   serial: string | null;
+  caliber: string | null;
   active: boolean;
   inactiveReason: string | null;
   notes: string | null;
@@ -55,6 +54,7 @@ export interface NewWeapon {
   brand?: string | null;
   model?: string | null;
   serial?: string | null;
+  caliber?: string | null;
   notes?: string | null;
 }
 
@@ -67,19 +67,25 @@ export interface UpdateWeapon extends NewWeapon {
 export const listUsers = () => invoke<User[]>('list_users');
 export const listOperators = () => invoke<User[]>('list_operators');
 export const getUser = (uid: number) => invoke<User | null>('get_user', { uid });
+export const nextUserDisplayId = () => invoke<string>('next_user_display_id');
 export const createUser = (input: NewUser) => invoke<User>('create_user', { input });
 export const updateUser = (input: UpdateUser) => invoke<User>('update_user', { input });
-export const setUserActive = (uid: number, active: boolean) =>
-  invoke<User>('set_user_active', { uid, active });
+export const setUserActive = (uid: number, active: boolean, clearDisplayId = false) =>
+  invoke<User>('set_user_active', { uid, active, clearDisplayId });
 
 // ---- Weapon commands ----
 
 export const listWeapons = () => invoke<Weapon[]>('list_weapons');
 export const getWeapon = (uid: number) => invoke<Weapon | null>('get_weapon', { uid });
+export const nextWeaponDisplayId = () => invoke<string>('next_weapon_display_id');
 export const createWeapon = (input: NewWeapon) => invoke<Weapon>('create_weapon', { input });
 export const updateWeapon = (input: UpdateWeapon) => invoke<Weapon>('update_weapon', { input });
-export const setWeaponActive = (uid: number, active: boolean, inactiveReason?: string) =>
-  invoke<Weapon>('set_weapon_active', { uid, active, inactiveReason });
+export const setWeaponActive = (
+  uid: number,
+  active: boolean,
+  inactiveReason?: string,
+  clearDisplayId = false,
+) => invoke<Weapon>('set_weapon_active', { uid, active, inactiveReason, clearDisplayId });
 
 // ---- Checkout / checkin ----
 
@@ -88,16 +94,23 @@ export interface CheckoutEval {
   suggestedUserName: string | null;
   suggestedUserBusy: boolean;
   suggestedWeaponUid: number | null;
-  suggestedWeaponLabel: string | null;
+  suggestedWeaponBrand: string | null;
+  suggestedWeaponModel: string | null;
+  suggestedWeaponSerial: string | null;
+  suggestedWeaponActive: boolean;
   suggestedWeaponOut: boolean;
   weaponInactive: boolean;
   weaponInactiveReason: string | null;
   weaponAlreadyOut: boolean;
   openHolderName: string | null;
+  openHolderDisplay: string | null;
+  openHolderActive: boolean;
   openCheckoutId: number | null;
   userInactive: boolean;
   userOutstandingDebtKr: number;
   fresherUserName: string | null;
+  fresherUserDisplay: string | null;
+  fresherUserActive: boolean;
   fresherUserAt: string | null;
   canCheckout: boolean;
 }
@@ -106,10 +119,6 @@ export interface Checkout {
   id: number;
   weaponUid: number;
   userUid: number;
-  weaponDisplaySnapshot: string | null;
-  weaponLabelSnapshot: string | null;
-  userDisplaySnapshot: string | null;
-  userNameSnapshot: string | null;
   operatorOutUid: number;
   checkedOutAt: string;
   operatorInUid: number | null;
@@ -121,10 +130,13 @@ export interface OpenCheckout {
   id: number;
   weaponUid: number;
   userUid: number;
-  weaponDisplay: string | null;
-  weaponLabel: string | null;
-  userDisplay: string | null;
   userName: string | null;
+  userDisplayId: string | null;
+  userActive: boolean;
+  weaponBrand: string | null;
+  weaponModel: string | null;
+  weaponSerial: string | null;
+  weaponActive: boolean;
   checkedOutAt: string;
 }
 
@@ -148,7 +160,6 @@ export const listOpenCheckouts = () => invoke<OpenCheckout[]>('list_open_checkou
 export interface Debt {
   id: number;
   userUid: number;
-  userNameSnapshot: string | null;
   operatorUid: number;
   amountKr: number;
   reason: string | null;
@@ -185,10 +196,13 @@ export interface CheckoutLog {
   id: number;
   weaponUid: number;
   userUid: number;
-  weaponDisplay: string | null;
-  weaponLabel: string | null;
-  userDisplay: string | null;
   userName: string | null;
+  userDisplayId: string | null;
+  userActive: boolean;
+  weaponBrand: string | null;
+  weaponModel: string | null;
+  weaponSerial: string | null;
+  weaponActive: boolean;
   checkedOutAt: string;
   checkedInAt: string | null;
   operatorOutName: string | null;
@@ -220,7 +234,6 @@ export const listCheckouts = (f: CheckoutFilters) =>
 export interface ServiceLog {
   id: number;
   weaponUid: number;
-  weaponDisplaySnapshot: string | null;
   operatorUid: number;
   operatorName: string | null;
   servicedAt: string;
