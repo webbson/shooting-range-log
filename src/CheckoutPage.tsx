@@ -45,10 +45,16 @@ export function CheckoutPage() {
   });
   const ev = evalQ.data;
 
-  // Autopopulate the weapon's most-recent user when none is picked (overridable).
+  // Autopopulate the other side when one is picked (overridable):
+  // weapon → its most-recent user, member → their most-recent weapon.
   useEffect(() => {
     if (userUid == null && ev?.suggestedUserUid != null) setUserUid(ev.suggestedUserUid);
   }, [ev?.suggestedUserUid, userUid]);
+
+  useEffect(() => {
+    if (weaponUid == null && ev?.suggestedWeaponUid != null)
+      setWeaponUid(ev.suggestedWeaponUid);
+  }, [ev?.suggestedWeaponUid, weaponUid]);
 
   const reset = () => {
     setWeaponUid(null);
