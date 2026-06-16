@@ -94,7 +94,7 @@ fn operators_list(conn: &Connection) -> Result<Vec<User>, AppError> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-fn user_get(conn: &Connection, uid: i64) -> Result<Option<User>, AppError> {
+pub(crate) fn user_get(conn: &Connection, uid: i64) -> Result<Option<User>, AppError> {
     let sql = format!("SELECT {USER_COLS} FROM users WHERE uid = ?1");
     Ok(conn
         .query_row(&sql, params![uid], |r| User::from_row(r))
@@ -105,7 +105,7 @@ fn user_require(conn: &Connection, uid: i64) -> Result<User, AppError> {
     user_get(conn, uid)?.ok_or_else(|| AppError::user_not_found(uid))
 }
 
-fn user_create(conn: &Connection, input: NewUser) -> Result<User, AppError> {
+pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, AppError> {
     let display_id = norm(input.display_id);
     let name = require_name(input.name)?;
     ensure_display_id_free(conn, "users", &display_id, None)?;
@@ -159,7 +159,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
     user_require(conn, input.uid)
 }
 
-fn user_set_active(conn: &Connection, uid: i64, active: bool) -> Result<User, AppError> {
+pub(crate) fn user_set_active(conn: &Connection, uid: i64, active: bool) -> Result<User, AppError> {
     let current = user_require(conn, uid)?;
     if active {
         // Reactivating: the tag must still be free among other active users.
@@ -183,7 +183,7 @@ fn weapons_list(conn: &Connection) -> Result<Vec<Weapon>, AppError> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-fn weapon_get(conn: &Connection, uid: i64) -> Result<Option<Weapon>, AppError> {
+pub(crate) fn weapon_get(conn: &Connection, uid: i64) -> Result<Option<Weapon>, AppError> {
     let sql = format!("SELECT {WEAPON_COLS} FROM weapons WHERE uid = ?1");
     Ok(conn
         .query_row(&sql, params![uid], |r| Weapon::from_row(r))
@@ -194,7 +194,7 @@ fn weapon_require(conn: &Connection, uid: i64) -> Result<Weapon, AppError> {
     weapon_get(conn, uid)?.ok_or_else(|| AppError::weapon_not_found(uid))
 }
 
-fn weapon_create(conn: &Connection, input: NewWeapon) -> Result<Weapon, AppError> {
+pub(crate) fn weapon_create(conn: &Connection, input: NewWeapon) -> Result<Weapon, AppError> {
     let display_id = norm(input.display_id);
     let serial = norm(input.serial);
     ensure_display_id_free(conn, "weapons", &display_id, None)?;
@@ -241,7 +241,7 @@ fn weapon_update(conn: &Connection, input: UpdateWeapon) -> Result<Weapon, AppEr
     weapon_require(conn, input.uid)
 }
 
-fn weapon_set_active(
+pub(crate) fn weapon_set_active(
     conn: &Connection,
     uid: i64,
     active: bool,
