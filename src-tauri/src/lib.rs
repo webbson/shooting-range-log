@@ -1,5 +1,7 @@
+mod commands;
 mod db;
 mod error;
+mod models;
 
 use error::AppError;
 use tauri::Manager;
@@ -25,7 +27,20 @@ pub fn run() {
             app.manage(db);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![db_health])
+        .invoke_handler(tauri::generate_handler![
+            db_health,
+            commands::list_users,
+            commands::list_operators,
+            commands::get_user,
+            commands::create_user,
+            commands::update_user,
+            commands::set_user_active,
+            commands::list_weapons,
+            commands::get_weapon,
+            commands::create_weapon,
+            commands::update_weapon,
+            commands::set_weapon_active,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -5,6 +5,7 @@ import {
   Button,
   Text,
   Badge,
+  Tooltip,
   SegmentedControl,
   ActionIcon,
   useMantineColorScheme,
@@ -15,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
 import { dbHealth } from './api';
+import { OperatorPicker } from './OperatorPicker';
 
 const NAV = [
   { to: '/checkout', key: 'nav_checkout' },
@@ -29,6 +31,7 @@ export function AppLayout() {
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
   const operatorName = useAppStore((s) => s.operatorName);
+  const setOperator = useAppStore((s) => s.setOperator);
 
   const { toggleColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light');
@@ -36,7 +39,9 @@ export function AppLayout() {
   const health = useQuery({ queryKey: ['db_health'], queryFn: dbHealth });
 
   return (
-    <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
+    <>
+      <OperatorPicker />
+      <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Title order={3}>{t('app_title')}</Title>
@@ -66,9 +71,16 @@ export function AppLayout() {
             <Text size="sm" c="dimmed">
               {t('operator')}:
             </Text>
-            <Badge color={operatorName ? 'blue' : 'gray'} variant="light">
-              {operatorName ?? t('no_operator')}
-            </Badge>
+            <Tooltip label={t('change_operator')}>
+              <Badge
+                color={operatorName ? 'blue' : 'gray'}
+                variant="light"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setOperator(null)}
+              >
+                {operatorName ?? t('no_operator')}
+              </Badge>
+            </Tooltip>
           </Group>
 
           <Group gap="md">
@@ -100,6 +112,7 @@ export function AppLayout() {
           </Group>
         </Group>
       </AppShell.Footer>
-    </AppShell>
+      </AppShell>
+    </>
   );
 }
