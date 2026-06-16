@@ -92,11 +92,14 @@ export const setWeaponActive = (
 export interface CheckoutEval {
   suggestedUserUid: number | null;
   suggestedUserName: string | null;
+  suggestedUserDisplayId: string | null;
+  suggestedUserActive: boolean;
   suggestedUserBusy: boolean;
   suggestedWeaponUid: number | null;
   suggestedWeaponBrand: string | null;
   suggestedWeaponModel: string | null;
   suggestedWeaponSerial: string | null;
+  suggestedWeaponDisplayId: string | null;
   suggestedWeaponActive: boolean;
   suggestedWeaponOut: boolean;
   weaponInactive: boolean;
@@ -136,6 +139,7 @@ export interface OpenCheckout {
   weaponBrand: string | null;
   weaponModel: string | null;
   weaponSerial: string | null;
+  weaponDisplayId: string | null;
   weaponActive: boolean;
   checkedOutAt: string;
 }
@@ -202,6 +206,7 @@ export interface CheckoutLog {
   weaponBrand: string | null;
   weaponModel: string | null;
   weaponSerial: string | null;
+  weaponDisplayId: string | null;
   weaponActive: boolean;
   checkedOutAt: string;
   checkedInAt: string | null;

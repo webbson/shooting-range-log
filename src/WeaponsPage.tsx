@@ -8,6 +8,7 @@ import {
   TextInput,
   Textarea,
   Checkbox,
+  Switch,
   Stack,
   Text,
 } from '@mantine/core';
@@ -58,6 +59,10 @@ export function WeaponsPage() {
   const [reason, setReason] = useState('');
   const [clearId, setClearId] = useState(false);
   const [serviceWeapon, setServiceWeapon] = useState<Weapon | null>(null);
+
+  // List view: active-only by default, with a search box + show-inactive toggle.
+  const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const form = useForm<WeaponForm>({ initialValues: EMPTY });
@@ -163,7 +168,16 @@ export function WeaponsPage() {
     close();
   };
 
-  const rows = (weapons.data ?? []).map((w) => (
+  const q = search.trim().toLowerCase();
+  const filtered = (weapons.data ?? []).filter((w) => {
+    if (!showInactive && !w.active) return false;
+    if (!q) return true;
+    return [w.displayId, w.brand, w.model, w.serial, w.caliber].some((f) =>
+      f?.toLowerCase().includes(q),
+    );
+  });
+
+  const rows = filtered.map((w) => (
     <Table.Tr key={w.uid} opacity={w.active ? 1 : 0.5}>
       <Table.Td>{w.displayId}</Table.Td>
       <Table.Td>{w.brand}</Table.Td>
@@ -203,22 +217,41 @@ export function WeaponsPage() {
       {(weapons.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_weapons')}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={700}>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('field_display_id')}</Table.Th>
-                <Table.Th>{t('field_brand')}</Table.Th>
-                <Table.Th>{t('field_model')}</Table.Th>
-                <Table.Th>{t('field_serial')}</Table.Th>
-                <Table.Th>{t('field_caliber')}</Table.Th>
-                <Table.Th>{t('status')}</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>{rows}</Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        <>
+          <Group>
+            <TextInput
+              placeholder={t('search')}
+              value={search}
+              onChange={(e) => setSearch(e.currentTarget.value)}
+              style={{ flex: 1 }}
+            />
+            <Switch
+              label={t('show_inactive')}
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.currentTarget.checked)}
+            />
+          </Group>
+          {filtered.length === 0 ? (
+            <Text c="dimmed">{t('no_results')}</Text>
+          ) : (
+            <Table.ScrollContainer minWidth={700}>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{t('field_display_id')}</Table.Th>
+                    <Table.Th>{t('field_brand')}</Table.Th>
+                    <Table.Th>{t('field_model')}</Table.Th>
+                    <Table.Th>{t('field_serial')}</Table.Th>
+                    <Table.Th>{t('field_caliber')}</Table.Th>
+                    <Table.Th>{t('status')}</Table.Th>
+                    <Table.Th />
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>{rows}</Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </>
       )}
 
       {/* Create / edit */}
@@ -344,7 +377,7 @@ export function WeaponsPage() {
             ? weaponLabel(
                 serviceWeapon.brand,
                 serviceWeapon.model,
-                serviceWeapon.serial,
+                serviceWeapon.displayId,
                 serviceWeapon.active,
                 t,
               )

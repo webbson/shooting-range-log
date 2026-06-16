@@ -110,18 +110,16 @@ export function CheckoutPage() {
   // are offered for checkout.
   const weaponData = (weapons.data ?? [])
     .filter((w) => w.active && !outMap.has(w.uid))
-    .map((w) => {
-      const label = [w.displayId, [w.brand, w.model].filter(Boolean).join(' ')]
-        .filter(Boolean)
-        .join(' · ');
-      return { value: String(w.uid), label };
-    });
+    .map((w) => ({
+      value: String(w.uid),
+      label: weaponLabel(w.brand, w.model, w.displayId, true, t),
+    }));
 
   const userData = (users.data ?? [])
     .filter((u) => u.active)
     .map((u) => ({
       value: String(u.uid),
-      label: [u.displayId, u.name].filter(Boolean).join(' · '),
+      label: userLabel(u.name, u.displayId, true, t),
     }));
 
   return (
@@ -195,7 +193,14 @@ export function CheckoutPage() {
           )}
           {weaponUid != null && userUid == null && ev?.suggestedUserBusy && (
             <Alert color="orange">
-              {t('banner_suggested_user_busy', { name: ev.suggestedUserName })}
+              {t('banner_suggested_user_busy', {
+                name: userLabel(
+                  ev.suggestedUserName,
+                  ev.suggestedUserDisplayId,
+                  ev.suggestedUserActive,
+                  t,
+                ),
+              })}
             </Alert>
           )}
           {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
@@ -204,7 +209,7 @@ export function CheckoutPage() {
                 label: weaponLabel(
                   ev.suggestedWeaponBrand,
                   ev.suggestedWeaponModel,
-                  ev.suggestedWeaponSerial,
+                  ev.suggestedWeaponDisplayId,
                   ev.suggestedWeaponActive,
                   t,
                 ),
@@ -241,7 +246,7 @@ export function CheckoutPage() {
                 <Group justify="space-between" wrap="nowrap">
                   <Stack gap={2}>
                     <Text fw={600}>
-                      {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponSerial, o.weaponActive, t)}
+                      {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponDisplayId, o.weaponActive, t)}
                     </Text>
                     <Text size="sm">
                       {userLabel(o.userName, o.userDisplayId, o.userActive, t)}

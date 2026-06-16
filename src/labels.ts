@@ -11,21 +11,19 @@ export function userLabel(
   t: TFunction,
 ): string {
   const n = name ?? '';
-  if (!active) return `${n} (${t('label_disabled')})`;
-  return displayId ? `${n} (${displayId})` : n;
+  if (!active) return `${n} [${t('label_disabled')}]`;
+  return displayId ? `${n} [${displayId}]` : n;
 }
 
 export function weaponLabel(
   brand: string | null,
   model: string | null,
-  serial: string | null,
+  displayId: string | null,
   active: boolean,
   t: TFunction,
 ): string {
   const base = [brand, model].filter(Boolean).join(' ');
-  const parens: string[] = [];
-  if (serial) parens.push(serial);
-  if (!active) parens.push(t('label_disabled'));
-  const suffix = parens.length ? `(${parens.join(', ')})` : '';
+  const id = active ? displayId : t('label_disabled');
+  const suffix = id ? `[${id}]` : '';
   return [base, suffix].filter(Boolean).join(' ');
 }

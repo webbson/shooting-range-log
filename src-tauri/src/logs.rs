@@ -28,6 +28,7 @@ pub struct CheckoutLog {
     pub weapon_brand: Option<String>,
     pub weapon_model: Option<String>,
     pub weapon_serial: Option<String>,
+    pub weapon_display_id: Option<String>,
     pub weapon_active: bool,
     pub checked_out_at: String,
     pub checked_in_at: Option<String>,
@@ -52,7 +53,8 @@ fn query(
                 u.name, u.display_id, u.active,
                 w.brand, w.model, w.serial, w.active,
                 c.checked_out_at, c.checked_in_at,
-                oo.name AS op_out_name, oi.name AS op_in_name, c.notes
+                oo.name AS op_out_name, oi.name AS op_in_name, c.notes,
+                w.display_id
          FROM checkouts c
          JOIN users u ON u.uid = c.user_uid
          JOIN weapons w ON w.uid = c.weapon_uid
@@ -85,6 +87,7 @@ fn query(
                 operator_out_name: r.get(12)?,
                 operator_in_name: r.get(13)?,
                 notes: r.get(14)?,
+                weapon_display_id: r.get(15)?,
             })
         },
     )?;
