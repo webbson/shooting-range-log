@@ -126,6 +126,14 @@ impl AppError {
             json!({}),
         )
     }
+
+    pub fn service_description_required() -> Self {
+        AppError::new(
+            "err_service_description_required",
+            "Service description is required.",
+            json!({}),
+        )
+    }
 }
 
 impl From<rusqlite::Error> for AppError {

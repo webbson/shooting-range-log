@@ -24,6 +24,7 @@ import {
   type Weapon,
 } from './api';
 import { errorMessage } from './errors';
+import { ServiceModal } from './ServiceModal';
 
 interface WeaponForm {
   displayId: string;
@@ -44,6 +45,7 @@ export function WeaponsPage() {
   // Deactivation reason flow.
   const [deactivating, setDeactivating] = useState<Weapon | null>(null);
   const [reason, setReason] = useState('');
+  const [serviceWeapon, setServiceWeapon] = useState<Weapon | null>(null);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const form = useForm<WeaponForm>({ initialValues: EMPTY });
@@ -111,6 +113,9 @@ export function WeaponsPage() {
       </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="flex-end" wrap="nowrap">
+          <Button size="xs" variant="subtle" onClick={() => setServiceWeapon(w)}>
+            {t('service')}
+          </Button>
           <Button size="xs" variant="default" onClick={() => openEdit(w)}>
             {t('edit')}
           </Button>
@@ -236,6 +241,19 @@ export function WeaponsPage() {
           </Group>
         </Stack>
       </Modal>
+
+      <ServiceModal
+        weaponUid={serviceWeapon?.uid ?? null}
+        weaponLabel={
+          serviceWeapon
+            ? [serviceWeapon.displayId, serviceWeapon.brand, serviceWeapon.model]
+                .filter(Boolean)
+                .join(' · ')
+            : ''
+        }
+        opened={serviceWeapon != null}
+        onClose={() => setServiceWeapon(null)}
+      />
     </Stack>
   );
 }

@@ -5,6 +5,7 @@ mod debt;
 mod error;
 mod logs;
 mod models;
+mod service;
 
 use error::AppError;
 use tauri::Manager;
@@ -52,6 +53,8 @@ pub fn run() {
             debt::settle_debt,
             debt::outstanding_debts,
             logs::list_checkouts,
+            service::add_service,
+            service::list_weapon_service,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
