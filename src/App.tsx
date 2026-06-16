@@ -14,6 +14,7 @@ import { Placeholder } from './pages';
 import { CheckoutPage } from './CheckoutPage';
 import { MembersPage } from './MembersPage';
 import { WeaponsPage } from './WeaponsPage';
+import { LogsPage } from './LogsPage';
 
 const queryClient = new QueryClient();
 
@@ -31,7 +32,7 @@ export default function App() {
                 <Route path="checkout" element={<CheckoutPage />} />
                 <Route path="members" element={<MembersPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />
-                <Route path="logs" element={<Placeholder titleKey="nav_logs" />} />
+                <Route path="logs" element={<LogsPage />} />
                 <Route path="backup" element={<Placeholder titleKey="nav_backup" />} />
               </Route>
             </Routes>
