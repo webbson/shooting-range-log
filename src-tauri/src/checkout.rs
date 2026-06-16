@@ -84,6 +84,9 @@ pub struct CheckoutEval {
     /// Weapon's most-recent user, suggested when no user is picked yet.
     pub suggested_user_uid: Option<i64>,
     pub suggested_user_name: Option<String>,
+    /// Member's most-recent weapon, suggested when no weapon is picked yet.
+    pub suggested_weapon_uid: Option<i64>,
+    pub suggested_weapon_label: Option<String>,
     pub weapon_inactive: bool,
     pub weapon_inactive_reason: Option<String>,
     pub weapon_already_out: bool,
@@ -161,6 +164,28 @@ fn open_checkout_for(
         .optional()?)
 }
 
+/// (weapon_uid, label) of the member's most recent checkout — for member→weapon
+/// autopopulate.
+fn most_recent_weapon_for_user(
+    conn: &Connection,
+    user_uid: i64,
+) -> Result<Option<(i64, String)>, AppError> {
+    Ok(conn
+        .query_row(
+            "SELECT weapon_uid, weapon_label_snapshot, weapon_display_snapshot
+             FROM checkouts WHERE user_uid = ?1
+             ORDER BY checked_out_at DESC, id DESC LIMIT 1",
+            params![user_uid],
+            |r| {
+                let wuid: i64 = r.get(0)?;
+                let label: Option<String> = r.get(1)?;
+                let disp: Option<String> = r.get(2)?;
+                Ok((wuid, label.or(disp).unwrap_or_default()))
+            },
+        )
+        .optional()?)
+}
+
 fn outstanding_debt(conn: &Connection, user_uid: i64) -> Result<i64, AppError> {
     Ok(conn.query_row(
         "SELECT COALESCE(SUM(amount_kr), 0) FROM debts WHERE user_uid = ?1 AND settled_at IS NULL",
@@ -217,6 +242,17 @@ fn evaluate(
                 eval.fresher_user_at = Some(mat);
             }
             _ => {}
+        }
+    }
+
+    // Symmetric autopopulate: member picked, weapon not → suggest member's most
+    // recent weapon.
+    if weapon_uid.is_none() {
+        if let Some(uuid) = user_uid {
+            if let Some((wuid, label)) = most_recent_weapon_for_user(conn, uuid)? {
+                eval.suggested_weapon_uid = Some(wuid);
+                eval.suggested_weapon_label = Some(label);
+            }
         }
     }
 
@@ -456,6 +492,30 @@ mod tests {
         let e = evaluate(&conn, Some(fresh), None).unwrap();
         assert!(e.suggested_user_uid.is_none());
         assert!(e.fresher_user_name.is_none());
+    }
+
+    #[test]
+    fn member_to_weapon_suggestion() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let w = mk_weapon(&conn, "W1");
+
+        // No history → no weapon suggestion.
+        let e = evaluate(&conn, None, Some(anna)).unwrap();
+        assert!(e.suggested_weapon_uid.is_none());
+
+        let c = do_checkout(&conn, w, anna, op, None).unwrap();
+        do_checkin(&conn, c.id, op).unwrap();
+
+        // Member picked, no weapon → suggest the member's last weapon.
+        let e = evaluate(&conn, None, Some(anna)).unwrap();
+        assert_eq!(e.suggested_weapon_uid, Some(w));
+        assert_eq!(e.suggested_weapon_label.as_deref(), Some("Glock 17 (S-W1)"));
+
+        // Weapon already picked → no weapon suggestion.
+        let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
+        assert!(e.suggested_weapon_uid.is_none());
     }
 
     #[test]
