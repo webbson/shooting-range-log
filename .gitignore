@@ -1,0 +1,35 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local SQLite database + WAL sidecars
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Local backups
+/backups/
+
+# Session continuity — never commit (per global CLAUDE.md)
+primer.md
