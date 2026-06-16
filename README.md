@@ -6,14 +6,17 @@ English). Developed on macOS, shipped to Windows.
 
 ## Features
 - **Members & weapons** — CRUD with active/inactive state. A movable display **ID** (the
-  physical tag) is separate from the hidden internal key, so a tag can be reassigned once a
-  weapon/member is retired without losing history.
+  physical tag) is separate from the hidden internal key. An ID is **required while active**,
+  auto-fillable to the next free number, and can be **freed on deactivation** so it's reusable
+  on another weapon/member. Weapons also track serial + caliber. Identity in logs/lists is
+  resolved **live** (shown `name (id)`, or `name (disabled)` once retired) — never snapshotted.
 - **Checkout / checkin** — enter a weapon or a member; the other side autopopulates
   (overridable). Loud, colour-coded banners warn about: outstanding **debt**, **inactive**
   weapon/member, a weapon that's **already checked out** (with the holder), and a
   **fresher-user mismatch**. Already-out weapons can't be selected.
-- **Debt** — record free-form amounts (whole kr) owed by a member, optionally at checkout;
-  highlighted whenever the member is selected; settle from the member's debt view.
+- **Debt** — record free-form amounts (whole kr) owed by a member; add from a checked-out
+  weapon's **Add debt** button or the member's debt view; highlighted whenever the member is
+  selected; settle from the member's debt view.
 - **Logs** — filterable checkout history (by weapon, member, operator, date range, open-only)
   serving both "weapon checkout log" and "member shooting log".
 - **Weapon service log** — append-only, operator-tagged service history per weapon.

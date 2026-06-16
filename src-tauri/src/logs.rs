@@ -1,7 +1,8 @@
 //! Read-only log views over the append-only `checkouts` table. One filterable
 //! query serves both "weapon checkout history" (filter by weapon) and "member
-//! shooting log" (filter by member). Display uses the row's identity snapshots;
-//! operator names are joined live (operators rarely change name).
+//! shooting log" (filter by member). Identity (weapon, member, operators) is
+//! resolved live by uid — history reflects each entity's current name/status,
+//! not a point-in-time snapshot (snapshots would mis-attribute a reassigned tag).
 
 use rusqlite::{params, Connection};
 use serde::Serialize;
@@ -20,10 +21,14 @@ pub struct CheckoutLog {
     pub id: i64,
     pub weapon_uid: i64,
     pub user_uid: i64,
-    pub weapon_display: Option<String>,
-    pub weapon_label: Option<String>,
-    pub user_display: Option<String>,
+    // Live identity (looked up by uid), composed for display by the frontend.
     pub user_name: Option<String>,
+    pub user_display_id: Option<String>,
+    pub user_active: bool,
+    pub weapon_brand: Option<String>,
+    pub weapon_model: Option<String>,
+    pub weapon_serial: Option<String>,
+    pub weapon_active: bool,
     pub checked_out_at: String,
     pub checked_in_at: Option<String>,
     pub operator_out_name: Option<String>,
@@ -44,11 +49,13 @@ fn query(
     // Date filter compares the YYYY-MM-DD prefix of the UTC timestamp.
     let mut stmt = conn.prepare(
         "SELECT c.id, c.weapon_uid, c.user_uid,
-                c.weapon_display_snapshot, c.weapon_label_snapshot,
-                c.user_display_snapshot, c.user_name_snapshot,
+                u.name, u.display_id, u.active,
+                w.brand, w.model, w.serial, w.active,
                 c.checked_out_at, c.checked_in_at,
                 oo.name AS op_out_name, oi.name AS op_in_name, c.notes
          FROM checkouts c
+         JOIN users u ON u.uid = c.user_uid
+         JOIN weapons w ON w.uid = c.weapon_uid
          LEFT JOIN users oo ON oo.uid = c.operator_out_uid
          LEFT JOIN users oi ON oi.uid = c.operator_in_uid
          WHERE (?1 IS NULL OR c.weapon_uid = ?1)
@@ -66,15 +73,18 @@ fn query(
                 id: r.get(0)?,
                 weapon_uid: r.get(1)?,
                 user_uid: r.get(2)?,
-                weapon_display: r.get(3)?,
-                weapon_label: r.get(4)?,
-                user_display: r.get(5)?,
-                user_name: r.get(6)?,
-                checked_out_at: r.get(7)?,
-                checked_in_at: r.get(8)?,
-                operator_out_name: r.get(9)?,
-                operator_in_name: r.get(10)?,
-                notes: r.get(11)?,
+                user_name: r.get(3)?,
+                user_display_id: r.get(4)?,
+                user_active: r.get(5)?,
+                weapon_brand: r.get(6)?,
+                weapon_model: r.get(7)?,
+                weapon_serial: r.get(8)?,
+                weapon_active: r.get(9)?,
+                checked_out_at: r.get(10)?,
+                checked_in_at: r.get(11)?,
+                operator_out_name: r.get(12)?,
+                operator_in_name: r.get(13)?,
+                notes: r.get(14)?,
             })
         },
     )?;
@@ -116,8 +126,7 @@ mod tests {
         user_create(
             conn,
             NewUser {
-                display_id: None,
-                member_number: None,
+                display_id: Some(name.into()),
                 name: name.into(),
                 email: None,
                 phone: None,
@@ -139,6 +148,7 @@ mod tests {
                 brand: Some("Glock".into()),
                 model: Some("17".into()),
                 serial: Some(format!("S-{display}")),
+                caliber: None,
                 notes: None,
             },
         )

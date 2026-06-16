@@ -38,6 +38,7 @@ const resources = {
       staff: 'Personal',
       active: 'Aktiv',
       inactive: 'Inaktiv',
+      label_disabled: 'inaktiverad',
       status: 'Status',
 
       // Members
@@ -51,10 +52,12 @@ const resources = {
       no_weapons: 'Inga vapen ännu.',
       inactive_reason: 'Orsak till inaktivering',
       confirm_deactivate_title: 'Inaktivera',
+      clear_display_id: 'Frigör ID så det kan återanvändas på ett annat vapen',
+      clear_display_id_member: 'Frigör ID så det kan återanvändas på en annan medlem',
+      next_free_id: 'Nästa lediga',
 
       // Fields
       field_display_id: 'ID',
-      field_member_number: 'Medlemsnummer',
       field_name: 'Namn',
       field_email: 'E-post',
       field_phone: 'Telefon',
@@ -65,13 +68,16 @@ const resources = {
       field_brand: 'Märke',
       field_model: 'Modell',
       field_serial: 'Serienummer',
+      field_caliber: 'Kaliber',
       name_required: 'Namn krävs.',
+      display_id_required: 'ID krävs.',
 
       // Error codes from Rust
       err_display_id_taken: "ID '{{displayId}}' används redan av en annan aktiv post.",
       err_serial_taken:
         "Serienummer '{{serial}}' är redan registrerat på ett annat vapen.",
       err_name_required: 'Namn krävs.',
+      err_display_id_required: 'Ett ID krävs för en aktiv post.',
       err_user_not_found: 'Medlem {{uid}} hittades inte.',
       err_weapon_not_found: 'Vapen {{uid}} hittades inte.',
       err_weapon_inactive: 'Vapnet är inaktivt.',
@@ -85,14 +91,13 @@ const resources = {
       field_weapon: 'Vapen',
       field_member: 'Medlem',
       select_weapon_ph: 'Välj vapen (ID, märke, modell)',
-      select_member_ph: 'Välj medlem (ID, namn, medlemsnr)',
-      held_by: 'hos {{name}}',
+      select_member_ph: 'Välj medlem (ID, namn)',
       banner_weapon_inactive: 'Vapnet är inaktivt: {{reason}}',
       banner_weapon_inactive_noreason: 'Vapnet är inaktivt.',
       banner_weapon_already_out: 'Vapnet är redan utlånat till {{name}}.',
       banner_user_inactive: 'Medlemmen är inaktiv.',
       banner_debt: 'Skuld: {{amount}} kr',
-      banner_fresher: 'Senast använt av {{name}}.',
+      banner_fresher: 'Senast använt av {{name}} ({{date}}).',
       banner_suggested_user_busy: '{{name}} (senaste användaren) har redan lånat ett vapen.',
       banner_suggested_weapon_out: 'Senast använda vapnet ({{label}}) är redan utlånat.',
       confirm_checkout: 'Lämna ut',
@@ -118,7 +123,6 @@ const resources = {
       no_debts: 'Inga skulder.',
       settled: 'Reglerad',
       settle: 'Reglera',
-      checkout_debt: 'Lägg till skuld vid utlämning (kr)',
 
       // Logs (M4)
       label_from: 'Från',
@@ -174,6 +178,7 @@ const resources = {
       staff: 'Staff',
       active: 'Active',
       inactive: 'Inactive',
+      label_disabled: 'disabled',
       status: 'Status',
 
       // Members
@@ -187,10 +192,12 @@ const resources = {
       no_weapons: 'No weapons yet.',
       inactive_reason: 'Reason for deactivation',
       confirm_deactivate_title: 'Deactivate',
+      clear_display_id: 'Free the ID so it can be reused on another weapon',
+      clear_display_id_member: 'Free the ID so it can be reused on another member',
+      next_free_id: 'Next free',
 
       // Fields
       field_display_id: 'ID',
-      field_member_number: 'Member number',
       field_name: 'Name',
       field_email: 'Email',
       field_phone: 'Phone',
@@ -201,13 +208,16 @@ const resources = {
       field_brand: 'Brand',
       field_model: 'Model',
       field_serial: 'Serial number',
+      field_caliber: 'Caliber',
       name_required: 'Name is required.',
+      display_id_required: 'ID is required.',
 
       // Error codes from Rust
       err_display_id_taken:
         "Display ID '{{displayId}}' is already in use by another active record.",
       err_serial_taken: "Serial '{{serial}}' is already registered to another weapon.",
       err_name_required: 'Name is required.',
+      err_display_id_required: 'An ID is required for an active record.',
       err_user_not_found: 'Member {{uid}} not found.',
       err_weapon_not_found: 'Weapon {{uid}} not found.',
       err_weapon_inactive: 'Weapon is inactive.',
@@ -221,14 +231,13 @@ const resources = {
       field_weapon: 'Weapon',
       field_member: 'Member',
       select_weapon_ph: 'Select weapon (ID, brand, model)',
-      select_member_ph: 'Select member (ID, name, member no.)',
-      held_by: 'with {{name}}',
+      select_member_ph: 'Select member (ID, name)',
       banner_weapon_inactive: 'Weapon is inactive: {{reason}}',
       banner_weapon_inactive_noreason: 'Weapon is inactive.',
       banner_weapon_already_out: 'Weapon is already checked out to {{name}}.',
       banner_user_inactive: 'Member is inactive.',
       banner_debt: 'Debt: {{amount}} kr',
-      banner_fresher: 'Last used by {{name}}.',
+      banner_fresher: 'Last used by {{name}} ({{date}}).',
       banner_suggested_user_busy: '{{name}} (last user) already has a weapon checked out.',
       banner_suggested_weapon_out: 'Last-used weapon ({{label}}) is already checked out.',
       confirm_checkout: 'Check out',
@@ -254,7 +263,6 @@ const resources = {
       no_debts: 'No debts.',
       settled: 'Settled',
       settle: 'Settle',
-      checkout_debt: 'Add debt at checkout (kr)',
 
       // Logs (M4)
       label_from: 'From',

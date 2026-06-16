@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { listWeapons, listUsers, listOperators, listCheckouts } from './api';
 import { fmtDateTime } from './format';
+import { userLabel, weaponLabel } from './labels';
 
 export function LogsPage() {
   const { t } = useTranslation();
@@ -69,12 +70,9 @@ export function LogsPage() {
     <Table.Tr key={c.id}>
       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
       <Table.Td>
-        {c.weaponDisplay} {c.weaponLabel && `· ${c.weaponLabel}`}
+        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponSerial, c.weaponActive, t)}
       </Table.Td>
-      <Table.Td>
-        {c.userDisplay && `${c.userDisplay} · `}
-        {c.userName}
-      </Table.Td>
+      <Table.Td>{userLabel(c.userName, c.userDisplayId, c.userActive, t)}</Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>
         {c.checkedInAt ? (

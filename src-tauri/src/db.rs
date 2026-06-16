@@ -21,8 +21,8 @@ pub struct Db(pub Mutex<Connection>);
 /// Identity model: `uid` is the hidden permanent PK / only FK target;
 /// `display_id` is the movable physical tag, unique only among **active** rows
 /// (partial indexes below) so a tag can be reassigned once its holder is retired.
-/// Log tables snapshot `display_id`/name at event time so history reads correctly
-/// after a tag moves. Money is whole kronor (`amount_kr`). Timestamps are RFC3339 UTC.
+/// Log rows store only uids; identity is resolved live by uid at read time (no
+/// snapshots). Money is whole kronor (`amount_kr`). Timestamps are RFC3339 UTC.
 const SCHEMA_V1: &str = r#"
 CREATE TABLE app_meta (
   key   TEXT PRIMARY KEY,
@@ -33,7 +33,6 @@ INSERT INTO app_meta (key, value) VALUES ('app', 'shooting-range-log');
 CREATE TABLE users (
   uid           INTEGER PRIMARY KEY,
   display_id    TEXT,
-  member_number TEXT,
   name          TEXT NOT NULL,
   email         TEXT,
   phone         TEXT,
@@ -47,7 +46,6 @@ CREATE TABLE users (
 );
 CREATE UNIQUE INDEX idx_users_display_active
   ON users(display_id) WHERE active = 1 AND display_id IS NOT NULL;
-CREATE INDEX idx_users_member_number ON users(member_number);
 
 CREATE TABLE weapons (
   uid             INTEGER PRIMARY KEY,
@@ -55,6 +53,7 @@ CREATE TABLE weapons (
   brand           TEXT,
   model           TEXT,
   serial          TEXT,
+  caliber         TEXT,
   active          INTEGER NOT NULL DEFAULT 1,
   inactive_reason TEXT,
   notes           TEXT,
@@ -70,10 +69,6 @@ CREATE TABLE checkouts (
   id                       INTEGER PRIMARY KEY,
   weapon_uid               INTEGER NOT NULL REFERENCES weapons(uid),
   user_uid                 INTEGER NOT NULL REFERENCES users(uid),
-  weapon_display_snapshot  TEXT,
-  weapon_label_snapshot    TEXT,
-  user_display_snapshot    TEXT,
-  user_name_snapshot       TEXT,
   operator_out_uid         INTEGER NOT NULL REFERENCES users(uid),
   checked_out_at           TEXT NOT NULL,
   operator_in_uid          INTEGER REFERENCES users(uid),
@@ -87,7 +82,6 @@ CREATE INDEX idx_checkouts_open ON checkouts(weapon_uid) WHERE checked_in_at IS 
 CREATE TABLE weapon_service_log (
   id                      INTEGER PRIMARY KEY,
   weapon_uid              INTEGER NOT NULL REFERENCES weapons(uid),
-  weapon_display_snapshot TEXT,
   operator_uid            INTEGER NOT NULL REFERENCES users(uid),
   serviced_at             TEXT NOT NULL,
   description             TEXT NOT NULL,
@@ -98,7 +92,6 @@ CREATE INDEX idx_service_weapon ON weapon_service_log(weapon_uid, serviced_at);
 CREATE TABLE debts (
   id                   INTEGER PRIMARY KEY,
   user_uid             INTEGER NOT NULL REFERENCES users(uid),
-  user_name_snapshot   TEXT,
   operator_uid         INTEGER NOT NULL REFERENCES users(uid),
   amount_kr            INTEGER NOT NULL,
   reason               TEXT,
@@ -110,8 +103,9 @@ CREATE TABLE debts (
 CREATE INDEX idx_debts_user_open ON debts(user_uid) WHERE settled_at IS NULL;
 "#;
 
-/// Ordered list of migrations. Never edit a released migration — append a new
-/// one. `to_latest` applies any not yet recorded in `PRAGMA user_version`.
+/// Ordered list of migrations. Once a migration has shipped to a real install,
+/// never edit it — append a new one. `to_latest` applies any not yet recorded in
+/// `PRAGMA user_version`.
 fn migrations() -> Migrations<'static> {
     Migrations::new(vec![
         // 0001 — full domain schema.

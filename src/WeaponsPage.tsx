@@ -7,6 +7,7 @@ import {
   Modal,
   TextInput,
   Textarea,
+  Checkbox,
   Stack,
   Text,
 } from '@mantine/core';
@@ -21,9 +22,11 @@ import {
   createWeapon,
   updateWeapon,
   setWeaponActive,
+  nextWeaponDisplayId,
   type Weapon,
 } from './api';
 import { errorMessage } from './errors';
+import { weaponLabel } from './labels';
 import { ServiceModal } from './ServiceModal';
 
 interface WeaponForm {
@@ -31,10 +34,18 @@ interface WeaponForm {
   brand: string;
   model: string;
   serial: string;
+  caliber: string;
   notes: string;
 }
 
-const EMPTY: WeaponForm = { displayId: '', brand: '', model: '', serial: '', notes: '' };
+const EMPTY: WeaponForm = {
+  displayId: '',
+  brand: '',
+  model: '',
+  serial: '',
+  caliber: '',
+  notes: '',
+};
 
 export function WeaponsPage() {
   const { t } = useTranslation();
@@ -42,9 +53,10 @@ export function WeaponsPage() {
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<Weapon | null>(null);
 
-  // Deactivation reason flow.
+  // Deactivation flow (reason + optional tag release).
   const [deactivating, setDeactivating] = useState<Weapon | null>(null);
   const [reason, setReason] = useState('');
+  const [clearId, setClearId] = useState(false);
   const [serviceWeapon, setServiceWeapon] = useState<Weapon | null>(null);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
@@ -53,6 +65,10 @@ export function WeaponsPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['weapons'] });
   const onError = (e: unknown) =>
     notifications.show({ color: 'red', message: errorMessage(e, t) });
+
+  // An active weapon (a new one, or an existing active one being edited) must
+  // carry an ID. Inactive weapons may have it cleared. Rust enforces this too.
+  const idRequired = !editing || editing.active;
 
   const save = useMutation({
     mutationFn: (v: WeaponForm) =>
@@ -65,13 +81,40 @@ export function WeaponsPage() {
     onError,
   });
 
+  // Activate an inactive weapon: persist the (possibly newly entered) ID first,
+  // then flip it active.
+  const activate = useMutation({
+    mutationFn: async (v: WeaponForm) => {
+      if (!editing) throw new Error('no weapon');
+      await updateWeapon({ ...v, uid: editing.uid });
+      return setWeaponActive(editing.uid, true);
+    },
+    onSuccess: () => {
+      invalidate();
+      close();
+      notifications.show({ message: t('saved') });
+    },
+    onError,
+  });
+
+  const suggestId = useMutation({
+    mutationFn: nextWeaponDisplayId,
+    onSuccess: (id) => form.setFieldValue('displayId', id),
+    onError,
+  });
+
   const setActive = useMutation({
-    mutationFn: (args: { uid: number; active: boolean; reason?: string }) =>
-      setWeaponActive(args.uid, args.active, args.reason),
+    mutationFn: (args: {
+      uid: number;
+      active: boolean;
+      reason?: string;
+      clearDisplayId?: boolean;
+    }) => setWeaponActive(args.uid, args.active, args.reason, args.clearDisplayId),
     onSuccess: () => {
       invalidate();
       setDeactivating(null);
       setReason('');
+      setClearId(false);
     },
     onError,
   });
@@ -90,9 +133,34 @@ export function WeaponsPage() {
       brand: w.brand ?? '',
       model: w.model ?? '',
       serial: w.serial ?? '',
+      caliber: w.caliber ?? '',
       notes: w.notes ?? '',
     });
     open();
+  };
+
+  const onSave = (v: WeaponForm) => {
+    if (idRequired && !v.displayId.trim()) {
+      form.setFieldError('displayId', t('display_id_required'));
+      return;
+    }
+    save.mutate(v);
+  };
+
+  const onActivate = () => {
+    const v = form.values;
+    if (!v.displayId.trim()) {
+      form.setFieldError('displayId', t('display_id_required'));
+      return;
+    }
+    activate.mutate(v);
+  };
+
+  const openDeactivate = (w: Weapon) => {
+    setReason('');
+    setClearId(false);
+    setDeactivating(w);
+    close();
   };
 
   const rows = (weapons.data ?? []).map((w) => (
@@ -101,6 +169,7 @@ export function WeaponsPage() {
       <Table.Td>{w.brand}</Table.Td>
       <Table.Td>{w.model}</Table.Td>
       <Table.Td>{w.serial}</Table.Td>
+      <Table.Td>{w.caliber}</Table.Td>
       <Table.Td>
         <Badge color={w.active ? 'teal' : 'gray'} variant="light">
           {w.active ? t('active') : t('inactive')}
@@ -119,28 +188,6 @@ export function WeaponsPage() {
           <Button size="xs" variant="default" onClick={() => openEdit(w)}>
             {t('edit')}
           </Button>
-          {w.active ? (
-            <Button
-              size="xs"
-              variant="subtle"
-              color="red"
-              onClick={() => {
-                setReason('');
-                setDeactivating(w);
-              }}
-            >
-              {t('deactivate')}
-            </Button>
-          ) : (
-            <Button
-              size="xs"
-              variant="subtle"
-              color="teal"
-              onClick={() => setActive.mutate({ uid: w.uid, active: true })}
-            >
-              {t('activate')}
-            </Button>
-          )}
         </Group>
       </Table.Td>
     </Table.Tr>
@@ -164,6 +211,7 @@ export function WeaponsPage() {
                 <Table.Th>{t('field_brand')}</Table.Th>
                 <Table.Th>{t('field_model')}</Table.Th>
                 <Table.Th>{t('field_serial')}</Table.Th>
+                <Table.Th>{t('field_caliber')}</Table.Th>
                 <Table.Th>{t('status')}</Table.Th>
                 <Table.Th />
               </Table.Tr>
@@ -180,33 +228,74 @@ export function WeaponsPage() {
         title={editing ? t('edit_weapon') : t('new_weapon')}
         centered
       >
-        <form onSubmit={form.onSubmit((v) => save.mutate(v))}>
+        <form onSubmit={form.onSubmit(onSave)}>
           <Stack>
-            <TextInput label={t('field_display_id')} {...form.getInputProps('displayId')} />
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <TextInput
+                style={{ flex: 1 }}
+                label={t('field_display_id')}
+                withAsterisk={idRequired}
+                {...form.getInputProps('displayId')}
+              />
+              {!form.values.displayId.trim() && (
+                <Button
+                  variant="default"
+                  loading={suggestId.isPending}
+                  onClick={() => suggestId.mutate()}
+                >
+                  {t('next_free_id')}
+                </Button>
+              )}
+            </Group>
             <Group grow>
               <TextInput label={t('field_brand')} {...form.getInputProps('brand')} />
               <TextInput label={t('field_model')} {...form.getInputProps('model')} />
             </Group>
-            <TextInput label={t('field_serial')} {...form.getInputProps('serial')} />
+            <Group grow>
+              <TextInput label={t('field_serial')} {...form.getInputProps('serial')} />
+              <TextInput label={t('field_caliber')} {...form.getInputProps('caliber')} />
+            </Group>
             <Textarea
               label={t('field_notes')}
               autosize
               minRows={2}
               {...form.getInputProps('notes')}
             />
-            <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
-                {t('cancel')}
-              </Button>
-              <Button type="submit" loading={save.isPending}>
-                {t('save')}
-              </Button>
+            <Group justify="space-between">
+              {editing && !editing.active ? (
+                <Button
+                  variant="subtle"
+                  color="teal"
+                  loading={activate.isPending}
+                  onClick={onActivate}
+                >
+                  {t('activate')}
+                </Button>
+              ) : editing ? (
+                <Button
+                  variant="subtle"
+                  color="red"
+                  onClick={() => openDeactivate(editing)}
+                >
+                  {t('deactivate')}
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Group justify="flex-end">
+                <Button variant="default" onClick={close}>
+                  {t('cancel')}
+                </Button>
+                <Button type="submit" loading={save.isPending}>
+                  {t('save')}
+                </Button>
+              </Group>
             </Group>
           </Stack>
         </form>
       </Modal>
 
-      {/* Deactivate reason */}
+      {/* Deactivate reason + optional tag release */}
       <Modal
         opened={deactivating !== null}
         onClose={() => setDeactivating(null)}
@@ -219,6 +308,11 @@ export function WeaponsPage() {
             value={reason}
             onChange={(e) => setReason(e.currentTarget.value)}
             data-autofocus
+          />
+          <Checkbox
+            label={t('clear_display_id')}
+            checked={clearId}
+            onChange={(e) => setClearId(e.currentTarget.checked)}
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setDeactivating(null)}>
@@ -233,6 +327,7 @@ export function WeaponsPage() {
                   uid: deactivating.uid,
                   active: false,
                   reason: reason.trim() || undefined,
+                  clearDisplayId: clearId,
                 })
               }
             >
@@ -246,9 +341,13 @@ export function WeaponsPage() {
         weaponUid={serviceWeapon?.uid ?? null}
         weaponLabel={
           serviceWeapon
-            ? [serviceWeapon.displayId, serviceWeapon.brand, serviceWeapon.model]
-                .filter(Boolean)
-                .join(' · ')
+            ? weaponLabel(
+                serviceWeapon.brand,
+                serviceWeapon.model,
+                serviceWeapon.serial,
+                serviceWeapon.active,
+                t,
+              )
             : ''
         }
         opened={serviceWeapon != null}

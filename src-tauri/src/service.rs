@@ -1,5 +1,5 @@
-//! Weapon service history. Append-only, operator-tagged, with a weapon
-//! display_id snapshot so old entries read correctly after a tag is reassigned.
+//! Weapon service history. Append-only, operator-tagged. The weapon is referenced
+//! by uid; its identity is resolved live by the caller (no snapshot stored).
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
@@ -26,7 +26,6 @@ fn lock<'a>(db: &'a State<'_, Db>) -> Result<std::sync::MutexGuard<'a, Connectio
 pub struct ServiceLog {
     pub id: i64,
     pub weapon_uid: i64,
-    pub weapon_display_snapshot: Option<String>,
     pub operator_uid: i64,
     pub operator_name: Option<String>,
     pub serviced_at: String,
@@ -46,13 +45,13 @@ fn add(
     if description.is_empty() {
         return Err(AppError::service_description_required());
     }
-    let w = weapon_get(conn, weapon_uid)?.ok_or_else(|| AppError::weapon_not_found(weapon_uid))?;
+    weapon_get(conn, weapon_uid)?.ok_or_else(|| AppError::weapon_not_found(weapon_uid))?;
     let when = norm(serviced_at).unwrap_or_else(now_utc);
     conn.execute(
         "INSERT INTO weapon_service_log
-           (weapon_uid, weapon_display_snapshot, operator_uid, serviced_at, description, notes)
-         VALUES (?1,?2,?3,?4,?5,?6)",
-        params![weapon_uid, w.display_id, operator_uid, when, description, norm(notes)],
+           (weapon_uid, operator_uid, serviced_at, description, notes)
+         VALUES (?1,?2,?3,?4,?5)",
+        params![weapon_uid, operator_uid, when, description, norm(notes)],
     )?;
     get(conn, conn.last_insert_rowid())?
         .ok_or_else(|| AppError::internal("inserted service entry not found"))
@@ -61,7 +60,7 @@ fn add(
 fn get(conn: &Connection, id: i64) -> Result<Option<ServiceLog>, AppError> {
     Ok(conn
         .query_row(
-            "SELECT s.id, s.weapon_uid, s.weapon_display_snapshot, s.operator_uid,
+            "SELECT s.id, s.weapon_uid, s.operator_uid,
                     o.name, s.serviced_at, s.description, s.notes
              FROM weapon_service_log s LEFT JOIN users o ON o.uid = s.operator_uid
              WHERE s.id = ?1",
@@ -73,7 +72,7 @@ fn get(conn: &Connection, id: i64) -> Result<Option<ServiceLog>, AppError> {
 
 fn list_for_weapon(conn: &Connection, weapon_uid: i64) -> Result<Vec<ServiceLog>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT s.id, s.weapon_uid, s.weapon_display_snapshot, s.operator_uid,
+        "SELECT s.id, s.weapon_uid, s.operator_uid,
                 o.name, s.serviced_at, s.description, s.notes
          FROM weapon_service_log s LEFT JOIN users o ON o.uid = s.operator_uid
          WHERE s.weapon_uid = ?1
@@ -87,12 +86,11 @@ fn row_to_log(r: &rusqlite::Row) -> rusqlite::Result<ServiceLog> {
     Ok(ServiceLog {
         id: r.get(0)?,
         weapon_uid: r.get(1)?,
-        weapon_display_snapshot: r.get(2)?,
-        operator_uid: r.get(3)?,
-        operator_name: r.get(4)?,
-        serviced_at: r.get(5)?,
-        description: r.get(6)?,
-        notes: r.get(7)?,
+        operator_uid: r.get(2)?,
+        operator_name: r.get(3)?,
+        serviced_at: r.get(4)?,
+        description: r.get(5)?,
+        notes: r.get(6)?,
     })
 }
 
@@ -128,8 +126,7 @@ mod tests {
         user_create(
             conn,
             NewUser {
-                display_id: None,
-                member_number: None,
+                display_id: Some("OP".into()),
                 name: "Op".into(),
                 email: None,
                 phone: None,
@@ -151,6 +148,7 @@ mod tests {
                 brand: Some("Glock".into()),
                 model: Some("17".into()),
                 serial: Some("S-1".into()),
+                caliber: None,
                 notes: None,
             },
         )
@@ -159,14 +157,13 @@ mod tests {
     }
 
     #[test]
-    fn add_lists_snapshot_and_operator() {
+    fn add_lists_and_resolves_operator() {
         let conn = migrated_in_memory();
         let op = mk_op(&conn);
         let w = mk_weapon(&conn);
 
         let s = add(&conn, w, op, "  Cleaned barrel  ".into(), None, None).unwrap();
         assert_eq!(s.description, "Cleaned barrel");
-        assert_eq!(s.weapon_display_snapshot.as_deref(), Some("W1"));
         assert_eq!(s.operator_name.as_deref(), Some("Op"));
 
         let list = list_for_weapon(&conn, w).unwrap();
