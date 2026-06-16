@@ -13,6 +13,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import { listWeaponService, addService } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -46,7 +47,7 @@ export function ServiceModal({
   });
 
   const form = useForm<ServiceForm>({
-    initialValues: { description: '', notes: '', servicedAt: '' },
+    initialValues: { description: '', notes: '', servicedAt: dayjs().format('YYYY-MM-DD') },
     validate: { description: (v) => (v.trim() ? null : t('err_service_description_required')) },
   });
 
