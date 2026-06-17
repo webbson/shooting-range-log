@@ -119,6 +119,37 @@ pub fn list_checkouts(
     )
 }
 
+/// Most recent shooting date per member (`MAX(checked_out_at)`), for the members
+/// list "last shot" column. Mirrors `outstanding_debts`: an aggregate keyed by
+/// `user_uid` that the frontend folds into a Map. Only members with at least one
+/// checkout appear; `checked_out_at` is NOT NULL so `last_shot_at` is never null.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastShot {
+    pub user_uid: i64,
+    pub last_shot_at: String,
+}
+
+fn last_shot_dates_q(conn: &Connection) -> Result<Vec<LastShot>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT user_uid, MAX(checked_out_at) AS last_shot_at
+         FROM checkouts GROUP BY user_uid",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(LastShot {
+            user_uid: r.get(0)?,
+            last_shot_at: r.get(1)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+#[tauri::command]
+pub fn last_shot_dates(db: State<Db>) -> Result<Vec<LastShot>, AppError> {
+    let conn = lock(&db)?;
+    last_shot_dates_q(&conn)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,5 +218,25 @@ mod tests {
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].weapon_uid, w2);
         assert_eq!(open[0].operator_out_name.as_deref(), Some("Op"));
+    }
+
+    #[test]
+    fn last_shot_dates_returns_max_per_member_and_skips_non_shooters() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", true);
+        let anna = mk_user(&conn, "Anna", false);
+        let _never = mk_user(&conn, "Never", false); // no checkouts → absent
+        let w1 = mk_weapon(&conn, "W1");
+        let w2 = mk_weapon(&conn, "W2");
+
+        let c1 = do_checkout(&conn, w1, anna, op, None).unwrap();
+        do_checkin(&conn, c1.id, op).unwrap();
+        let c2 = do_checkout(&conn, w2, anna, op, None).unwrap();
+        let expected_max = c1.checked_out_at.max(c2.checked_out_at);
+
+        let rows = last_shot_dates_q(&conn).unwrap();
+        assert_eq!(rows.len(), 1); // only Anna shot
+        assert_eq!(rows[0].user_uid, anna);
+        assert_eq!(rows[0].last_shot_at, expected_max);
     }
 }

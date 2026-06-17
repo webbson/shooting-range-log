@@ -49,6 +49,12 @@ const resources = {
       new_member: 'Ny medlem',
       edit_member: 'Redigera medlem',
       no_members: 'Inga medlemmar ännu.',
+      field_last_shot: 'Senaste skjutdatum',
+      member_info: 'Medlemsuppgifter',
+      field_member_since: 'Medlem sedan',
+      shooting_history: 'Skjuthistorik',
+      no_shooting_history: 'Ingen skjuthistorik.',
+      back: 'Tillbaka',
 
       // Weapons
       new_weapon: 'Nytt vapen',
@@ -196,6 +202,12 @@ const resources = {
       new_member: 'New member',
       edit_member: 'Edit member',
       no_members: 'No members yet.',
+      field_last_shot: 'Last shooting date',
+      member_info: 'Member details',
+      field_member_since: 'Member since',
+      shooting_history: 'Shooting history',
+      no_shooting_history: 'No shooting history.',
+      back: 'Back',
 
       // Weapons
       new_weapon: 'New weapon',

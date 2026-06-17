@@ -64,6 +64,7 @@ pub fn run() {
             debt::settle_debt,
             debt::outstanding_debts,
             logs::list_checkouts,
+            logs::last_shot_dates,
             service::add_service,
             service::list_weapon_service,
         ])

@@ -11,6 +11,7 @@ import {
   Checkbox,
   Stack,
   Text,
+  UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
@@ -18,6 +19,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   listUsers,
   createUser,
@@ -25,11 +27,15 @@ import {
   setUserActive,
   nextUserDisplayId,
   outstandingDebts,
+  lastShotDates,
   type User,
 } from './api';
 import { errorMessage } from './errors';
 import { userLabel } from './labels';
+import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
+
+type SortKey = 'id' | 'name' | 'lastShot';
 
 interface MemberForm {
   displayId: string;
@@ -56,6 +62,7 @@ const EMPTY: MemberForm = {
 export function MembersPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [debtUser, setDebtUser] = useState<User | null>(null);
@@ -67,10 +74,20 @@ export function MembersPage() {
   // List view: active-only by default, with a search box + show-inactive toggle.
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
+    key: 'name',
+    dir: 'asc',
+  });
+  const toggleSort = (k: SortKey) =>
+    setSort((s) =>
+      s.key === k ? { key: k, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' },
+    );
 
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
+  const shots = useQuery({ queryKey: ['lastShotDates'], queryFn: lastShotDates });
+  const lastShotMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
 
   const form = useForm<MemberForm>({
     initialValues: EMPTY,
@@ -186,8 +203,48 @@ export function MembersPage() {
     );
   });
 
-  const rows = filtered.map((u) => (
-    <Table.Tr key={u.uid} opacity={u.active ? 1 : 0.5}>
+  // Sort the filtered rows. Missing values (no tag / never shot) always sink to
+  // the bottom regardless of direction; name is never null.
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort.key === 'name') return a.name.localeCompare(b.name, 'sv') * dir;
+    if (sort.key === 'lastShot') {
+      const av = lastShotMap.get(a.uid);
+      const bv = lastShotMap.get(b.uid);
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av.localeCompare(bv) * dir;
+    }
+    // id: numeric-aware on the display tag, falling back to locale compare.
+    const a0 = a.displayId;
+    const b0 = b.displayId;
+    if (!a0 && !b0) return 0;
+    if (!a0) return 1;
+    if (!b0) return -1;
+    const an = Number(a0);
+    const bn = Number(b0);
+    const cmp =
+      !Number.isNaN(an) && !Number.isNaN(bn) ? an - bn : a0.localeCompare(b0, 'sv');
+    return cmp * dir;
+  });
+
+  const SortTh = ({ label, k }: { label: string; k: SortKey }) => (
+    <Table.Th>
+      <UnstyledButton onClick={() => toggleSort(k)} style={{ fontWeight: 'inherit' }}>
+        {label}
+        {sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+      </UnstyledButton>
+    </Table.Th>
+  );
+
+  const rows = sorted.map((u) => (
+    <Table.Tr
+      key={u.uid}
+      opacity={u.active ? 1 : 0.5}
+      style={{ cursor: 'pointer' }}
+      onClick={() => navigate(`/members/${u.uid}`)}
+    >
       <Table.Td>{u.displayId}</Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
@@ -199,19 +256,29 @@ export function MembersPage() {
           )}
         </Group>
       </Table.Td>
-      <Table.Td>{u.phone}</Table.Td>
+      <Table.Td>{lastShotMap.has(u.uid) ? fmtDate(lastShotMap.get(u.uid)!) : '—'}</Table.Td>
       <Table.Td>{u.isStaff && <Badge color="grape">{t('staff')}</Badge>}</Table.Td>
       <Table.Td>
-        <Badge color={u.active ? 'teal' : 'gray'} variant="light">
-          {u.active ? t('active') : t('inactive')}
-        </Badge>
-      </Table.Td>
-      <Table.Td>
         <Group gap="xs" justify="flex-end" wrap="nowrap">
-          <Button size="xs" variant="subtle" color="red" onClick={() => setDebtUser(u)}>
+          <Button
+            size="xs"
+            variant="subtle"
+            color="red"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDebtUser(u);
+            }}
+          >
             {t('debt')}
           </Button>
-          <Button size="xs" variant="default" onClick={() => openEdit(u)}>
+          <Button
+            size="xs"
+            variant="default"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(u);
+            }}
+          >
             {t('edit')}
           </Button>
         </Group>
@@ -250,11 +317,10 @@ export function MembersPage() {
               <Table striped highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>{t('field_display_id')}</Table.Th>
-                    <Table.Th>{t('field_name')}</Table.Th>
-                    <Table.Th>{t('field_phone')}</Table.Th>
+                    <SortTh label={t('field_display_id')} k="id" />
+                    <SortTh label={t('field_name')} k="name" />
+                    <SortTh label={t('field_last_shot')} k="lastShot" />
                     <Table.Th />
-                    <Table.Th>{t('status')}</Table.Th>
                     <Table.Th />
                   </Table.Tr>
                 </Table.Thead>

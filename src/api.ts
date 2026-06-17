@@ -196,6 +196,13 @@ export const settleDebt = (debtId: number, operatorUid: number) =>
 
 export const outstandingDebts = () => invoke<OutstandingDebt[]>('outstanding_debts');
 
+export interface LastShot {
+  userUid: number;
+  lastShotAt: string;
+}
+
+export const lastShotDates = () => invoke<LastShot[]>('last_shot_dates');
+
 // ---- Logs ----
 
 export interface CheckoutLog {
