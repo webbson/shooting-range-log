@@ -5,6 +5,7 @@
 //! migrations are applied automatically on launch, so the database upgrades
 //! itself after an app update with no manual SQL on the laptop.
 
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use rusqlite::Connection;
@@ -15,6 +16,9 @@ use crate::error::AppError;
 
 /// Managed Tauri state wrapping the SQLite connection.
 pub struct Db(pub Mutex<Connection>);
+
+const APP_IDENTIFIER: &str = "com.aura.shootingrangelog";
+const DB_FILENAME: &str = "shooting-range-log.sqlite";
 
 /// Full schema (migration 0001).
 ///
@@ -113,24 +117,39 @@ fn migrations() -> Migrations<'static> {
     ])
 }
 
-/// Open the database in the OS app-data dir, enable WAL + foreign keys, and
-/// migrate to the latest schema.
+/// Open the database at `path` (creating its parent dir), enable WAL + foreign
+/// keys, and migrate to the latest schema. Shared by the app (`init`) and the dev
+/// seeding CLI so schema/pragmas can never drift between them.
+pub fn open_migrated(path: &Path) -> Result<Connection, AppError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| AppError::internal(format!("create data dir: {e}")))?;
+    }
+    let mut conn = Connection::open(path)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    migrations().to_latest(&mut conn)?;
+    Ok(conn)
+}
+
+/// Open the database in the OS app-data dir (Tauri's canonical resolver) and
+/// migrate it. This is the path the running app uses.
 pub fn init(app: &AppHandle) -> Result<Db, AppError> {
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::internal(format!("app_data_dir: {e}")))?;
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| AppError::internal(format!("create data dir: {e}")))?;
+    let path = dir.join(DB_FILENAME);
+    Ok(Db(Mutex::new(open_migrated(&path)?)))
+}
 
-    let path = dir.join("shooting-range-log.sqlite");
-    let mut conn = Connection::open(path)?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "foreign_keys", "ON")?;
-
-    migrations().to_latest(&mut conn)?;
-
-    Ok(Db(Mutex::new(conn)))
+/// DB path for the dev seeding CLI (`npm run seed`), which has no Tauri
+/// `AppHandle`. Mirrors Tauri v2 `app_data_dir()` = `dirs::data_dir()` + the
+/// bundle identifier (verified against Tauri's resolution), so the CLI writes the
+/// exact file the dev app reads. Dev-only; the app itself uses `init` above.
+pub fn dev_db_path() -> Result<PathBuf, AppError> {
+    let base = dirs::data_dir().ok_or_else(|| AppError::internal("no OS data dir"))?;
+    Ok(base.join(APP_IDENTIFIER).join(DB_FILENAME))
 }
 
 /// In-memory, fully-migrated connection for unit tests (foreign keys enforced).

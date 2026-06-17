@@ -3139,6 +3139,7 @@ name = "shooting-range-log"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dirs",
  "rusqlite",
  "rusqlite_migration",
  "serde",
