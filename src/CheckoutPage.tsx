@@ -9,6 +9,7 @@ import {
   TextInput,
   Button,
   Alert,
+  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +28,7 @@ import { errorMessage } from './errors';
 import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
 import { DebtModal } from './DebtModal';
+import { IdNumpadModal } from './IdNumpadModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -37,6 +39,8 @@ export function CheckoutPage() {
   const [userUid, setUserUid] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [debtUser, setDebtUser] = useState<{ uid: number; name: string } | null>(null);
+  // Numpad ID entry (touch alternative to the dropdowns).
+  const [numpad, setNumpad] = useState<'weapon' | 'member' | null>(null);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -112,7 +116,7 @@ export function CheckoutPage() {
     .filter((w) => w.active && !outMap.has(w.uid))
     .map((w) => ({
       value: String(w.uid),
-      label: weaponLabel(w.brand, w.model, w.displayId, true, t),
+      label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t),
     }));
 
   const userData = (users.data ?? [])
@@ -122,6 +126,31 @@ export function CheckoutPage() {
       label: userLabel(u.name, u.displayId, true, t),
     }));
 
+  // Resolve an entered tag (display_id) against the same pool the dropdown offers.
+  // Used both for the modal's live match preview and for confirming the pick.
+  const matchId = (id: string): { uid: number; label: string } | null => {
+    if (numpad === 'weapon') {
+      const w = (weapons.data ?? []).find(
+        (x) => x.active && !outMap.has(x.uid) && x.displayId === id,
+      );
+      return w ? { uid: w.uid, label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t) } : null;
+    }
+    if (numpad === 'member') {
+      const u = (users.data ?? []).find((x) => x.active && x.displayId === id);
+      return u ? { uid: u.uid, label: userLabel(u.name, u.displayId, true, t) } : null;
+    }
+    return null;
+  };
+
+  // Drive the existing change handlers so autopopulate + eval behave like a dropdown pick.
+  const onNumpadSubmit = (id: string) => {
+    const m = matchId(id);
+    if (!m) return;
+    if (numpad === 'weapon') onWeaponChange(String(m.uid));
+    else onMemberChange(String(m.uid));
+    setNumpad(null);
+  };
+
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
       {/* New checkout */}
@@ -129,24 +158,40 @@ export function CheckoutPage() {
         <Stack>
           <Title order={3}>{t('checkout_new')}</Title>
 
-          <Select
-            label={t('field_weapon')}
-            placeholder={t('select_weapon_ph')}
-            data={weaponData}
-            value={weaponUid != null ? String(weaponUid) : null}
-            onChange={onWeaponChange}
-            searchable
-            clearable
-          />
-          <Select
-            label={t('field_member')}
-            placeholder={t('select_member_ph')}
-            data={userData}
-            value={userUid != null ? String(userUid) : null}
-            onChange={onMemberChange}
-            searchable
-            clearable
-          />
+          <Group align="flex-end" gap="xs" wrap="nowrap">
+            <Select
+              label={t('field_weapon')}
+              placeholder={t('select_weapon_ph')}
+              data={weaponData}
+              value={weaponUid != null ? String(weaponUid) : null}
+              onChange={onWeaponChange}
+              searchable
+              clearable
+              style={{ flex: 1 }}
+            />
+            <Tooltip label={t('enter_id')}>
+              <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('weapon')}>
+                ⌨
+              </Button>
+            </Tooltip>
+          </Group>
+          <Group align="flex-end" gap="xs" wrap="nowrap">
+            <Select
+              label={t('field_member')}
+              placeholder={t('select_member_ph')}
+              data={userData}
+              value={userUid != null ? String(userUid) : null}
+              onChange={onMemberChange}
+              searchable
+              clearable
+              style={{ flex: 1 }}
+            />
+            <Tooltip label={t('enter_id')}>
+              <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('member')}>
+                ⌨
+              </Button>
+            </Tooltip>
+          </Group>
 
           {/* Banners */}
           {ev?.weaponInactive && (
@@ -209,6 +254,7 @@ export function CheckoutPage() {
                 label: weaponLabel(
                   ev.suggestedWeaponBrand,
                   ev.suggestedWeaponModel,
+                  ev.suggestedWeaponCaliber,
                   ev.suggestedWeaponDisplayId,
                   ev.suggestedWeaponActive,
                   t,
@@ -246,7 +292,7 @@ export function CheckoutPage() {
                 <Group justify="space-between" wrap="nowrap">
                   <Stack gap={2}>
                     <Text fw={600}>
-                      {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponDisplayId, o.weaponActive, t)}
+                      {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
                     </Text>
                     <Text size="sm">
                       {userLabel(o.userName, o.userDisplayId, o.userActive, t)}
@@ -289,6 +335,14 @@ export function CheckoutPage() {
         userName={debtUser?.name ?? ''}
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}
+      />
+
+      <IdNumpadModal
+        opened={numpad != null}
+        title={numpad === 'member' ? t('field_member') : t('field_weapon')}
+        match={(id) => matchId(id)?.label ?? null}
+        onClose={() => setNumpad(null)}
+        onSubmit={onNumpadSubmit}
       />
     </SimpleGrid>
   );

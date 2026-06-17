@@ -377,6 +377,7 @@ export function WeaponsPage() {
             ? weaponLabel(
                 serviceWeapon.brand,
                 serviceWeapon.model,
+                serviceWeapon.caliber,
                 serviceWeapon.displayId,
                 serviceWeapon.active,
                 t,

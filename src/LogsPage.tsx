@@ -77,7 +77,7 @@ export function LogsPage() {
     <Table.Tr key={c.id}>
       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
       <Table.Td>
-        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponDisplayId, c.weaponActive, t)}
+        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
       </Table.Td>
       <Table.Td>{userLabel(c.userName, c.userDisplayId, c.userActive, t)}</Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>

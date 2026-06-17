@@ -100,6 +100,7 @@ export interface CheckoutEval {
   suggestedWeaponModel: string | null;
   suggestedWeaponSerial: string | null;
   suggestedWeaponDisplayId: string | null;
+  suggestedWeaponCaliber: string | null;
   suggestedWeaponActive: boolean;
   suggestedWeaponOut: boolean;
   weaponInactive: boolean;
@@ -140,6 +141,7 @@ export interface OpenCheckout {
   weaponModel: string | null;
   weaponSerial: string | null;
   weaponDisplayId: string | null;
+  weaponCaliber: string | null;
   weaponActive: boolean;
   checkedOutAt: string;
 }
@@ -207,6 +209,7 @@ export interface CheckoutLog {
   weaponModel: string | null;
   weaponSerial: string | null;
   weaponDisplayId: string | null;
+  weaponCaliber: string | null;
   weaponActive: boolean;
   checkedOutAt: string;
   checkedInAt: string | null;
