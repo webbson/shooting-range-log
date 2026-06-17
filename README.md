@@ -11,6 +11,8 @@ English). Developed on macOS, shipped to Windows.
   on another weapon/member. Weapons also track serial + caliber. Identity in logs/lists is
   resolved **live** (shown `name [id]`, or `name [disabled]` once retired) — never snapshotted.
   Member/weapon lists show **active only** by default, with a text search and a *show inactive* toggle.
+  Creating a weapon offers **suggestions** for brand/model/caliber (a curated list merged with values
+  already used; still free-text), and can be **based on an existing weapon** to copy its brand/model/caliber.
 - **Checkout / checkin** — enter a weapon or a member; the other side autopopulates
   (overridable). Loud, colour-coded banners warn about: outstanding **debt**, **inactive**
   weapon/member, a weapon that's **already checked out** (with the holder), and a

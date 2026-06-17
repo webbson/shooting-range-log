@@ -65,6 +65,8 @@ const resources = {
       clear_display_id: 'Frigör ID så det kan återanvändas på ett annat vapen',
       clear_display_id_member: 'Frigör ID så det kan återanvändas på en annan medlem',
       next_free_id: 'Nästa lediga',
+      base_on_weapon: 'Utgå från befintligt vapen',
+      base_on_weapon_ph: 'Välj vapen att kopiera…',
 
       // Fields
       field_display_id: 'ID',
@@ -218,6 +220,8 @@ const resources = {
       clear_display_id: 'Free the ID so it can be reused on another weapon',
       clear_display_id_member: 'Free the ID so it can be reused on another member',
       next_free_id: 'Next free',
+      base_on_weapon: 'Base on existing weapon',
+      base_on_weapon_ph: 'Pick a weapon to copy…',
 
       // Fields
       field_display_id: 'ID',

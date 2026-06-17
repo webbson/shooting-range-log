@@ -94,7 +94,8 @@ commit on a `feat/*` branch → merge to `main`.
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
   badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx` (list: sortable, last-shot
   column, row → detail), `MemberDetailPage.tsx` (read-only info grid + shooting history),
-  `WeaponsPage.tsx`,
+  `WeaponsPage.tsx` (list + create/edit; brand/model/caliber Autocomplete + "base on existing weapon"),
+  `weaponPresets.ts` (curated brand/caliber lists + DB-merge suggestion helper),
   `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`.
 
