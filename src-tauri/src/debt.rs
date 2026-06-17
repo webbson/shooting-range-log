@@ -73,7 +73,7 @@ fn debt_require(conn: &Connection, id: i64) -> Result<Debt, AppError> {
     debt_get(conn, id)?.ok_or_else(|| AppError::debt_not_found(id))
 }
 
-fn add(
+pub(crate) fn add(
     conn: &Connection,
     user_uid: i64,
     operator_uid: i64,
@@ -112,7 +112,7 @@ fn list_for_user(conn: &Connection, user_uid: i64) -> Result<Vec<Debt>, AppError
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-fn settle(conn: &Connection, debt_id: i64, operator_uid: i64) -> Result<Debt, AppError> {
+pub(crate) fn settle(conn: &Connection, debt_id: i64, operator_uid: i64) -> Result<Debt, AppError> {
     let d = debt_require(conn, debt_id)?;
     if d.settled_at.is_some() {
         return Err(AppError::debt_already_settled());

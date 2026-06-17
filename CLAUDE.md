@@ -18,6 +18,7 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 - Dev (launches app): `npm run tauri dev`
 - Frontend typecheck + bundle: `npm run build`  (must be green before done)
 - Backend tests: `cargo test --manifest-path src-tauri/Cargo.toml`  (must be green before done)
+- Seed dev DB with mock data (**wipes** then refills): `npm run seed`
 - Windows installer: CI only (`npm run tauri build` on `windows-latest`) — can't cross-build from Mac.
 
 ## Architecture rules (do not violate)
@@ -64,6 +65,16 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 - **Frontend data:** TanStack Query for all `invoke` calls; mutations `invalidateQueries`
   on success; surface errors via Mantine `notifications` + `errorMessage`.
 
+## Dev data
+`src-tauri/src/seed.rs` (run via `npm run seed`) **wipes** the domain tables then refills the
+dev DB with a deterministic mock dataset (20 users, 20 weapons, checkouts/checkins incl. open
+ones, debts, service logs, plus a few retired entities) by calling the real create fns. The CLI
+(`bin/seed.rs`) resolves the same DB path the app uses via `db::dev_db_path` (no Tauri handle).
+**Run with the app closed**, then launch — both writing the WAL file at once risks `SQLITE_BUSY`,
+and a running app won't show the new data until a refetch/restart anyway.
+**Keep it current:** when you add a new entity, field, or log type, extend `seed.rs` so the new
+thing is populated and testable too.
+
 ## Working workflow (per feature)
 Backend module (+ cargo tests) → register in `lib.rs` → frontend (`api.ts` wrapper+types,
 page/modal, i18n sv+en) → `npm run build` + `cargo test` green → **user live-smoke in
@@ -77,7 +88,8 @@ commit on a `feat/*` branch → merge to `main`.
 - `src-tauri/src/`: `lib.rs` (setup + command registry + `db_health`), `db.rs`
   (connection, `SCHEMA_V1`, migrations, test conn), `error.rs`, `models.rs`
   (User/Weapon + New/Update, serde camelCase), `commands.rs` (entity CRUD + display_id/serial
-  rules), `checkout.rs` (evaluate/checkout/checkin/open list), `debt.rs`, `logs.rs`, `service.rs`.
+  rules), `checkout.rs` (evaluate/checkout/checkin/open list), `debt.rs`, `logs.rs`, `service.rs`,
+  `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
   badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx`, `WeaponsPage.tsx`,
   `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),

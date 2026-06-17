@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Shooting range weapon & member management"
 authors = ["Aura Group"]
 edition = "2021"
+default-run = "shooting-range-log"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -26,4 +27,5 @@ rusqlite = { version = "0.40.1", features = ["bundled"] }
 rusqlite_migration = "2.6.0"
 chrono = { version = "0.4.45", features = ["serde"] }
 thiserror = "2.0.18"
+dirs = "6"
 

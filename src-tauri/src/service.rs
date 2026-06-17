@@ -33,7 +33,7 @@ pub struct ServiceLog {
     pub notes: Option<String>,
 }
 
-fn add(
+pub(crate) fn add(
     conn: &Connection,
     weapon_uid: i64,
     operator_uid: i64,

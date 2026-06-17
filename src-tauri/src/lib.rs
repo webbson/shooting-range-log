@@ -1,10 +1,11 @@
 mod checkout;
 mod commands;
-mod db;
+pub mod db;
 mod debt;
 mod error;
 mod logs;
 mod models;
+pub mod seed;
 mod service;
 
 use error::AppError;
