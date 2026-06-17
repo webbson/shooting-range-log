@@ -18,12 +18,15 @@ export function userLabel(
 export function weaponLabel(
   brand: string | null,
   model: string | null,
+  caliber: string | null,
   displayId: string | null,
   active: boolean,
   t: TFunction,
 ): string {
+  // "Glock 17, 9mm [1]" — caliber appended after a comma when present.
   const base = [brand, model].filter(Boolean).join(' ');
+  const withCaliber = [base, caliber].filter(Boolean).join(', ');
   const id = active ? displayId : t('label_disabled');
   const suffix = id ? `[${id}]` : '';
-  return [base, suffix].filter(Boolean).join(' ');
+  return [withCaliber, suffix].filter(Boolean).join(' ');
 }

@@ -70,6 +70,7 @@ pub struct OpenCheckout {
     pub weapon_model: Option<String>,
     pub weapon_serial: Option<String>,
     pub weapon_display_id: Option<String>,
+    pub weapon_caliber: Option<String>,
     pub weapon_active: bool,
     pub checked_out_at: String,
 }
@@ -91,6 +92,7 @@ pub struct CheckoutEval {
     pub suggested_weapon_model: Option<String>,
     pub suggested_weapon_serial: Option<String>,
     pub suggested_weapon_display_id: Option<String>,
+    pub suggested_weapon_caliber: Option<String>,
     pub suggested_weapon_active: bool,
     /// That suggested weapon is currently out → don't autofill, warn instead.
     pub suggested_weapon_out: bool,
@@ -262,6 +264,7 @@ fn evaluate(
                     eval.suggested_weapon_model = w.model;
                     eval.suggested_weapon_serial = w.serial;
                     eval.suggested_weapon_display_id = w.display_id;
+                    eval.suggested_weapon_caliber = w.caliber;
                     eval.suggested_weapon_active = w.active;
                     eval.suggested_weapon_out = open_checkout_for(conn, wuid)?.is_some();
                 }
@@ -329,7 +332,7 @@ fn list_open(conn: &Connection) -> Result<Vec<OpenCheckout>, AppError> {
         "SELECT c.id, c.weapon_uid, c.user_uid,
                 u.name, u.display_id, u.active,
                 w.brand, w.model, w.serial, w.active,
-                c.checked_out_at, w.display_id
+                c.checked_out_at, w.display_id, w.caliber
          FROM checkouts c
          JOIN users u ON u.uid = c.user_uid
          JOIN weapons w ON w.uid = c.weapon_uid
@@ -350,6 +353,7 @@ fn list_open(conn: &Connection) -> Result<Vec<OpenCheckout>, AppError> {
             weapon_active: r.get(9)?,
             checked_out_at: r.get(10)?,
             weapon_display_id: r.get(11)?,
+            weapon_caliber: r.get(12)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
