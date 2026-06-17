@@ -16,6 +16,7 @@ import { AppLayout } from './AppLayout';
 import { Placeholder } from './pages';
 import { CheckoutPage } from './CheckoutPage';
 import { MembersPage } from './MembersPage';
+import { MemberDetailPage } from './MemberDetailPage';
 import { WeaponsPage } from './WeaponsPage';
 import { LogsPage } from './LogsPage';
 
@@ -35,6 +36,7 @@ export default function App() {
                 <Route index element={<Navigate to="/checkout" replace />} />
                 <Route path="checkout" element={<CheckoutPage />} />
                 <Route path="members" element={<MembersPage />} />
+                <Route path="members/:uid" element={<MemberDetailPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />
                 <Route path="logs" element={<LogsPage />} />
                 <Route path="backup" element={<Placeholder titleKey="nav_backup" />} />

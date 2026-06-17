@@ -92,7 +92,9 @@ commit on a `feat/*` branch → merge to `main`.
   rules), `checkout.rs` (evaluate/checkout/checkin/open list), `debt.rs`, `logs.rs`, `service.rs`,
   `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
-  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx`, `WeaponsPage.tsx`,
+  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx` (list: sortable, last-shot
+  column, row → detail), `MemberDetailPage.tsx` (read-only info grid + shooting history),
+  `WeaponsPage.tsx`,
   `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`.
 
