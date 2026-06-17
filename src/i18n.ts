@@ -23,6 +23,8 @@ const resources = {
 
       // Operator picker
       pick_operator: 'Välj operatör',
+      select_operator_ph: 'Sök operatör (namn)',
+      confirm_operator: 'Välj',
       no_operators_hint:
         'Inga operatörer. Lägg till en medlem med personalbehörighet först.',
       add_first_operator: 'Lägg till operatör',
@@ -166,6 +168,8 @@ const resources = {
 
       // Operator picker
       pick_operator: 'Select operator',
+      select_operator_ph: 'Search operator (name)',
+      confirm_operator: 'Select',
       no_operators_hint: 'No operators. Add a member with staff access first.',
       add_first_operator: 'Add operator',
       change_operator: 'Change operator',
