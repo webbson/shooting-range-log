@@ -162,6 +162,11 @@ pub fn dev_db_path() -> Result<PathBuf, AppError> {
     Ok(base.join(APP_IDENTIFIER).join(DB_FILENAME))
 }
 
+/// Re-run all pending migrations on an existing connection (used after restoring a backup).
+pub fn run_migrations(conn: &mut Connection) -> Result<(), AppError> {
+    Ok(migrations().to_latest(conn)?)
+}
+
 /// In-memory, fully-migrated connection for unit tests (foreign keys enforced).
 #[cfg(test)]
 pub fn migrated_in_memory() -> Connection {

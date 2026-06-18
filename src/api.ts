@@ -321,3 +321,20 @@ export interface Settings {
 export const getSettings = () => invoke<Settings>('get_settings');
 export const updateSettings = (input: Settings) =>
   invoke<void>('update_settings', { input });
+
+// ---- Backup operations (M6) ----
+
+export type BackupSource = 'local' | 'remote';
+
+export interface BackupInfo {
+  filename: string;
+  timestamp: string;   // RFC3339 UTC
+  schemaVersion: number;
+  source: BackupSource;
+}
+
+export const testS3Connection = () => invoke<string>('test_s3_connection');
+export const backupNow = () => invoke<string>('backup_now');
+export const listBackups = () => invoke<BackupInfo[]>('list_backups');
+export const restoreBackup = (filename: string, source: BackupSource) =>
+  invoke<void>('restore_backup', { filename, source });

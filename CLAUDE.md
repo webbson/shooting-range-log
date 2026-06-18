@@ -92,8 +92,11 @@ commit on a `feat/*` branch → merge to `main`.
   (connection, `SCHEMA_V1`+`SCHEMA_V2`, migrations, test conn), `error.rs`, `models.rs`
   (User/Weapon + New/Update, serde camelCase), `commands.rs` (entity CRUD + display_id/serial
   rules), `checkout.rs` (evaluate/checkout/checkin/open list), `debt.rs`, `logs.rs`, `service.rs`,
-  `settings.rs` (S3/passphrase settings, get/update commands), `seed.rs` (dev mock-data seeding),
-  `bin/seed.rs` (the `npm run seed` CLI entry).
+  `settings.rs` (S3/passphrase settings, get/update commands),
+  `backup.rs` (snapshot_local via VACUUM INTO, GFS retention, list_local, restore_from_file via rusqlite backup API),
+  `crypto.rs` (age passphrase encrypt/decrypt),
+  `s3.rs` (rust-s3: test_connection, upload, list_remote, download, delete, retention_remote),
+  `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
   badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx` (list: sortable, last-shot
   column, row → detail), `MemberDetailPage.tsx` (read-only info grid + shooting history),
@@ -103,8 +106,18 @@ commit on a `feat/*` branch → merge to `main`.
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`.
 
 ## Status
-M0–M5 done on `main`. M6 (backup/restore) + M7 (packaging/CI/updater) deferred — see
-`BACKLOG.md`. Git is local-only (no remote yet → Windows installer not yet built).
+M0–M5 done on `main`. M6 (backup/restore) **implemented** — local snapshots, GFS retention,
+S3-compatible upload/restore, passphrase encryption; needs live-smoke test before calling done.
+M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
+Git is local-only (no remote yet → Windows installer not yet built).
+
+## Backup architecture (M6)
+- **Snapshot:** `VACUUM INTO` every 10 min (timer thread) + on `ExitRequested`. Always local first.
+- **Encryption:** `age` crate, passphrase mode (scrypt KDF). Encrypt artifact BEFORE any S3 upload.
+- **Retention (GFS, fixed):** today→hourly, this month→daily, this year→weekly, prev year→monthly, older→purge.
+- **S3:** `rust-s3`, path-style, S3-compatible endpoint. Upload encrypted `.age` files; list/download/retention on remote.
+- **Restore:** rusqlite online backup API (in-place copy into live connection); re-runs migrations after.
+- **Keys stored:** passphrase + S3 secret in `settings` table plaintext (same threat model as SSN — BitLocker mitigation).
 
 ## Privacy
 SSN/personnummer is stored **plaintext** (deliberate). Mitigation is disk encryption
