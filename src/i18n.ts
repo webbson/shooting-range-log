@@ -122,6 +122,7 @@ const resources = {
       open_checkouts: 'Utlånade vapen',
       no_open_checkouts: 'Inga utlånade vapen.',
       return_weapon: 'Återlämna',
+      fast_checkin: 'Snabb återlämning',
       label_checked_out_at: 'Utlånat',
 
       // Debt (M3)
@@ -277,6 +278,7 @@ const resources = {
       open_checkouts: 'Checked-out weapons',
       no_open_checkouts: 'No checked-out weapons.',
       return_weapon: 'Return',
+      fast_checkin: 'Quick return',
       label_checked_out_at: 'Checked out',
 
       // Debt (M3)
