@@ -266,3 +266,42 @@ export const addService = (
 
 export const listWeaponService = (weaponUid: number) =>
   invoke<ServiceLog[]>('list_weapon_service', { weaponUid });
+
+// ---- Excel import ----
+
+export interface ImportWarning {
+  row: number;
+  code: string;
+  message: string;
+}
+
+export interface ImportPreview {
+  membersToCreate: number;
+  membersToMatch: number;
+  weaponsToCreate: number;
+  weaponsExisting: number;
+  loansToCreate: number;
+  loansSkippedDuplicate: number;
+  openLoans: number;
+  warnings: ImportWarning[];
+}
+
+export interface ImportResult {
+  membersCreated: number;
+  membersMatched: number;
+  weaponsCreated: number;
+  weaponsMatched: number;
+  loansCreated: number;
+  loansSkipped: number;
+  openLoansMarkedReturned: number;
+  warnings: ImportWarning[];
+}
+
+export const importListSheets = (path: string) =>
+  invoke<string[]>('import_list_sheets', { path });
+
+export const importPreview = (path: string, sheet: string) =>
+  invoke<ImportPreview>('import_preview', { path, sheet });
+
+export const importCommit = (path: string, sheet: string, markOpenAsReturned: boolean) =>
+  invoke<ImportResult>('import_commit', { path, sheet, markOpenAsReturned });

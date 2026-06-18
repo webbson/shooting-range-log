@@ -3,6 +3,7 @@ mod commands;
 pub mod db;
 mod debt;
 mod error;
+mod import;
 mod logs;
 mod models;
 pub mod seed;
@@ -27,6 +28,7 @@ fn db_health(db: tauri::State<db::Db>) -> Result<String, AppError> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let db = db::init(app.handle())?;
             app.manage(db);
@@ -67,6 +69,9 @@ pub fn run() {
             logs::last_shot_dates,
             service::add_service,
             service::list_weapon_service,
+            import::import_list_sheets,
+            import::import_preview,
+            import::import_commit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

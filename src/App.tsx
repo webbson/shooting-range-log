@@ -13,12 +13,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './i18n';
 import { theme } from './theme';
 import { AppLayout } from './AppLayout';
-import { Placeholder } from './pages';
 import { CheckoutPage } from './CheckoutPage';
 import { MembersPage } from './MembersPage';
 import { MemberDetailPage } from './MemberDetailPage';
 import { WeaponsPage } from './WeaponsPage';
 import { LogsPage } from './LogsPage';
+import { SettingsPage } from './SettingsPage';
 
 const queryClient = new QueryClient();
 
@@ -39,7 +39,8 @@ export default function App() {
                 <Route path="members/:uid" element={<MemberDetailPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />
                 <Route path="logs" element={<LogsPage />} />
-                <Route path="backup" element={<Placeholder titleKey="nav_backup" />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="backup" element={<Navigate to="/settings" replace />} />
               </Route>
             </Routes>
             </BrowserRouter>
