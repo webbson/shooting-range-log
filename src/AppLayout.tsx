@@ -15,7 +15,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
-import { dbHealth } from './api';
+import { dbHealth, listBackups } from './api';
 import { OperatorPicker } from './OperatorPicker';
 
 const NAV = [
@@ -37,6 +37,12 @@ export function AppLayout() {
   const computed = useComputedColorScheme('light');
 
   const health = useQuery({ queryKey: ['db_health'], queryFn: dbHealth });
+  const backups = useQuery({
+    queryKey: ['backups'],
+    queryFn: listBackups,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 60 * 1000,
+  });
 
   return (
     <>
@@ -91,6 +97,16 @@ export function AppLayout() {
                 : health.isError
                   ? t('db_error')
                   : health.data}
+            </Text>
+            <Text size="sm" c="dimmed">
+              {t('backup_last')}:{' '}
+              {(() => {
+                const latest = backups.data?.[0];
+                if (!latest) return '–';
+                const ts = latest.timestamp.slice(0, 16).replace('T', ' ');
+                const today = new Date().toISOString().slice(0, 10);
+                return latest.timestamp.startsWith(today) ? ts.slice(11) : ts.slice(0, 10);
+              })()}
             </Text>
             <SegmentedControl
               size="xs"
