@@ -15,6 +15,7 @@ import {
   Alert,
   TextInput,
   PasswordInput,
+  Table,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -445,30 +446,43 @@ export function SettingsPage() {
           {backupList.length === 0 ? (
             <Text size="sm" c="dimmed">{t('backup_no_backups')}</Text>
           ) : (
-            <Stack gap="xs">
-              {backupList.map((b) => (
-                <Group key={`${b.source}-${b.filename}`} justify="space-between">
-                  <Box>
-                    <Text size="sm">{b.timestamp.slice(0, 19).replace('T', ' ')}</Text>
-                    <Badge
-                      size="xs"
-                      color={b.source === 'local' ? 'gray' : 'blue'}
-                      variant="light"
-                    >
-                      {t(b.source === 'local' ? 'backup_source_local' : 'backup_source_remote')}
-                    </Badge>
-                  </Box>
-                  <Button
-                    variant="default"
-                    size="xs"
-                    loading={restoreMut.isPending && confirmingRestore?.filename === b.filename}
-                    onClick={() => setConfirmingRestore(b)}
-                  >
-                    {t('backup_restore_btn')}
-                  </Button>
-                </Group>
-              ))}
-            </Stack>
+            <Table striped withTableBorder>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('backup_ts')}</Table.Th>
+                  <Table.Th>{t('backup_source')}</Table.Th>
+                  <Table.Th />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {backupList.map((b) => (
+                  <Table.Tr key={`${b.source}-${b.filename}`}>
+                    <Table.Td>
+                      <Text size="sm">{b.timestamp.slice(0, 16).replace('T', ' ')}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        size="xs"
+                        color={b.source === 'local' ? 'gray' : 'blue'}
+                        variant="light"
+                      >
+                        {t(b.source === 'local' ? 'backup_source_local' : 'backup_source_remote')}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      <Button
+                        variant="default"
+                        size="xs"
+                        loading={restoreMut.isPending && confirmingRestore?.filename === b.filename}
+                        onClick={() => setConfirmingRestore(b)}
+                      >
+                        {t('backup_restore_btn')}
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
           )}
         </Stack>
       </Card>
