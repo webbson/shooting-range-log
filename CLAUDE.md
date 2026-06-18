@@ -44,10 +44,10 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   single migration 0001). Never reintroduce snapshots. Log tables (checkouts,
   weapon_service_log, debts) stay **append-only** — corrections/returns/settles are new rows
   or field updates, never deletes.
-- **Migrations:** the full schema is `SCHEMA_V1` in `src-tauri/src/db.rs` — currently the
-  **only** migration (0002/0003 were squashed back into it while still dev-only). Once a
-  migration has shipped to a real install, **never edit it — append a new `M::up` (0002, …)**
-  to the `migrations()` vec. Editing a released migration silently diverges existing DBs.
+- **Migrations:** `SCHEMA_V1` (domain schema) + `SCHEMA_V2` (settings table) in
+  `src-tauri/src/db.rs`. Currently 2 migrations (0001, 0002). Once a migration has shipped
+  to a real install, **never edit it — append a new `M::up` (0003, …)** to the `migrations()`
+  vec. Editing a released migration silently diverges existing DBs.
 - **Money:** integer whole **kronor** (`amount_kr`). No floats, no öre.
 - **Time:** store UTC RFC3339; display via `src/format.ts` (sv-SE, e.g. `2026-06-16 14:30`).
 - **Operators** are users with `is_staff`. The frontend store holds `{uid, name}`; `uid` is
@@ -89,10 +89,11 @@ commit on a `feat/*` branch → merge to `main`.
 
 ## File map
 - `src-tauri/src/`: `lib.rs` (setup + command registry + `db_health`), `db.rs`
-  (connection, `SCHEMA_V1`, migrations, test conn), `error.rs`, `models.rs`
+  (connection, `SCHEMA_V1`+`SCHEMA_V2`, migrations, test conn), `error.rs`, `models.rs`
   (User/Weapon + New/Update, serde camelCase), `commands.rs` (entity CRUD + display_id/serial
   rules), `checkout.rs` (evaluate/checkout/checkin/open list), `debt.rs`, `logs.rs`, `service.rs`,
-  `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
+  `settings.rs` (S3/passphrase settings, get/update commands), `seed.rs` (dev mock-data seeding),
+  `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
   badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx` (list: sortable, last-shot
   column, row → detail), `MemberDetailPage.tsx` (read-only info grid + shooting history),

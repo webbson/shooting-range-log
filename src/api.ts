@@ -305,3 +305,19 @@ export const importPreview = (path: string, sheet: string) =>
 
 export const importCommit = (path: string, sheet: string, markOpenAsReturned: boolean) =>
   invoke<ImportResult>('import_commit', { path, sheet, markOpenAsReturned });
+
+// ---- Settings (M6) ----
+
+export interface Settings {
+  s3Endpoint: string | null;
+  s3Region: string | null;
+  s3Bucket: string | null;
+  s3Prefix: string | null;
+  s3AccessKeyId: string | null;
+  s3SecretAccessKey: string | null;
+  backupPassphrase: string | null;
+}
+
+export const getSettings = () => invoke<Settings>('get_settings');
+export const updateSettings = (input: Settings) =>
+  invoke<void>('update_settings', { input });

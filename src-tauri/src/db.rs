@@ -107,6 +107,14 @@ CREATE TABLE debts (
 CREATE INDEX idx_debts_user_open ON debts(user_uid) WHERE settled_at IS NULL;
 "#;
 
+/// Settings table (migration 0002).
+const SCHEMA_V2: &str = r#"
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+"#;
+
 /// Ordered list of migrations. Once a migration has shipped to a real install,
 /// never edit it — append a new one. `to_latest` applies any not yet recorded in
 /// `PRAGMA user_version`.
@@ -114,6 +122,8 @@ fn migrations() -> Migrations<'static> {
     Migrations::new(vec![
         // 0001 — full domain schema.
         M::up(SCHEMA_V1),
+        // 0002 — app settings key/value store.
+        M::up(SCHEMA_V2),
     ])
 }
 
@@ -172,7 +182,7 @@ mod tests {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 1, "one migration applied");
+        assert_eq!(v, 2, "two migrations applied");
     }
 
     #[test]
