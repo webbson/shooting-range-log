@@ -58,11 +58,20 @@ fn build_bucket(settings: &Settings) -> Result<Box<Bucket>, AppError> {
             )
         })?;
 
-    let region = Region::Custom {
-        region: settings
+    // Cloudflare R2 requires "auto" as the Sig V4 region regardless of what the
+    // user typed. Auto-detect and override; for all other providers respect the
+    // stored value (defaulting to "auto" if blank).
+    let region_str = if endpoint.contains(".r2.cloudflarestorage.com") {
+        "auto".to_owned()
+    } else {
+        settings
             .s3_region
             .clone()
-            .unwrap_or_else(|| "auto".into()),
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "auto".into())
+    };
+    let region = Region::Custom {
+        region: region_str,
         endpoint: endpoint.to_owned(),
     };
     let creds = Credentials::new(Some(access_key), Some(secret_key), None, None, None)
