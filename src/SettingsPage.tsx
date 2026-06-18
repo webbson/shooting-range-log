@@ -105,7 +105,7 @@ export function SettingsPage() {
   });
 
   const testConnMut = useMutation<string, unknown, void>({
-    mutationFn: testS3Connection,
+    mutationFn: () => testS3Connection(form),
     onSuccess: (bucket) =>
       notifications.show({ color: 'green', message: t('backup_test_ok', { bucket }) }),
     onError,
@@ -306,14 +306,15 @@ export function SettingsPage() {
           <Text size="sm" c="dimmed">{t('backup_s3_desc')}</Text>
           <TextInput
             label={t('backup_s3_endpoint')}
-            placeholder="https://s3.eu-central-003.backblazeb2.com"
+            placeholder="https://<account-id>.r2.cloudflarestorage.com"
             value={form.s3Endpoint ?? ''}
             onChange={(e) => setForm({ ...form, s3Endpoint: e.target.value || null })}
           />
           <Group grow>
             <TextInput
               label={t('backup_s3_region')}
-              placeholder="eu-central-003"
+              placeholder="auto"
+              description={t('backup_s3_region_hint')}
               value={form.s3Region ?? ''}
               onChange={(e) => setForm({ ...form, s3Region: e.target.value || null })}
             />
