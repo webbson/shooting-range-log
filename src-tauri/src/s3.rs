@@ -135,21 +135,22 @@ fn gfs_slot(
 // ---------------------------------------------------------------------------
 
 /// Check if bucket is reachable. Returns bucket name on success.
+/// Uses ListObjects (max 1) instead of HeadBucket — more broadly compatible with
+/// S3-compatible stores (Cloudflare R2, MinIO, etc.) that may reject HeadBucket.
 pub async fn test_connection(settings: &Settings) -> Result<String, AppError> {
     let bucket = build_bucket(settings)?;
     let bucket_name = settings.s3_bucket.clone().unwrap_or_default();
-    match bucket
-        .exists()
+    bucket
+        .list(String::new(), Some("/".to_owned()))
         .await
-        .map_err(|e| AppError::new("err_s3_failed", format!("S3 error: {e}"), serde_json::json!({})))?
-    {
-        true => Ok(bucket_name),
-        false => Err(AppError::new(
-            "err_s3_bucket_not_found",
-            "S3 bucket not found or not accessible",
-            serde_json::json!({ "bucket": bucket_name }),
-        )),
-    }
+        .map_err(|e| {
+            AppError::new(
+                "err_s3_failed",
+                format!("S3 connection failed: {e}"),
+                serde_json::json!({ "detail": format!("{e}") }),
+            )
+        })?;
+    Ok(bucket_name)
 }
 
 /// Upload raw bytes to a key in the bucket.
