@@ -308,37 +308,37 @@ export function SettingsPage() {
             label={t('backup_s3_endpoint')}
             placeholder="https://s3.eu-central-003.backblazeb2.com"
             value={form.s3Endpoint ?? ''}
-            onChange={(e) => setForm((f) => ({ ...f, s3Endpoint: e.currentTarget.value || null }))}
+            onChange={(e) => setForm({ ...form, s3Endpoint: e.target.value || null })}
           />
           <Group grow>
             <TextInput
               label={t('backup_s3_region')}
               placeholder="eu-central-003"
               value={form.s3Region ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, s3Region: e.currentTarget.value || null }))}
+              onChange={(e) => setForm({ ...form, s3Region: e.target.value || null })}
             />
             <TextInput
               label={t('backup_s3_bucket')}
               value={form.s3Bucket ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, s3Bucket: e.currentTarget.value || null }))}
+              onChange={(e) => setForm({ ...form, s3Bucket: e.target.value || null })}
             />
           </Group>
           <TextInput
             label={t('backup_s3_prefix')}
             placeholder="srl-backups"
             value={form.s3Prefix ?? ''}
-            onChange={(e) => setForm((f) => ({ ...f, s3Prefix: e.currentTarget.value || null }))}
+            onChange={(e) => setForm({ ...form, s3Prefix: e.target.value || null })}
           />
           <Group grow>
             <TextInput
               label={t('backup_s3_access_key_id')}
               value={form.s3AccessKeyId ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, s3AccessKeyId: e.currentTarget.value || null }))}
+              onChange={(e) => setForm({ ...form, s3AccessKeyId: e.target.value || null })}
             />
             <PasswordInput
               label={t('backup_s3_secret_key')}
               value={form.s3SecretAccessKey ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, s3SecretAccessKey: e.currentTarget.value || null }))}
+              onChange={(e) => setForm({ ...form, s3SecretAccessKey: e.target.value || null })}
             />
           </Group>
 
@@ -361,9 +361,7 @@ export function SettingsPage() {
           <PasswordInput
             label={t('backup_passphrase')}
             value={form.backupPassphrase ?? ''}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, backupPassphrase: e.currentTarget.value || null }))
-            }
+            onChange={(e) => setForm({ ...form, backupPassphrase: e.target.value || null })}
           />
 
           <Group justify="flex-end">
