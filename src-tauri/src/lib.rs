@@ -55,17 +55,10 @@ async fn upload_encrypted(
     s3::retention_remote(settings).await
 }
 
-/// Test S3 connectivity with current settings. Returns bucket name on success.
+/// Test S3 connectivity using the settings passed from the form (no DB read required).
 #[tauri::command]
-async fn test_s3_connection(db: tauri::State<'_, db::Db>) -> Result<String, AppError> {
-    let settings = {
-        let conn = db
-            .0
-            .lock()
-            .map_err(|_| AppError::internal("db lock poisoned"))?;
-        settings::get_settings_inner(&conn)?
-    };
-    s3::test_connection(&settings).await
+async fn test_s3_connection(input: settings::Settings) -> Result<String, AppError> {
+    s3::test_connection(&input).await
 }
 
 /// Take an immediate local snapshot. Spawns async S3 upload if configured. Returns snapshot filename.

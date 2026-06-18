@@ -333,7 +333,7 @@ export interface BackupInfo {
   source: BackupSource;
 }
 
-export const testS3Connection = () => invoke<string>('test_s3_connection');
+export const testS3Connection = (input: Settings) => invoke<string>('test_s3_connection', { input });
 export const backupNow = () => invoke<string>('backup_now');
 export const listBackups = () => invoke<BackupInfo[]>('list_backups');
 export const restoreBackup = (filename: string, source: BackupSource) =>
