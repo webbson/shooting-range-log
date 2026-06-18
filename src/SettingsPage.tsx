@@ -27,9 +27,15 @@ import {
   importCommit,
   getSettings,
   updateSettings,
+  testS3Connection,
+  backupNow,
+  listBackups,
+  restoreBackup,
   type ImportPreview,
   type ImportResult,
   type Settings,
+  type BackupInfo,
+  type BackupSource,
 } from './api';
 import { errorMessage } from './errors';
 
@@ -97,6 +103,42 @@ export function SettingsPage() {
     },
     onError,
   });
+
+  const testConnMut = useMutation<string, unknown, void>({
+    mutationFn: testS3Connection,
+    onSuccess: (bucket) =>
+      notifications.show({ color: 'green', message: t('backup_test_ok', { bucket }) }),
+    onError,
+  });
+
+  const backupNowMut = useMutation<string, unknown, void>({
+    mutationFn: backupNow,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['backups'] });
+      notifications.show({ color: 'green', message: t('backup_now_ok') });
+    },
+    onError,
+  });
+
+  const restoreMut = useMutation<void, unknown, { filename: string; source: BackupSource }>({
+    mutationFn: ({ filename, source }) => restoreBackup(filename, source),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['weapons'] });
+      qc.invalidateQueries({ queryKey: ['checkouts'] });
+      qc.invalidateQueries({ queryKey: ['backups'] });
+      notifications.show({ color: 'green', message: t('backup_restore_ok') });
+      setConfirmingRestore(null);
+    },
+    onError,
+  });
+
+  const { data: backupList = [], refetch: refetchBackups } = useQuery({
+    queryKey: ['backups'],
+    queryFn: listBackups,
+  });
+
+  const [confirmingRestore, setConfirmingRestore] = useState<BackupInfo | null>(null);
 
   const previewMut = useMutation<ImportPreview, unknown, void>({
     mutationFn: () => importPreview(filePath!, selectedSheet!),
@@ -300,6 +342,17 @@ export function SettingsPage() {
             />
           </Group>
 
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              size="sm"
+              loading={testConnMut.isPending}
+              onClick={() => testConnMut.mutate()}
+            >
+              {t('backup_test_connection')}
+            </Button>
+          </Group>
+
           {/* Encryption passphrase */}
           <Divider label={t('backup_passphrase_title')} labelPosition="left" />
           <Alert color="orange" variant="light">
@@ -322,6 +375,102 @@ export function SettingsPage() {
               {t('backup_save_btn')}
             </Button>
           </Group>
+
+          {/* Backup operations */}
+          <Divider label={t('backup_list_title')} labelPosition="left" />
+          <Group>
+            <Button
+              variant="default"
+              size="sm"
+              loading={backupNowMut.isPending}
+              onClick={() => backupNowMut.mutate()}
+            >
+              {t('backup_now_btn')}
+            </Button>
+            <Button variant="subtle" size="sm" onClick={() => refetchBackups()}>
+              ↺
+            </Button>
+          </Group>
+
+          {/* Remote-newer alert */}
+          {(() => {
+            const newest_local = backupList.find((b) => b.source === 'local');
+            const newest_remote = backupList.find((b) => b.source === 'remote');
+            if (
+              newest_remote &&
+              (!newest_local || newest_remote.timestamp > newest_local.timestamp)
+            ) {
+              return (
+                <Alert color="blue" variant="light">
+                  <Text size="sm">{t('backup_remote_newer')}</Text>
+                </Alert>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Restore confirmation inline */}
+          {confirmingRestore && (
+            <Alert color="red" variant="light">
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>{t('backup_restore_confirm')}</Text>
+                <Text size="sm">{t('backup_restore_confirm_detail')}</Text>
+                <Text size="xs" c="dimmed">{confirmingRestore.filename}</Text>
+                <Group>
+                  <Button
+                    color="red"
+                    size="xs"
+                    loading={restoreMut.isPending}
+                    onClick={() =>
+                      restoreMut.mutate({
+                        filename: confirmingRestore.filename,
+                        source: confirmingRestore.source,
+                      })
+                    }
+                  >
+                    {t('backup_restore_btn')}
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="xs"
+                    onClick={() => setConfirmingRestore(null)}
+                  >
+                    {t('cancel')}
+                  </Button>
+                </Group>
+              </Stack>
+            </Alert>
+          )}
+
+          {/* Backup list */}
+          {backupList.length === 0 ? (
+            <Text size="sm" c="dimmed">{t('backup_no_backups')}</Text>
+          ) : (
+            <Stack gap="xs">
+              {backupList.map((b) => (
+                <Group key={`${b.source}-${b.filename}`} justify="space-between">
+                  <Box>
+                    <Text size="sm">{b.timestamp.slice(0, 19).replace('T', ' ')}</Text>
+                    <Badge
+                      size="xs"
+                      color={b.source === 'local' ? 'gray' : 'blue'}
+                      variant="light"
+                    >
+                      {t(b.source === 'local' ? 'backup_source_local' : 'backup_source_remote')}
+                    </Badge>
+                  </Box>
+                  <Button
+                    variant="default"
+                    size="xs"
+                    loading={restoreMut.isPending && confirmingRestore?.filename === b.filename}
+                    onClick={() => setConfirmingRestore(b)}
+                  >
+                    {t('backup_restore_btn')}
+                  </Button>
+                </Group>
+              ))}
+            </Stack>
+          )}
         </Stack>
       </Card>
     </Stack>
