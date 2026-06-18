@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   AppShell,
   Group,
@@ -36,6 +37,12 @@ export function AppLayout() {
   const { toggleColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light');
 
+  const [clock, setClock] = useState(() => new Date().toLocaleTimeString('sv-SE'));
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date().toLocaleTimeString('sv-SE')), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const health = useQuery({ queryKey: ['db_health'], queryFn: dbHealth });
   const backups = useQuery({
     queryKey: ['backups'],
@@ -50,8 +57,9 @@ export function AppLayout() {
       <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Title order={3}>{t('app_title')}</Title>
-          <Group gap="xs" wrap="nowrap">
+          <Title order={3} style={{ flex: 1 }}>{t('app_title')}</Title>
+          <Text fw={600} size="lg">{clock}</Text>
+          <Group gap="xs" wrap="nowrap" style={{ flex: 1, justifyContent: 'flex-end' }}>
             {NAV.map((item) => (
               <Button
                 key={item.to}
