@@ -52,6 +52,8 @@ async fn upload_encrypted(
     let filename = path.file_name().unwrap().to_string_lossy().into_owned();
     let key = s3::s3_key(settings, &filename);
     s3::upload(settings, &key, &encrypted).await?;
+    // Local file was just staging — remove it now that remote copy is durable.
+    let _ = std::fs::remove_file(path);
     s3::retention_remote(settings).await
 }
 
