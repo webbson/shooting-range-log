@@ -8,6 +8,7 @@ mod logs;
 mod models;
 pub mod seed;
 mod service;
+mod settings;
 
 use error::AppError;
 use tauri::Manager;
@@ -72,6 +73,8 @@ pub fn run() {
             import::import_list_sheets,
             import::import_preview,
             import::import_commit,
+            settings::get_settings,
+            settings::update_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

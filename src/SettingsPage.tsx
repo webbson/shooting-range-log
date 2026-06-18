@@ -13,6 +13,8 @@ import {
   Loader,
   Checkbox,
   Alert,
+  TextInput,
+  PasswordInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,19 +25,46 @@ import {
   importListSheets,
   importPreview,
   importCommit,
+  getSettings,
+  updateSettings,
   type ImportPreview,
   type ImportResult,
+  type Settings,
 } from './api';
 import { errorMessage } from './errors';
+
+const DEFAULT_SETTINGS: Settings = {
+  s3Endpoint: null,
+  s3Region: null,
+  s3Bucket: null,
+  s3Prefix: null,
+  s3AccessKeyId: null,
+  s3SecretAccessKey: null,
+  backupPassphrase: null,
+};
 
 export function SettingsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
 
+  // ── Excel import state ──
   const [filePath, setFilePath] = useState<string | null>(null);
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [markOpenReturned, setMarkOpenReturned] = useState(false);
+
+  // ── Backup settings state ──
+  const [form, setForm] = useState<Settings>(DEFAULT_SETTINGS);
+
+  const { data: savedSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+  });
+
+  // Populate form when settings load from DB.
+  useEffect(() => {
+    if (savedSettings) setForm(savedSettings);
+  }, [savedSettings]);
 
   // Fetch sheet names whenever a file is picked.
   const { data: sheets, isLoading: sheetsLoading } = useQuery({
@@ -59,6 +88,15 @@ export function SettingsPage() {
 
   const onError = (e: unknown) =>
     notifications.show({ color: 'red', message: errorMessage(e, t) });
+
+  const settingsMut = useMutation<void, unknown, Settings>({
+    mutationFn: (s) => updateSettings(s),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+      notifications.show({ color: 'green', message: t('settings_saved') });
+    },
+    onError,
+  });
 
   const previewMut = useMutation<ImportPreview, unknown, void>({
     mutationFn: () => importPreview(filePath!, selectedSheet!),
@@ -216,11 +254,74 @@ export function SettingsPage() {
         </Stack>
       </Card>
 
-      {/* ── Backup (stub — M6) ── */}
+      {/* ── Backup settings (M6) ── */}
       <Card withBorder>
-        <Stack gap="xs">
+        <Stack gap="md">
           <Title order={4}>{t('nav_backup')}</Title>
-          <Text c="dimmed">{t('page_todo')}</Text>
+
+          {/* S3 configuration */}
+          <Divider label={t('backup_s3_title')} labelPosition="left" />
+          <Text size="sm" c="dimmed">{t('backup_s3_desc')}</Text>
+          <TextInput
+            label={t('backup_s3_endpoint')}
+            placeholder="https://s3.eu-central-003.backblazeb2.com"
+            value={form.s3Endpoint ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, s3Endpoint: e.currentTarget.value || null }))}
+          />
+          <Group grow>
+            <TextInput
+              label={t('backup_s3_region')}
+              placeholder="eu-central-003"
+              value={form.s3Region ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, s3Region: e.currentTarget.value || null }))}
+            />
+            <TextInput
+              label={t('backup_s3_bucket')}
+              value={form.s3Bucket ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, s3Bucket: e.currentTarget.value || null }))}
+            />
+          </Group>
+          <TextInput
+            label={t('backup_s3_prefix')}
+            placeholder="srl-backups"
+            value={form.s3Prefix ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, s3Prefix: e.currentTarget.value || null }))}
+          />
+          <Group grow>
+            <TextInput
+              label={t('backup_s3_access_key_id')}
+              value={form.s3AccessKeyId ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, s3AccessKeyId: e.currentTarget.value || null }))}
+            />
+            <PasswordInput
+              label={t('backup_s3_secret_key')}
+              value={form.s3SecretAccessKey ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, s3SecretAccessKey: e.currentTarget.value || null }))}
+            />
+          </Group>
+
+          {/* Encryption passphrase */}
+          <Divider label={t('backup_passphrase_title')} labelPosition="left" />
+          <Alert color="orange" variant="light">
+            <Text size="sm">{t('backup_passphrase_warning')}</Text>
+          </Alert>
+          <PasswordInput
+            label={t('backup_passphrase')}
+            value={form.backupPassphrase ?? ''}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, backupPassphrase: e.currentTarget.value || null }))
+            }
+          />
+
+          <Group justify="flex-end">
+            <Button
+              color="blue"
+              loading={settingsMut.isPending}
+              onClick={() => settingsMut.mutate(form)}
+            >
+              {t('backup_save_btn')}
+            </Button>
+          </Group>
         </Stack>
       </Card>
     </Stack>

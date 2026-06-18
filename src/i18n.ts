@@ -185,6 +185,25 @@ const resources = {
       import_mark_open_returned: 'Markera alla som återlämnade samma dag',
       import_done: 'Import klar — {{membersCreated}} nya medlemmar, {{weaponsCreated}} nya vapen, {{loansCreated}} lånposter',
       err_import_sheet_not_found: "Arknamnet '{{sheet}}' hittades inte i filen.",
+
+      // Backup & settings (M6)
+      settings_saved: 'Inställningar sparade',
+      backup_s3_title: 'S3-lagring',
+      backup_s3_desc: 'Konfiguration för S3-kompatibel lagring (t.ex. Backblaze B2, Cloudflare R2, MinIO).',
+      backup_s3_endpoint: 'Endpoint-URL',
+      backup_s3_region: 'Region',
+      backup_s3_bucket: 'Bucket',
+      backup_s3_prefix: 'Prefix (valfritt)',
+      backup_s3_access_key_id: 'Access Key ID',
+      backup_s3_secret_key: 'Secret Access Key',
+      backup_passphrase_title: 'Krypteringslösenfras',
+      backup_passphrase: 'Lösenfras',
+      backup_passphrase_warning:
+        'Spara lösenfrasen på ett säkert ställe utanför enheten. Den krävs för att återställa säkerhetskopior på en ny dator. Om du tappar bort den är alla säkerhetskopior oåterkalleliga.',
+      backup_schedule_title: 'Schema och lagring',
+      backup_interval_minutes: 'Intervall (minuter)',
+      backup_retention_keep_n: 'Behåll antal kopior',
+      backup_save_btn: 'Spara inställningar',
     },
   },
   en: {
@@ -367,6 +386,25 @@ const resources = {
       import_mark_open_returned: 'Mark all as returned on the same day',
       import_done: 'Import complete — {{membersCreated}} new members, {{weaponsCreated}} new weapons, {{loansCreated}} loan records',
       err_import_sheet_not_found: "Sheet '{{sheet}}' not found in the file.",
+
+      // Backup & settings (M6)
+      settings_saved: 'Settings saved',
+      backup_s3_title: 'S3 Storage',
+      backup_s3_desc: 'Configuration for an S3-compatible storage provider (e.g. Backblaze B2, Cloudflare R2, MinIO).',
+      backup_s3_endpoint: 'Endpoint URL',
+      backup_s3_region: 'Region',
+      backup_s3_bucket: 'Bucket',
+      backup_s3_prefix: 'Prefix (optional)',
+      backup_s3_access_key_id: 'Access Key ID',
+      backup_s3_secret_key: 'Secret Access Key',
+      backup_passphrase_title: 'Encryption Passphrase',
+      backup_passphrase: 'Passphrase',
+      backup_passphrase_warning:
+        'Store this passphrase somewhere safe off this device. It is required to restore backups onto a new machine. If you lose it, your backups are unrecoverable.',
+      backup_schedule_title: 'Schedule & Retention',
+      backup_interval_minutes: 'Interval (minutes)',
+      backup_retention_keep_n: 'Copies to keep',
+      backup_save_btn: 'Save settings',
     },
   },
 };

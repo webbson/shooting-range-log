@@ -155,3 +155,9 @@ impl From<rusqlite_migration::Error> for AppError {
         AppError::internal(format!("migration error: {e}"))
     }
 }
+
+impl From<std::io::Error> for AppError {
+    fn from(e: std::io::Error) -> Self {
+        AppError::internal(format!("io error: {e}"))
+    }
+}
