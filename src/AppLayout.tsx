@@ -11,7 +11,7 @@ import {
   useMantineColorScheme,
   useComputedColorScheme,
 } from '@mantine/core';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
@@ -23,11 +23,11 @@ const NAV = [
   { to: '/members', key: 'nav_members' },
   { to: '/weapons', key: 'nav_weapons' },
   { to: '/logs', key: 'nav_logs' },
-  { to: '/backup', key: 'nav_backup' },
 ] as const;
 
 export function AppLayout() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
   const operator = useAppStore((s) => s.operator);
@@ -108,6 +108,14 @@ export function AppLayout() {
               onClick={toggleColorScheme}
             >
               {computed === 'dark' ? '☀' : '🌙'}
+            </ActionIcon>
+            <ActionIcon
+              variant="default"
+              size="lg"
+              aria-label={t('nav_settings')}
+              onClick={() => navigate('/settings')}
+            >
+              ⚙
             </ActionIcon>
           </Group>
         </Group>
