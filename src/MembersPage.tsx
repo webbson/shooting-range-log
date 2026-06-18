@@ -101,10 +101,6 @@ export function MembersPage() {
     qc.invalidateQueries({ queryKey: ['operators'] });
   };
 
-  // An active member (a new one, or an existing active one being edited) must
-  // carry an ID. Inactive members may have it cleared. Rust enforces this too.
-  const idRequired = !editing || editing.active;
-
   const save = useMutation({
     mutationFn: (v: MemberForm) =>
       editing ? updateUser({ ...v, uid: editing.uid }) : createUser(v),
@@ -172,19 +168,11 @@ export function MembersPage() {
   };
 
   const onSave = (v: MemberForm) => {
-    if (idRequired && !v.displayId.trim()) {
-      form.setFieldError('displayId', t('display_id_required'));
-      return;
-    }
     save.mutate(v);
   };
 
   const onActivate = () => {
     if (form.validate().hasErrors) return;
-    if (!form.values.displayId.trim()) {
-      form.setFieldError('displayId', t('display_id_required'));
-      return;
-    }
     activate.mutate(form.values);
   };
 
@@ -344,7 +332,6 @@ export function MembersPage() {
               <TextInput
                 style={{ flex: 1 }}
                 label={t('field_display_id')}
-                withAsterisk={idRequired}
                 {...form.getInputProps('displayId')}
               />
               {!form.values.displayId.trim() && (

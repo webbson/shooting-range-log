@@ -110,10 +110,7 @@ fn user_require(conn: &Connection, uid: i64) -> Result<User, AppError> {
 pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, AppError> {
     let display_id = norm(input.display_id);
     let name = require_name(input.name)?;
-    // New members are active; an active member must carry a tag.
-    if display_id.is_none() {
-        return Err(AppError::display_id_required());
-    }
+    // display_id is optional for members; enforce uniqueness only when one is given.
     ensure_display_id_free(conn, "users", &display_id, None)?;
     let now = now_utc();
     conn.execute(
@@ -139,10 +136,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
     let current = user_require(conn, input.uid)?;
     let display_id = norm(input.display_id);
     let name = require_name(input.name)?;
-    // An active member must keep a tag; inactive members may have it cleared.
-    if current.active && display_id.is_none() {
-        return Err(AppError::display_id_required());
-    }
+    // display_id is optional; enforce uniqueness only when one is given.
     ensure_display_id_free(conn, "users", &display_id, Some(input.uid))?;
     conn.execute(
         "UPDATE users SET
@@ -173,10 +167,7 @@ pub(crate) fn user_set_active(
 ) -> Result<User, AppError> {
     let current = user_require(conn, uid)?;
     if active {
-        // Reactivating: an active member must carry a tag, still free.
-        if current.display_id.is_none() {
-            return Err(AppError::display_id_required());
-        }
+        // Reactivating: if a tag is retained, it must still be free.
         ensure_display_id_free(conn, "users", &current.display_id, Some(uid))?;
         conn.execute(
             "UPDATE users SET active = 1, updated_at = ?2 WHERE uid = ?1",
@@ -483,24 +474,27 @@ mod tests {
     }
 
     #[test]
-    fn user_create_requires_display_id() {
+    fn user_create_without_display_id_ok() {
         let conn = migrated_in_memory();
-        let err = user_create(&conn, new_user("Anna", None, false)).unwrap_err();
-        assert_eq!(err.code, "err_display_id_required");
+        let u = user_create(&conn, new_user("Anna", None, false)).unwrap();
+        assert_eq!(u.display_id, None);
+        assert!(u.active);
     }
 
     #[test]
-    fn user_deactivate_clear_frees_tag_and_reactivate_requires_one() {
+    fn user_deactivate_clear_frees_tag_and_reactivate_without_tag_ok() {
         let conn = migrated_in_memory();
         let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
         // Deactivate retaining the tag → still occupies "10".
         let a1 = user_set_active(&conn, a.uid, false, false).unwrap();
         assert_eq!(a1.display_id.as_deref(), Some("10"));
-        // Clear the tag → "10" freed; reactivating now needs a fresh tag.
+        // Clear the tag → "10" freed.
         let a2 = user_set_active(&conn, a.uid, false, true).unwrap();
         assert_eq!(a2.display_id, None);
-        let err = user_set_active(&conn, a.uid, true, false).unwrap_err();
-        assert_eq!(err.code, "err_display_id_required");
+        // Reactivating without a tag is now allowed.
+        let a3 = user_set_active(&conn, a.uid, true, false).unwrap();
+        assert!(a3.active);
+        assert_eq!(a3.display_id, None);
     }
 
     #[test]

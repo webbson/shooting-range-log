@@ -26,16 +26,18 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 - **Validation/business rules live in Rust**, not JS (JS is convenience only).
 - **Identity model:** every entity has hidden `uid` (INTEGER PK, the only FK target) +
   movable `display_id` (the physical tag). `display_id` is unique only among **active**
-  rows (partial unique index) so a tag is reusable once its holder is retired; it is
-  **required while active** (create/update/reactivate enforce it), and may be cleared on
-  deactivation to free the tag. `serial` (weapons) is globally unique. Durable legal
-  identity = serial via uid. (Members no longer carry a `member_number` — column remains in
-  the shipped migration but is unused.)
+  rows (partial unique index) so a tag is reusable once its holder is retired; it may be
+  cleared on deactivation to free the tag. **Weapons** require a tag while active
+  (create/update/reactivate enforce it). **Members/users** treat the tag as optional
+  (quick-access only) — uniqueness is still enforced when one is given, but a member may
+  be active without one (renders as bare name, no `[]`). `serial` (weapons) is globally
+  unique. Durable legal identity = serial via uid. (Members no longer carry a
+  `member_number` — column remains in the shipped migration but is unused.)
 - **Live identity, not snapshots:** because entities are never hard-deleted (only
   `set_active(false)`) and tags are reusable, log read views resolve identity **live by uid**
   via JOIN — history reflects each entity's *current* name/status, not a point-in-time value
   (a snapshotted tag would mis-attribute after reassignment). Display composes
-  `name [id]` when active, `name [disabled]` when not (`src/labels.ts`); weapons compose
+  `name [id]` when active with a tag, bare `name` when active without one, `name [disabled]` when not (`src/labels.ts`); weapons compose
   `brand model, caliber [id]` (caliber omitted when absent) where `[id]` is the **display_id
   (tag)**, not the serial. Log rows store
   **only uids** — there are no `*_snapshot` columns (removed during dev; schema squashed to a
