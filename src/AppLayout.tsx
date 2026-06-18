@@ -101,7 +101,7 @@ export function AppLayout() {
             <Text size="sm" c="dimmed">
               {t('backup_last')}:{' '}
               {(() => {
-                const latest = backups.data?.[0];
+                const latest = backups.data?.find((b) => b.source === 'remote');
                 if (!latest) return '–';
                 const ts = latest.timestamp.slice(0, 16).replace('T', ' ');
                 const today = new Date().toISOString().slice(0, 10);
