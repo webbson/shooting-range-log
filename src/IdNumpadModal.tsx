@@ -4,18 +4,21 @@ import { useTranslation } from 'react-i18next';
 
 // Touch-first number pad for entering an entity tag (display_id) at checkout — a
 // fast alternative to the searchable dropdown. Resolution lives in the parent
-// (it knows the available pools): `match` returns the matched entity's label for
-// the current entry (or null), shown live; confirm is enabled only on a match.
+// (it knows the available pools): `match` returns the matched entity's label (or
+// richer ReactNode) for the current entry (or null), shown live; confirm is
+// enabled only on a match.
 export function IdNumpadModal({
   opened,
   title,
   match,
+  confirmLabel,
   onClose,
   onSubmit,
 }: {
   opened: boolean;
   title: string;
-  match: (id: string) => string | null;
+  match: (id: string) => React.ReactNode | null;
+  confirmLabel?: string;
   onClose: () => void;
   onSubmit: (id: string) => void;
 }) {
@@ -79,7 +82,7 @@ export function IdNumpadModal({
           ))}
         </SimpleGrid>
         <Button size="lg" fullWidth disabled={!matched} onClick={submit}>
-          {t('confirm')}
+          {confirmLabel ?? t('confirm')}
         </Button>
       </Stack>
     </Modal>

@@ -41,6 +41,7 @@ export function CheckoutPage() {
   const [debtUser, setDebtUser] = useState<{ uid: number; name: string } | null>(null);
   // Numpad ID entry (touch alternative to the dropdowns).
   const [numpad, setNumpad] = useState<'weapon' | 'member' | null>(null);
+  const [fastCheckinOpen, setFastCheckinOpen] = useState(false);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -69,10 +70,9 @@ export function CheckoutPage() {
   const onMemberChange = async (v: string | null) => {
     const uid = v ? Number(v) : null;
     setUserUid(uid);
-    if (uid != null && weaponUid == null) {
+    if (uid != null) {
       const e = await evaluateCheckout(null, uid);
-      if (e.suggestedWeaponUid != null && !e.suggestedWeaponOut)
-        setWeaponUid(e.suggestedWeaponUid);
+      if (e.suggestedWeaponUid != null) setWeaponUid(e.suggestedWeaponUid);
     }
   };
 
@@ -111,13 +111,18 @@ export function CheckoutPage() {
   );
 
   // Only available weapons (active and not currently out) and active members
-  // are offered for checkout.
+  // are offered for checkout. If an unavailable item is selected (e.g. via numpad),
+  // append it so the closed Select still renders its label.
   const weaponData = (weapons.data ?? [])
     .filter((w) => w.active && !outMap.has(w.uid))
     .map((w) => ({
       value: String(w.uid),
       label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t),
     }));
+  if (weaponUid != null && !weaponData.some((d) => d.value === String(weaponUid))) {
+    const w = (weapons.data ?? []).find((x) => x.uid === weaponUid);
+    if (w) weaponData.push({ value: String(w.uid), label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) });
+  }
 
   const userData = (users.data ?? [])
     .filter((u) => u.active)
@@ -125,22 +130,56 @@ export function CheckoutPage() {
       value: String(u.uid),
       label: userLabel(u.name, u.displayId, true, t),
     }));
+  if (userUid != null && !userData.some((d) => d.value === String(userUid))) {
+    const u = (users.data ?? []).find((x) => x.uid === userUid);
+    if (u) userData.push({ value: String(u.uid), label: userLabel(u.name, u.displayId, u.active, t) });
+  }
 
-  // Resolve an entered tag (display_id) against the same pool the dropdown offers.
-  // Used both for the modal's live match preview and for confirming the pick.
+  // Resolve an entered tag (display_id) against all known weapons/members.
+  // Inactive and loaned-out items match too — the eval will surface an error state.
   const matchId = (id: string): { uid: number; label: string } | null => {
     if (numpad === 'weapon') {
-      const w = (weapons.data ?? []).find(
-        (x) => x.active && !outMap.has(x.uid) && x.displayId === id,
-      );
-      return w ? { uid: w.uid, label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t) } : null;
+      const w = (weapons.data ?? []).find((x) => x.displayId === id);
+      return w ? { uid: w.uid, label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) } : null;
     }
     if (numpad === 'member') {
-      const u = (users.data ?? []).find((x) => x.active && x.displayId === id);
-      return u ? { uid: u.uid, label: userLabel(u.name, u.displayId, true, t) } : null;
+      const u = (users.data ?? []).find((x) => x.displayId === id);
+      return u ? { uid: u.uid, label: userLabel(u.name, u.displayId, u.active, t) } : null;
     }
     return null;
   };
+
+  // Embedded notices — attached directly to the relevant Select instead of free-floating banners.
+  const weaponError: string | undefined = (() => {
+    if (!ev) return undefined;
+    if (ev.weaponInactive) {
+      return ev.weaponInactiveReason
+        ? t('banner_weapon_inactive', { reason: ev.weaponInactiveReason })
+        : t('banner_weapon_inactive_noreason');
+    }
+    if (ev.weaponAlreadyOut) {
+      return t('banner_weapon_already_out', {
+        name: userLabel(ev.openHolderName, ev.openHolderDisplay, ev.openHolderActive, t),
+      });
+    }
+    return undefined;
+  })();
+
+  const weaponDescription: string | undefined =
+    weaponUid != null && ev?.fresherUserName
+      ? t('banner_fresher', {
+          name: userLabel(ev.fresherUserName, ev.fresherUserDisplay, ev.fresherUserActive, t),
+          date: ev.fresherUserAt ? fmtDateTime(ev.fresherUserAt) : '',
+        })
+      : undefined;
+
+  const memberError: string | undefined =
+    ev?.userInactive ? t('banner_user_inactive') : undefined;
+
+  const memberDescription: string | undefined =
+    userUid != null && ev != null && ev.userOutstandingDebtKr > 0
+      ? t('banner_debt', { amount: ev.userOutstandingDebtKr })
+      : undefined;
 
   // Drive the existing change handlers so autopopulate + eval behave like a dropdown pick.
   const onNumpadSubmit = (id: string) => {
@@ -151,6 +190,32 @@ export function CheckoutPage() {
     setNumpad(null);
   };
 
+  const matchCheckin = (id: string): React.ReactNode | null => {
+    const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
+    if (!o) return null;
+    return (
+      <Stack gap={2}>
+        <Text fw={600} c="teal">
+          {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
+        </Text>
+        <Text size="sm">
+          {userLabel(o.userName, o.userDisplayId, o.userActive, t)}
+        </Text>
+        <Text size="xs" c="dimmed">
+          {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
+        </Text>
+      </Stack>
+    );
+  };
+
+  const onFastCheckinSubmit = (id: string) => {
+    const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
+    if (o) {
+      checkinMut.mutate(o.id);
+      setFastCheckinOpen(false);
+    }
+  };
+
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
       {/* New checkout */}
@@ -158,84 +223,51 @@ export function CheckoutPage() {
         <Stack>
           <Title order={3}>{t('checkout_new')}</Title>
 
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Select
-              label={t('field_weapon')}
-              placeholder={t('select_weapon_ph')}
-              data={weaponData}
-              value={weaponUid != null ? String(weaponUid) : null}
-              onChange={onWeaponChange}
-              searchable
-              clearable
-              style={{ flex: 1 }}
-            />
-            <Tooltip label={t('enter_id')}>
-              <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('weapon')}>
-                ⌨
-              </Button>
-            </Tooltip>
-          </Group>
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Select
-              label={t('field_member')}
-              placeholder={t('select_member_ph')}
-              data={userData}
-              value={userUid != null ? String(userUid) : null}
-              onChange={onMemberChange}
-              searchable
-              clearable
-              style={{ flex: 1 }}
-            />
-            <Tooltip label={t('enter_id')}>
-              <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('member')}>
-                ⌨
-              </Button>
-            </Tooltip>
-          </Group>
+          <Stack gap={4}>
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <Select
+                label={t('field_member')}
+                placeholder={t('select_member_ph')}
+                data={userData}
+                value={userUid != null ? String(userUid) : null}
+                onChange={onMemberChange}
+                searchable
+                clearable
+                style={{ flex: 1 }}
+                error={!!memberError}
+              />
+              <Tooltip label={t('enter_id')}>
+                <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('member')}>
+                  ⌨
+                </Button>
+              </Tooltip>
+            </Group>
+            {memberDescription && <Text fz="xs" c="orange.7">{memberDescription}</Text>}
+            {memberError && <Text fz="xs" c="red">{memberError}</Text>}
+          </Stack>
+          <Stack gap={4}>
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <Select
+                label={t('field_weapon')}
+                placeholder={t('select_weapon_ph')}
+                data={weaponData}
+                value={weaponUid != null ? String(weaponUid) : null}
+                onChange={onWeaponChange}
+                searchable
+                clearable
+                style={{ flex: 1 }}
+                error={!!weaponError}
+              />
+              <Tooltip label={t('enter_id')}>
+                <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('weapon')}>
+                  ⌨
+                </Button>
+              </Tooltip>
+            </Group>
+            {weaponDescription && <Text fz="xs" c="orange.7">{weaponDescription}</Text>}
+            {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
+          </Stack>
 
-          {/* Banners */}
-          {ev?.weaponInactive && (
-            <Alert color="red" variant="filled">
-              {ev.weaponInactiveReason
-                ? t('banner_weapon_inactive', { reason: ev.weaponInactiveReason })
-                : t('banner_weapon_inactive_noreason')}
-            </Alert>
-          )}
-          {ev?.weaponAlreadyOut && (
-            <Alert color="gray">
-              {t('banner_weapon_already_out', {
-                name: userLabel(
-                  ev.openHolderName,
-                  ev.openHolderDisplay,
-                  ev.openHolderActive,
-                  t,
-                ),
-              })}
-            </Alert>
-          )}
-          {ev?.userInactive && (
-            <Alert color="red" variant="filled">
-              {t('banner_user_inactive')}
-            </Alert>
-          )}
-          {ev != null && ev.userOutstandingDebtKr > 0 && (
-            <Alert color="red" variant="filled">
-              {t('banner_debt', { amount: ev.userOutstandingDebtKr })}
-            </Alert>
-          )}
-          {ev?.fresherUserName && (
-            <Alert color="orange">
-              {t('banner_fresher', {
-                name: userLabel(
-                  ev.fresherUserName,
-                  ev.fresherUserDisplay,
-                  ev.fresherUserActive,
-                  t,
-                ),
-                date: ev.fresherUserAt ? fmtDateTime(ev.fresherUserAt) : '',
-              })}
-            </Alert>
-          )}
           {weaponUid != null && userUid == null && ev?.suggestedUserBusy && (
             <Alert color="orange">
               {t('banner_suggested_user_busy', {
@@ -243,20 +275,6 @@ export function CheckoutPage() {
                   ev.suggestedUserName,
                   ev.suggestedUserDisplayId,
                   ev.suggestedUserActive,
-                  t,
-                ),
-              })}
-            </Alert>
-          )}
-          {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
-            <Alert color="orange">
-              {t('banner_suggested_weapon_out', {
-                label: weaponLabel(
-                  ev.suggestedWeaponBrand,
-                  ev.suggestedWeaponModel,
-                  ev.suggestedWeaponCaliber,
-                  ev.suggestedWeaponDisplayId,
-                  ev.suggestedWeaponActive,
                   t,
                 ),
               })}
@@ -283,7 +301,12 @@ export function CheckoutPage() {
       {/* Open checkouts / checkin */}
       <Card withBorder padding="lg">
         <Stack>
-          <Title order={3}>{t('open_checkouts')}</Title>
+          <Group justify="space-between" align="center">
+            <Title order={3}>{t('open_checkouts')}</Title>
+            <Button variant="default" onClick={() => setFastCheckinOpen(true)}>
+              {t('fast_checkin')}
+            </Button>
+          </Group>
           {(open.data?.length ?? 0) === 0 ? (
             <Text c="dimmed">{t('no_open_checkouts')}</Text>
           ) : (
@@ -343,6 +366,15 @@ export function CheckoutPage() {
         match={(id) => matchId(id)?.label ?? null}
         onClose={() => setNumpad(null)}
         onSubmit={onNumpadSubmit}
+      />
+
+      <IdNumpadModal
+        opened={fastCheckinOpen}
+        title={t('fast_checkin')}
+        match={matchCheckin}
+        confirmLabel={t('return_weapon')}
+        onClose={() => setFastCheckinOpen(false)}
+        onSubmit={onFastCheckinSubmit}
       />
     </SimpleGrid>
   );
