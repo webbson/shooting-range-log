@@ -74,18 +74,40 @@ fn opt(s: &str) -> Option<String> {
     }
 }
 
-/// Delete all domain rows (child → parent; `foreign_keys` is ON). `app_meta` and
-/// the schema itself are left intact.
-fn wipe(conn: &Connection) -> Result<(), AppError> {
-    for table in ["debts", "weapon_service_log", "checkouts", "weapons", "users"] {
+fn delete_tables(conn: &Connection, tables: &[&str]) -> Result<(), AppError> {
+    for table in tables {
         conn.execute(&format!("DELETE FROM {table}"), [])?;
     }
     Ok(())
 }
 
+/// Wipe all domain rows (child → parent; `foreign_keys` is ON).
+/// `app_meta` and the schema itself are left intact.
+pub fn wipe_all(conn: &Connection) -> Result<(), AppError> {
+    delete_tables(conn, &["debts", "weapon_service_log", "checkouts", "weapons", "users"])
+}
+
+/// Wipe users and all rows that reference them (checkouts, service log, debts).
+/// Weapons are kept.
+pub fn wipe_users(conn: &Connection) -> Result<(), AppError> {
+    delete_tables(conn, &["debts", "weapon_service_log", "checkouts", "users"])
+}
+
+/// Wipe weapons and all rows that reference them (checkouts, service log, debts).
+/// Users are kept.
+pub fn wipe_weapons(conn: &Connection) -> Result<(), AppError> {
+    delete_tables(conn, &["debts", "weapon_service_log", "checkouts", "weapons"])
+}
+
+/// Wipe log/transaction tables only (checkouts, service log, debts).
+/// Users and weapons are kept.
+pub fn wipe_logs(conn: &Connection) -> Result<(), AppError> {
+    delete_tables(conn, &["debts", "weapon_service_log", "checkouts"])
+}
+
 /// Wipe the dev DB and rebuild a full deterministic dataset.
 pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
-    wipe(conn)?;
+    wipe_all(conn)?;
 
     // --- Users (display_id "1".."20"); first N_STAFF are operators. ---
     let mut user_uids = Vec::with_capacity(N_USERS);
