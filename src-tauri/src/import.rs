@@ -159,6 +159,28 @@ fn is_weapon_no(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
 }
 
+/// Normalize a raw SSN string to canonical `YYYYMMDD-XXXX` form.
+///
+/// Handles:
+///   - `YYMMDD-XXXX` / `YYMMDDXXXX`  (10 raw digits) — infers century:
+///     yy > 26 → 1900s, yy ≤ 26 → 2000s (assumes no one older than ~90).
+///   - `YYYYMMDD-XXXX` / `YYYYMMDDXXXX` (12 raw digits) — just adds hyphen.
+///
+/// Returns `None` for anything that doesn't yield exactly 10 or 12 digits.
+fn normalize_ssn(raw: &str) -> Option<String> {
+    let digits: String = raw.trim().chars().filter(|c| c.is_ascii_digit()).collect();
+    let (date8, last4) = match digits.len() {
+        10 => {
+            let yy: u32 = digits[..2].parse().ok()?;
+            let century = if yy > 26 { 1900u32 } else { 2000u32 };
+            (format!("{}{}", century + yy, &digits[2..6]), digits[6..10].to_string())
+        }
+        12 => (digits[..8].to_string(), digits[8..12].to_string()),
+        _ => return None,
+    };
+    Some(format!("{}-{}", date8, last4))
+}
+
 /// Normalize member name to title case (first letter of each word uppercased,
 /// rest lowercased). Handles Swedish Å/Ä/Ö via Unicode char methods.
 fn normalize_name(s: &str) -> String {
@@ -245,7 +267,7 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             _ => continue, // blank row
         };
 
-        let ssn = row.get(1).and_then(|c| cell_as_str(c));
+        let ssn = row.get(1).and_then(|c| cell_as_str(c)).and_then(|s| normalize_ssn(&s));
 
         // Parse loan entries for this row.
         let mut loans: Vec<ParsedLoan> = Vec::new();
@@ -1014,5 +1036,24 @@ mod tests {
         )]);
         let plan = build_plan(&conn, &sheet).unwrap();
         assert_eq!(plan.weapons[0].existing_uid, Some(existing_w.uid));
+    }
+
+    #[test]
+    fn normalize_ssn_variants() {
+        // Already canonical
+        assert_eq!(normalize_ssn("19890330-1234"), Some("19890330-1234".into()));
+        // No hyphen, 12 digits
+        assert_eq!(normalize_ssn("198903301234"), Some("19890330-1234".into()));
+        // 10 digits, 19xx (yy=89 > 26)
+        assert_eq!(normalize_ssn("8903301234"), Some("19890330-1234".into()));
+        // 10 digits with hyphen, 19xx
+        assert_eq!(normalize_ssn("890330-1234"), Some("19890330-1234".into()));
+        // 10 digits, 20xx (yy=05 ≤ 26)
+        assert_eq!(normalize_ssn("0503301234"), Some("20050330-1234".into()));
+        // Leading/trailing whitespace
+        assert_eq!(normalize_ssn("  19890330-1234  "), Some("19890330-1234".into()));
+        // Garbage → None
+        assert_eq!(normalize_ssn("not-a-ssn"), None);
+        assert_eq!(normalize_ssn(""), None);
     }
 }
