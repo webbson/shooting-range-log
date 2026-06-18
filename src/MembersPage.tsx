@@ -11,6 +11,7 @@ import {
   Checkbox,
   Stack,
   Text,
+  Tooltip,
   UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -34,6 +35,9 @@ import { errorMessage } from './errors';
 import { userLabel } from './labels';
 import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
+
+const SSN_RE = /^\d{8}-\d{4}$/;
+const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
 
 type SortKey = 'id' | 'name' | 'lastShot';
 
@@ -91,7 +95,14 @@ export function MembersPage() {
 
   const form = useForm<MemberForm>({
     initialValues: EMPTY,
-    validate: { name: (v) => (v.trim() ? null : t('name_required')) },
+    validate: {
+      name: (v) => (v.trim() ? null : t('name_required')),
+      ssn: (v) => {
+        if (!v.trim()) return t('ssn_required');
+        if (!isValidSwedishSSN(v)) return t('ssn_format_invalid');
+        return null;
+      },
+    },
   });
 
   const onError = (e: unknown) =>
@@ -237,6 +248,11 @@ export function MembersPage() {
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
           {u.name}
+          {!u.isStaff && (!u.ssn || !isValidSwedishSSN(u.ssn)) && (
+            <Tooltip label={t('member_no_ssn_warning')} color="orange">
+              <Text component="span" c="orange" size="sm">⚠</Text>
+            </Tooltip>
+          )}
           {debtMap.has(u.uid) && (
             <Badge color="red" variant="filled">
               {t('debt_badge', { amount: debtMap.get(u.uid) })}

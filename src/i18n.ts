@@ -83,6 +83,9 @@ const resources = {
       field_caliber: 'Kaliber',
       name_required: 'Namn krävs.',
       display_id_required: 'ID krävs.',
+      ssn_required: 'Personnummer krävs.',
+      ssn_format_invalid: 'Ogiltigt format. Ange personnummer som YYYYMMDD-XXXX (t.ex. 19890330-1234).',
+      member_no_ssn_warning: 'Saknar giltigt personnummer',
 
       // Error codes from Rust
       err_display_id_taken: "ID '{{displayId}}' används redan av en annan aktiv post.",
@@ -262,6 +265,9 @@ const resources = {
       field_caliber: 'Caliber',
       name_required: 'Name is required.',
       display_id_required: 'ID is required.',
+      ssn_required: 'SSN is required.',
+      ssn_format_invalid: 'Invalid format. Use YYYYMMDD-XXXX (e.g. 19890330-1234).',
+      member_no_ssn_warning: 'Missing or invalid SSN',
 
       // Error codes from Rust
       err_display_id_taken:
