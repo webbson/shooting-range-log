@@ -12,6 +12,7 @@ import {
   Alert,
   ActionIcon,
   Tooltip,
+  ScrollArea,
 } from '@mantine/core';
 import { IconCoins, IconArrowBackUp } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -353,7 +354,11 @@ export function CheckoutPage() {
           {(open.data?.length ?? 0) === 0 ? (
             <Text c="dimmed">{t('no_open_checkouts')}</Text>
           ) : (
-            (open.data ?? []).map((o) => (
+            // List scrolls inside the card; title + fast check-in stay put.
+            // ponytail: 240px ≈ shell header + card chrome — tune at live-smoke if clipped.
+            <ScrollArea.Autosize mah="calc(100vh - 240px)" type="auto">
+              <Stack gap="sm">
+                {(open.data ?? []).map((o) => (
               <Card key={o.id} withBorder padding="sm">
                 <Group justify="space-between" wrap="nowrap">
                   <Stack gap={2}>
@@ -422,7 +427,9 @@ export function CheckoutPage() {
                   </Group>
                 </Group>
               </Card>
-            ))
+                ))}
+              </Stack>
+            </ScrollArea.Autosize>
           )}
         </Stack>
       </Card>
