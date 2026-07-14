@@ -55,7 +55,23 @@ export function CheckoutPage() {
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
-  const open = useQuery({ queryKey: ['openCheckouts'], queryFn: listOpenCheckouts });
+  // TEMP diag: stale-open-list investigation — remove after root cause found.
+  const open = useQuery({
+    queryKey: ['openCheckouts'],
+    queryFn: async () => {
+      console.log('[diag] openCheckouts fetch start', new Date().toISOString());
+      const rows = await listOpenCheckouts();
+      console.log('[diag] openCheckouts fetched rows:', rows.length, new Date().toISOString());
+      return rows;
+    },
+  });
+  console.log(
+    '[diag] render — open rows:',
+    open.data?.length,
+    'updatedAt:',
+    open.dataUpdatedAt ? new Date(open.dataUpdatedAt).toISOString() : 'never',
+    'fetching:', open.isFetching, 'stale:', open.isStale,
+  );
   const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
   const debtMap = new Map((debts.data ?? []).map((d) => [d.userUid, d.amountKr] as const));
 
@@ -101,6 +117,7 @@ export function CheckoutPage() {
   const checkinMut = useMutation({
     mutationFn: (id: number) => doCheckin(id, operator!.uid),
     onSuccess: () => {
+      console.log('[diag] checkin success, invalidating', new Date().toISOString());
       notifications.show({ message: t('returned_ok') });
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
