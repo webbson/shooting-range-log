@@ -6,10 +6,8 @@ import {
   Title,
   Text,
   Input,
-  CloseButton,
   TextInput,
   Button,
-  Alert,
   ActionIcon,
   Tooltip,
   ScrollArea,
@@ -61,25 +59,14 @@ export function CheckoutPage() {
   });
   const ev = evalQ.data;
 
-  // Autopopulate happens once, on explicit selection (not reactively) — so a
-  // manual clear sticks instead of being re-filled. We skip autofill when the
-  // suggested counterpart is unavailable (busy member / weapon already out);
-  // the reactive eval below surfaces a warning banner for that case.
-  const onWeaponChange = async (wid: number | null) => {
-    setWeaponUid(wid);
-    if (wid != null && userUid == null) {
-      const e = await evaluateCheckout(wid, null);
-      if (e.suggestedUserUid != null && !e.suggestedUserBusy) setUserUid(e.suggestedUserUid);
-    }
-  };
-
-  const onMemberChange = async (uid: number | null) => {
+  // Member drives the flow: picking a member autofills their suggested weapon
+  // (preferred, else last-used) or clears the field when nothing is available.
+  const onMemberChange = async (uid: number) => {
     setUserUid(uid);
-    if (uid != null) {
-      const e = await evaluateCheckout(null, uid);
-      if (e.suggestedWeaponUid != null && !e.suggestedWeaponOut)
-        setWeaponUid(e.suggestedWeaponUid);
-    }
+    const e = await evaluateCheckout(null, uid);
+    setWeaponUid(
+      e.suggestedWeaponUid != null && !e.suggestedWeaponOut ? e.suggestedWeaponUid : null,
+    );
   };
 
   const reset = () => {
@@ -158,46 +145,8 @@ export function CheckoutPage() {
     return undefined;
   })();
 
-  const weaponDescription: string | undefined =
-    weaponUid != null && ev?.fresherUserName
-      ? t('banner_fresher', {
-          name: userLabel(ev.fresherUserName, ev.fresherUserDisplay, ev.fresherUserActive, t),
-          date: ev.fresherUserAt ? fmtDateTime(ev.fresherUserAt) : '',
-        })
-      : undefined;
-
   const memberError: string | undefined =
     ev?.userInactive ? t('banner_user_inactive') : undefined;
-
-  const memberDescription: string | undefined =
-    userUid != null && ev != null && ev.userOutstandingDebtKr > 0
-      ? t('banner_debt', { amount: ev.userOutstandingDebtKr })
-      : undefined;
-
-  // Member's favorite weapon is currently out — informational, shown whenever
-  // the member is selected (autofill already fell back to last-used).
-  const favoriteOut = (() => {
-    const prefUid = selectedUser?.preferredWeaponUid;
-    if (prefUid == null) return null;
-    const o = (open.data ?? []).find((x) => x.weaponUid === prefUid);
-    if (!o) return null;
-    if (o.userUid === userUid) return null;
-    const w = (weapons.data ?? []).find((x) => x.uid === prefUid);
-    if (!w) return null;
-    return t('banner_favorite_out', {
-      member: selectedUser!.name,
-      weapon: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t),
-      holder: userLabel(o.userName, o.userDisplayId, o.userActive, t),
-    });
-  })();
-
-  // Chosen weapon is another member's favorite — informational, never blocks.
-  const weaponFavoriteNote = (() => {
-    if (weaponUid == null) return undefined;
-    const p = preferrerOf(weaponUid);
-    if (!p || p.uid === userUid) return undefined;
-    return t('banner_weapon_is_favorite', { name: p.name });
-  })();
 
   const matchCheckin = (id: string): React.ReactNode | null => {
     const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
@@ -249,15 +198,7 @@ export function CheckoutPage() {
                     : t('select_member_ph')}
                 </Button>
               </Input.Wrapper>
-              {userUid != null && (
-                <CloseButton
-                  size="lg"
-                  aria-label={t('clear_selection')}
-                  onClick={() => setUserUid(null)}
-                />
-              )}
             </Group>
-            {memberDescription && <Text fz="xs" c="orange.7">{memberDescription}</Text>}
             {memberError && <Text fz="xs" c="red">{memberError}</Text>}
           </Stack>
           <Stack gap={4}>
@@ -268,6 +209,7 @@ export function CheckoutPage() {
                   variant="default"
                   justify="space-between"
                   rightSection="▾"
+                  disabled={userUid == null}
                   onClick={() => setPicker('weapon')}
                   styles={weaponError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
                   c={selectedWeapon ? undefined : 'dimmed'}
@@ -284,46 +226,14 @@ export function CheckoutPage() {
                     : t('select_weapon_ph')}
                 </Button>
               </Input.Wrapper>
-              {weaponUid != null && (
-                <CloseButton
-                  size="lg"
-                  aria-label={t('clear_selection')}
-                  onClick={() => setWeaponUid(null)}
-                />
-              )}
             </Group>
-            {weaponDescription && <Text fz="xs" c="orange.7">{weaponDescription}</Text>}
-            {weaponFavoriteNote && <Text fz="xs" c="orange.7">{weaponFavoriteNote}</Text>}
+            {userUid == null && (
+              <Text fz="xs" c="dimmed">
+                {t('choose_member_first')}
+              </Text>
+            )}
             {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
           </Stack>
-
-          {weaponUid != null && userUid == null && ev?.suggestedUserBusy && (
-            <Alert color="orange">
-              {t('banner_suggested_user_busy', {
-                name: userLabel(
-                  ev.suggestedUserName,
-                  ev.suggestedUserDisplayId,
-                  ev.suggestedUserActive,
-                  t,
-                ),
-              })}
-            </Alert>
-          )}
-          {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
-            <Alert color="orange">
-              {t('banner_suggested_weapon_out', {
-                label: weaponLabel(
-                  ev.suggestedWeaponBrand,
-                  ev.suggestedWeaponModel,
-                  ev.suggestedWeaponCaliber,
-                  ev.suggestedWeaponDisplayId,
-                  ev.suggestedWeaponActive,
-                  t,
-                ),
-              })}
-            </Alert>
-          )}
-          {favoriteOut && <Alert color="orange">{favoriteOut}</Alert>}
 
           <TextInput
             label={t('field_checkout_notes')}
@@ -455,7 +365,7 @@ export function CheckoutPage() {
         onClose={() => setPicker(null)}
         onSelect={(uid) => {
           setPicker(null);
-          onWeaponChange(uid);
+          setWeaponUid(uid);
         }}
         availableOnly
         pinned={{
