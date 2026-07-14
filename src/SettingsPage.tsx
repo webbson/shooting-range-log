@@ -161,6 +161,14 @@ export function SettingsPage() {
           loansCreated: result.loansCreated,
         }),
       });
+      if (result.warnings.length > 0) {
+        notifications.show({
+          color: 'orange',
+          autoClose: false,
+          title: t('import_warnings'),
+          message: result.warnings.map((w) => w.message).join('\n'),
+        });
+      }
       setPreview(null);
       setFilePath(null);
       setSelectedSheet(null);
