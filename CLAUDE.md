@@ -11,8 +11,9 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 ## Stack
 - **Tauri 2** (Rust core) + **React + TypeScript + Mantine v9** in the WebView.
 - **SQLite via rusqlite** (bundled), migrations via **rusqlite_migration** (auto-applied on launch).
-- Frontend: **TanStack Query** (server state) · **Zustand** (app state) · **react-i18next**
-  (sv + en) · **@mantine/form** · **@mantine/dates** · **dayjs**.
+- Frontend: **TanStack Query** (server state; `networkMode: 'always'` — Tauri IPC must never
+  pause on offline WebView) · **Zustand** (app state) · **react-i18next** (sv + en) ·
+  **@mantine/form** · **@mantine/dates** · **@tabler/icons-react** · **dayjs**.
 
 ## Commands
 - Dev (launches app): `npm run tauri dev`
@@ -44,10 +45,17 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   single migration 0001). Never reintroduce snapshots. Log tables (checkouts,
   weapon_service_log, debts) stay **append-only** — corrections/returns/settles are new rows
   or field updates, never deletes.
-- **Migrations:** `SCHEMA_V1` (domain schema) + `SCHEMA_V2` (settings table) in
-  `src-tauri/src/db.rs`. Currently 2 migrations (0001, 0002). Once a migration has shipped
-  to a real install, **never edit it — append a new `M::up` (0003, …)** to the `migrations()`
-  vec. Editing a released migration silently diverges existing DBs.
+- **Migrations:** `SCHEMA_V1` (domain schema) + `SCHEMA_V2` (settings table) + `SCHEMA_V3`
+  (`users.preferred_weapon_uid` + partial unique index) in `src-tauri/src/db.rs`. Currently
+  3 migrations (0001–0003). Once a migration has shipped to a real install, **never edit
+  it — append a new `M::up` (0004, …)** to the `migrations()` vec. Editing a released
+  migration silently diverges existing DBs.
+- **Preferred weapon:** `users.preferred_weapon_uid` — exclusive both ways (one favorite per
+  member; a weapon is at most one member's favorite, DB-enforced by partial unique index).
+  Set only via `set_preferred_weapon` (never through create/update user); deactivating a
+  member clears it (frees the slot); import sets it from the `vapen` column (first row wins,
+  never overwrites a live preference, skips inactive matched members). Checkout autofill
+  suggests preferred first (active + not out), else last-used.
 - **Money:** integer whole **kronor** (`amount_kr`). No floats, no öre.
 - **Time:** store UTC RFC3339; display via `src/format.ts` (sv-SE, e.g. `2026-06-16 14:30`).
 - **Operators** are users with `is_staff`. The frontend store holds `{uid, name}`; `uid` is
@@ -98,16 +106,20 @@ commit on a `feat/*` branch → merge to `main`.
   `s3.rs` (rust-s3: test_connection, upload, list_remote, download, delete, retention_remote),
   `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
-  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx`, `MembersPage.tsx` (list: sortable, last-shot
-  column, row → detail), `MemberDetailPage.tsx` (read-only info grid + shooting history),
+  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (picker-modal selection, eval warnings,
+  scrollable open-loans list with favorite-star/debt/return actions),
+  `Numpad.tsx` (shared keypad) + `IdNumpadModal.tsx` (fast check-in),
+  `WeaponPickerModal.tsx` / `MemberPickerModal.tsx` (touch pickers: tag numpad + filters,
+  favorite/last badges, exact-tag-match-first sort), `MembersPage.tsx` (list: sortable, last-shot
+  column, row → detail; edit modal incl. preferred weapon), `MemberDetailPage.tsx` (read-only info grid + shooting history),
   `WeaponsPage.tsx` (list + create/edit; brand/model/caliber Autocomplete + "base on existing weapon"),
   `weaponPresets.ts` (curated brand/caliber lists + DB-merge suggestion helper),
   `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`.
 
 ## Status
-M0–M5 done on `main`. M6 (backup/restore) **implemented** — local snapshots, GFS retention,
-S3-compatible upload/restore, passphrase encryption; needs live-smoke test before calling done.
+M0–M6 done on `main` (M6 backup/restore live-smoked). Picker modals + preferred-weapon
+feature (3 waves, 2026-07-14) merged to `main` after live-smoke.
 M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
 Git is local-only (no remote yet → Windows installer not yet built).
 
