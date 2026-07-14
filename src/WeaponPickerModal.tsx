@@ -13,8 +13,9 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listWeapons, listOpenCheckouts, type Weapon } from './api';
-import { weaponLabel } from './labels';
+import { listWeapons, listOpenCheckouts, listUsers, lastWeaponUsers, type Weapon } from './api';
+import { weaponLabel, userLabel } from './labels';
+import { fmtDate } from './format';
 import { Numpad } from './Numpad';
 
 // Touch-first weapon selector: box list left, tag numpad + filters right.
@@ -57,6 +58,19 @@ export function WeaponPickerModal({
     enabled: opened && availableOnly,
   });
   const outSet = new Set((open.data ?? []).map((o) => o.weaponUid));
+  const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: opened });
+  const lastUses = useQuery({
+    queryKey: ['lastWeaponUsers'],
+    queryFn: lastWeaponUsers,
+    enabled: opened,
+  });
+  const lastUseMap = new Map((lastUses.data ?? []).map((l) => [l.weaponUid, l] as const));
+  // weapon uid → the member whose favorite it is (at most one; DB-enforced).
+  const preferrerMap = new Map(
+    (users.data ?? [])
+      .filter((u) => u.preferredWeaponUid != null)
+      .map((u) => [u.preferredWeaponUid as number, u] as const),
+  );
 
   const pool = (weapons.data ?? []).filter(
     (w) => w.active && (!availableOnly || !outSet.has(w.uid)),
@@ -78,7 +92,13 @@ export function WeaponPickerModal({
 
   const label = (w: Weapon) => weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t);
   const rank = (w: Weapon) =>
-    w.uid === pinned?.preferredUid ? 0 : w.uid === pinned?.lastUid ? 1 : 2;
+    tag && w.displayId === tag
+      ? 0
+      : w.uid === pinned?.preferredUid
+        ? 1
+        : w.uid === pinned?.lastUid
+          ? 2
+          : 3;
   const sorted = [...filtered].sort((a, b) => {
     const r = rank(a) - rank(b);
     if (r !== 0) return r;
@@ -108,16 +128,36 @@ export function WeaponPickerModal({
                           {w.serial}
                         </Text>
                       )}
+                      {lastUseMap.has(w.uid) && (
+                        <Text size="xs" c="dimmed">
+                          {t('picker_last_used', {
+                            name: userLabel(
+                              lastUseMap.get(w.uid)!.userName,
+                              lastUseMap.get(w.uid)!.userDisplayId,
+                              lastUseMap.get(w.uid)!.userActive,
+                              t,
+                            ),
+                            date: fmtDate(lastUseMap.get(w.uid)!.lastUsedAt),
+                          })}
+                        </Text>
+                      )}
                     </Stack>
-                    {w.uid === pinned?.preferredUid ? (
-                      <Badge color="yellow" variant="light">
-                        ★ {t('badge_preferred')}
-                      </Badge>
-                    ) : w.uid === pinned?.lastUid ? (
-                      <Badge color="gray" variant="light">
-                        {t('badge_last')}
-                      </Badge>
-                    ) : null}
+                    <Group gap={4} wrap="nowrap">
+                      {w.uid === pinned?.preferredUid ? (
+                        <Badge color="yellow" variant="light">
+                          ★ {t('badge_preferred')}
+                        </Badge>
+                      ) : preferrerMap.has(w.uid) ? (
+                        <Badge color="yellow" variant="light">
+                          ★ {preferrerMap.get(w.uid)!.name}
+                        </Badge>
+                      ) : null}
+                      {w.uid === pinned?.lastUid && (
+                        <Badge color="gray" variant="light">
+                          {t('badge_last')}
+                        </Badge>
+                      )}
+                    </Group>
                   </Group>
                 </Card>
               ))}
