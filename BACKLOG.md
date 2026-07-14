@@ -18,7 +18,8 @@ _Collect tweaks here as they come up._
 - [ ] Info modals show "no history" while the history query is loading — gate on query status.
 - [ ] WeaponInfoModal empty-usage state reuses `no_shooting_history` copy — dedicated key in a later copy pass.
 - [ ] Orphaned i18n keys `field_member_since`, `language` (pre-existing on main) — drop or wire up.
-- [ ] `last_shot_dates` localtime-vs-UTC boundary not distinguishable by current test — needs clock injection; SQL verified correct by review.
+- [x] `last_shot_dates` localtime-vs-UTC boundary not distinguishable by current test — obsolete: the before-today field was removed when picker grouping moved to the frontend (dayjs same-day check).
+- [ ] Intermittent stale open-loans list after a return (seen once at 2026-07-14 live-smoke: checkin succeeded + toast, list only refreshed on next interaction). Never reproduced during investigation; code path verified correct (invalidateQueries present, single conn, networkMode 'always'). Mitigation shipped: 30s `refetchInterval` on `openCheckouts`. If it recurs: cherry-pick diagnostics commit `5d204cb` and capture `[diag]` console lines (needs a devtools-enabled build).
 
 ## M6 — Backup / restore (deferred)
 - Auto snapshot via SQLite `VACUUM INTO` to a local backups dir; on app close + periodic.
