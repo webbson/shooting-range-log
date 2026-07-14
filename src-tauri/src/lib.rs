@@ -271,6 +271,7 @@ pub fn run() {
             commands::create_user,
             commands::update_user,
             commands::set_user_active,
+            commands::set_preferred_weapon,
             commands::list_weapons,
             commands::get_weapon,
             commands::next_weapon_display_id,

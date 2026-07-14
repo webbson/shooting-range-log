@@ -188,6 +188,38 @@ pub(crate) fn user_set_active(
     user_require(conn, uid)
 }
 
+/// Set (or clear, with None) a member's preferred weapon. A weapon can be the
+/// preferred weapon of at most one member — checked here first so the error can
+/// name the competing member; the partial unique index is the DB backstop.
+pub(crate) fn user_set_preferred_weapon(
+    conn: &Connection,
+    user_uid: i64,
+    weapon_uid: Option<i64>,
+) -> Result<User, AppError> {
+    user_require(conn, user_uid)?;
+    if let Some(wuid) = weapon_uid {
+        let w = weapon_require(conn, wuid)?;
+        if !w.active {
+            return Err(AppError::weapon_inactive());
+        }
+        let other: Option<String> = conn
+            .query_row(
+                "SELECT name FROM users WHERE preferred_weapon_uid = ?1 AND uid <> ?2",
+                params![wuid, user_uid],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(name) = other {
+            return Err(AppError::weapon_already_preferred(&name));
+        }
+    }
+    conn.execute(
+        "UPDATE users SET preferred_weapon_uid = ?2, updated_at = ?3 WHERE uid = ?1",
+        params![user_uid, weapon_uid, now_utc()],
+    )?;
+    user_require(conn, user_uid)
+}
+
 // ---------- Weapons (inner) ----------
 
 fn weapons_list(conn: &Connection) -> Result<Vec<Weapon>, AppError> {
@@ -369,6 +401,16 @@ pub fn set_user_active(
 }
 
 #[tauri::command]
+pub fn set_preferred_weapon(
+    db: State<Db>,
+    user_uid: i64,
+    weapon_uid: Option<i64>,
+) -> Result<User, AppError> {
+    let conn = lock(&db)?;
+    user_set_preferred_weapon(&conn, user_uid, weapon_uid)
+}
+
+#[tauri::command]
 pub fn next_user_display_id(db: State<Db>) -> Result<String, AppError> {
     let conn = lock(&db)?;
     next_free_user_display_id(&conn)
@@ -506,6 +548,54 @@ mod tests {
         // Deactivate Björn without clearing → "2" still taken.
         user_set_active(&conn, b.uid, false, false).unwrap();
         assert_eq!(next_free_user_display_id(&conn).unwrap(), "3");
+    }
+
+    #[test]
+    fn preferred_weapon_set_replace_clear() {
+        let conn = migrated_in_memory();
+        let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        let w1 = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        let w2 = weapon_create(&conn, new_weapon(Some("W2"), Some("S-2"))).unwrap();
+
+        let a = user_set_preferred_weapon(&conn, a.uid, Some(w1.uid)).unwrap();
+        assert_eq!(a.preferred_weapon_uid, Some(w1.uid));
+        // Replacing the member's own preference is allowed.
+        let a = user_set_preferred_weapon(&conn, a.uid, Some(w2.uid)).unwrap();
+        assert_eq!(a.preferred_weapon_uid, Some(w2.uid));
+        // Clearing.
+        let a = user_set_preferred_weapon(&conn, a.uid, None).unwrap();
+        assert_eq!(a.preferred_weapon_uid, None);
+    }
+
+    #[test]
+    fn preferred_weapon_exclusive_per_weapon() {
+        let conn = migrated_in_memory();
+        let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        let b = user_create(&conn, new_user("Björn", Some("11"), false)).unwrap();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+
+        user_set_preferred_weapon(&conn, a.uid, Some(w.uid)).unwrap();
+        // Re-setting the same weapon for the same member is idempotent, not an error.
+        user_set_preferred_weapon(&conn, a.uid, Some(w.uid)).unwrap();
+        // Another member wanting the same weapon is rejected, naming Anna.
+        let err = user_set_preferred_weapon(&conn, b.uid, Some(w.uid)).unwrap_err();
+        assert_eq!(err.code, "err_weapon_already_preferred");
+        assert!(err.to_string().contains("Anna"), "{err}");
+    }
+
+    #[test]
+    fn preferred_weapon_rejects_inactive_and_missing() {
+        let conn = migrated_in_memory();
+        let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        weapon_set_active(&conn, w.uid, false, None, false).unwrap();
+
+        let err = user_set_preferred_weapon(&conn, a.uid, Some(w.uid)).unwrap_err();
+        assert_eq!(err.code, "err_weapon_inactive");
+        let err = user_set_preferred_weapon(&conn, a.uid, Some(9999)).unwrap_err();
+        assert_eq!(err.code, "err_weapon_not_found");
+        let err = user_set_preferred_weapon(&conn, 9999, None).unwrap_err();
+        assert_eq!(err.code, "err_user_not_found");
     }
 
     #[test]
