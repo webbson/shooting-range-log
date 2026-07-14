@@ -344,8 +344,10 @@ export function MembersPage() {
           {filtered.length === 0 ? (
             <Text c="dimmed">{t('no_results')}</Text>
           ) : (
-            <Table.ScrollContainer minWidth={700}>
-              <Table striped highlightOnHover>
+            <>
+              {/* ponytail: offset ≈ shell header + title + filters — tune at live-smoke if clipped. */}
+              <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 260px)">
+                <Table striped highlightOnHover stickyHeader>
                 <Table.Thead>
                   <Table.Tr>
                     <SortTh label={t('field_display_id')} k="id" />
@@ -358,6 +360,7 @@ export function MembersPage() {
                 <Table.Tbody>{rows}</Table.Tbody>
               </Table>
             </Table.ScrollContainer>
+            </>
           )}
         </>
       )}
