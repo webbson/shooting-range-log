@@ -123,11 +123,6 @@ export function WeaponPickerModal({
                   <Group justify="space-between" wrap="nowrap">
                     <Stack gap={2}>
                       <Text fw={600}>{label(w)}</Text>
-                      {w.serial && (
-                        <Text size="xs" c="dimmed">
-                          {w.serial}
-                        </Text>
-                      )}
                       {lastUseMap.has(w.uid) && (
                         <Text size="xs" c="dimmed">
                           {t('picker_last_used', {
