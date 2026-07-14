@@ -347,18 +347,18 @@ export function MembersPage() {
             // ponytail: offset ≈ shell header + title + filters — tune at live-smoke if clipped.
             <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 260px)">
               <Table striped highlightOnHover stickyHeader>
-              <Table.Thead>
-                <Table.Tr>
-                  <SortTh label={t('field_display_id')} k="id" />
-                  <SortTh label={t('field_name')} k="name" />
-                  <SortTh label={t('field_last_shot')} k="lastShot" />
-                  <Table.Th />
-                  <Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>{rows}</Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
+                <Table.Thead>
+                  <Table.Tr>
+                    <SortTh label={t('field_display_id')} k="id" />
+                    <SortTh label={t('field_name')} k="name" />
+                    <SortTh label={t('field_last_shot')} k="lastShot" />
+                    <Table.Th />
+                    <Table.Th />
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>{rows}</Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
           )}
         </>
       )}
