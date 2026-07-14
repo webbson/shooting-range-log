@@ -133,6 +133,9 @@ export function MembersPage() {
   const save = useMutation({
     mutationFn: async (v: MemberForm) => {
       const u = editing ? await updateUser({ ...v, uid: editing.uid }) : await createUser(v);
+      // A failed preference save leaves the modal open — make the retry an
+      // update of the row we just created, not a second create.
+      if (!editing) setEditing(u);
       await savePreference(u.uid);
       return u;
     },
