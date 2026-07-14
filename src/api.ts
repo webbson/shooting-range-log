@@ -94,11 +94,6 @@ export const setWeaponActive = (
 // ---- Checkout / checkin ----
 
 export interface CheckoutEval {
-  suggestedUserUid: number | null;
-  suggestedUserName: string | null;
-  suggestedUserDisplayId: string | null;
-  suggestedUserActive: boolean;
-  suggestedUserBusy: boolean;
   suggestedWeaponUid: number | null;
   suggestedWeaponBrand: string | null;
   suggestedWeaponModel: string | null;
@@ -117,10 +112,6 @@ export interface CheckoutEval {
   openCheckoutId: number | null;
   userInactive: boolean;
   userOutstandingDebtKr: number;
-  fresherUserName: string | null;
-  fresherUserDisplay: string | null;
-  fresherUserActive: boolean;
-  fresherUserAt: string | null;
   canCheckout: boolean;
 }
 
