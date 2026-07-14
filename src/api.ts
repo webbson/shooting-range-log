@@ -16,6 +16,7 @@ export interface User {
   isStaff: boolean;
   active: boolean;
   notes: string | null;
+  preferredWeaponUid: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -73,6 +74,9 @@ export const updateUser = (input: UpdateUser) => invoke<User>('update_user', { i
 export const setUserActive = (uid: number, active: boolean, clearDisplayId = false) =>
   invoke<User>('set_user_active', { uid, active, clearDisplayId });
 
+export const setPreferredWeapon = (userUid: number, weaponUid: number | null) =>
+  invoke<User>('set_preferred_weapon', { userUid, weaponUid });
+
 // ---- Weapon commands ----
 
 export const listWeapons = () => invoke<Weapon[]>('list_weapons');
@@ -103,6 +107,7 @@ export interface CheckoutEval {
   suggestedWeaponCaliber: string | null;
   suggestedWeaponActive: boolean;
   suggestedWeaponOut: boolean;
+  lastWeaponUid: number | null;
   weaponInactive: boolean;
   weaponInactiveReason: string | null;
   weaponAlreadyOut: boolean;
