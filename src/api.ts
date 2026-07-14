@@ -204,6 +204,7 @@ export const outstandingDebts = () => invoke<OutstandingDebt[]>('outstanding_deb
 export interface LastShot {
   userUid: number;
   lastShotAt: string;
+  lastShotBeforeToday: string | null;
 }
 
 export const lastShotDates = () => invoke<LastShot[]>('last_shot_dates');
