@@ -229,6 +229,17 @@ const resources = {
       err_encrypt_failed: 'Krypteringsfel',
       err_decrypt_failed: 'Dekrypteringsfel — fel lösenfras?',
       err_passphrase_required: 'Lösenfras krävs för att återställa',
+
+      // Picker modals (M7)
+      pick_weapon: 'Välj vapen',
+      pick_member: 'Välj medlem',
+      filter_text_weapon: 'Sök märke, modell, serienummer',
+      filter_name: 'Sök namn',
+      filter_brand: 'Märke',
+      filter_caliber: 'Kaliber',
+      badge_preferred: 'Favorit',
+      badge_last: 'Senast',
+      clear_selection: 'Rensa',
     },
   },
   en: {
@@ -455,6 +466,17 @@ const resources = {
       err_encrypt_failed: 'Encryption failed',
       err_decrypt_failed: 'Decryption failed — wrong passphrase?',
       err_passphrase_required: 'Passphrase required to restore',
+
+      // Picker modals (M7)
+      pick_weapon: 'Select weapon',
+      pick_member: 'Select member',
+      filter_text_weapon: 'Search brand, model, serial',
+      filter_name: 'Search name',
+      filter_brand: 'Brand',
+      filter_caliber: 'Caliber',
+      badge_preferred: 'Favorite',
+      badge_last: 'Last used',
+      clear_selection: 'Clear',
     },
   },
 };
