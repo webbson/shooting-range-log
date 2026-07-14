@@ -115,6 +115,15 @@ CREATE TABLE settings (
 );
 "#;
 
+/// Preferred weapon per member (migration 0003). Single column = one preferred
+/// weapon per member; the partial unique index = a weapon can be the preferred
+/// weapon of at most one member.
+const SCHEMA_V3: &str = r#"
+ALTER TABLE users ADD COLUMN preferred_weapon_uid INTEGER REFERENCES weapons(uid);
+CREATE UNIQUE INDEX idx_users_preferred_weapon
+  ON users(preferred_weapon_uid) WHERE preferred_weapon_uid IS NOT NULL;
+"#;
+
 /// Ordered list of migrations. Once a migration has shipped to a real install,
 /// never edit it — append a new one. `to_latest` applies any not yet recorded in
 /// `PRAGMA user_version`.
@@ -124,6 +133,8 @@ fn migrations() -> Migrations<'static> {
         M::up(SCHEMA_V1),
         // 0002 — app settings key/value store.
         M::up(SCHEMA_V2),
+        // 0003 — preferred weapon per member.
+        M::up(SCHEMA_V3),
     ])
 }
 
@@ -187,7 +198,7 @@ mod tests {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 2, "two migrations applied");
+        assert_eq!(v, 3, "three migrations applied");
     }
 
     #[test]
