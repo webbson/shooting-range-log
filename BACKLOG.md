@@ -10,6 +10,7 @@ _Collect tweaks here as they come up._
 - [ ] CSV export of log views (was marked stretch in M4 — add if wanted).
 - [ ] Review touch sizing/layout at 1920×1080 / 1920×1200 / 2560×1440 on the actual laptop.
 - [ ] (add items here)
+- [ ] Retired members retain their preferred-weapon slot (star hidden for all on that weapon; exclusivity error names the retired holder) — decide policy: clear preference on deactivation, or allow taking over a weapon from an inactive holder.
 
 ## M6 — Backup / restore (deferred)
 - Auto snapshot via SQLite `VACUUM INTO` to a local backups dir; on app close + periodic.
