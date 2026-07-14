@@ -10,6 +10,7 @@ import {
   TextInput,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
+import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { lastShotDates, listUsers, outstandingDebts, type User } from './api';
@@ -48,13 +49,6 @@ export function MemberPickerModal({
   });
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
   const lastMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
-  // Sort key: last shot BEFORE today — checking a member out today must not
-  // reshuffle the list for the rest of the session. Display still shows lastMap.
-  const beforeMap = new Map(
-    (shots.data ?? [])
-      .filter((s) => s.lastShotBeforeToday != null)
-      .map((s) => [s.userUid, s.lastShotBeforeToday!] as const),
-  );
   const pool = (users.data ?? []).filter((u) => u.active);
 
   const q = text.trim().toLowerCase();
@@ -63,12 +57,21 @@ export function MemberPickerModal({
     if (q && !u.name.toLowerCase().includes(q)) return false;
     return true;
   });
-  const rank = (u: User) => (tag && u.displayId === tag ? 0 : 1);
+  // Groups: exact tag match on top, then by last shot (most recent first);
+  // members who already shot today sink to the very bottom (already served
+  // this session), below the never-shot group.
+  const shotToday = (iso: string) => dayjs(iso).isSame(dayjs(), 'day');
+  const rank = (u: User) => {
+    if (tag && u.displayId === tag) return 0;
+    const last = lastMap.get(u.uid);
+    if (!last) return 2;
+    return shotToday(last) ? 3 : 1;
+  };
   const sorted = [...filtered].sort((a, b) => {
     const r = rank(a) - rank(b);
     if (r !== 0) return r;
-    const av = beforeMap.get(a.uid);
-    const bv = beforeMap.get(b.uid);
+    const av = lastMap.get(a.uid);
+    const bv = lastMap.get(b.uid);
     if (av !== bv) {
       if (!av) return 1;
       if (!bv) return -1;
