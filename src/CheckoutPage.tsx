@@ -25,6 +25,7 @@ import {
   doCheckout,
   doCheckin,
   setPreferredWeapon,
+  outstandingDebts,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -51,6 +52,8 @@ export function CheckoutPage() {
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const open = useQuery({ queryKey: ['openCheckouts'], queryFn: listOpenCheckouts });
+  const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
+  const debtMap = new Map((debts.data ?? []).map((d) => [d.userUid, d.amountKr] as const));
 
   const evalQ = useQuery({
     queryKey: ['eval', weaponUid, userUid],
@@ -308,7 +311,7 @@ export function CheckoutPage() {
                     })()}
                     <Tooltip label={t('add_debt')}>
                       <ActionIcon
-                        variant="subtle"
+                        variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
                         color="red"
                         size="lg"
                         aria-label={t('add_debt')}
