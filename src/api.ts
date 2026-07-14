@@ -208,6 +208,17 @@ export interface LastShot {
 
 export const lastShotDates = () => invoke<LastShot[]>('last_shot_dates');
 
+export interface WeaponLastUse {
+  weaponUid: number;
+  userUid: number;
+  userName: string | null;
+  userDisplayId: string | null;
+  userActive: boolean;
+  lastUsedAt: string;
+}
+
+export const lastWeaponUsers = () => invoke<WeaponLastUse[]>('last_weapon_users');
+
 // ---- Logs ----
 
 export interface CheckoutLog {

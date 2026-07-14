@@ -288,6 +288,7 @@ pub fn run() {
             debt::outstanding_debts,
             logs::list_checkouts,
             logs::last_shot_dates,
+            logs::last_weapon_users,
             service::add_service,
             service::list_weapon_service,
             import::import_list_sheets,
