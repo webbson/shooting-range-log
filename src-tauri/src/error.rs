@@ -142,6 +142,14 @@ impl AppError {
             json!({}),
         )
     }
+
+    pub fn weapon_already_preferred(name: &str) -> Self {
+        AppError::new(
+            "err_weapon_already_preferred",
+            format!("Weapon is already the preferred weapon of {name}."),
+            json!({ "name": name }),
+        )
+    }
 }
 
 impl From<rusqlite::Error> for AppError {
