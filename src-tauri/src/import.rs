@@ -17,7 +17,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use tauri::State;
 
-use crate::commands::{user_create, user_set_preferred_weapon, weapon_create};
+use crate::commands::{user_create, user_set_active, user_set_preferred_weapon, weapon_create};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{NewUser, NewWeapon};
@@ -741,6 +741,27 @@ fn execute(
             Some(&w) => w,
             None => continue,
         };
+        // Skip if the matched member is inactive — setting a favorite on a
+        // deactivated member would occupy the exclusive slot and block active members.
+        let active: bool = tx
+            .query_row(
+                "SELECT active FROM users WHERE uid = ?1",
+                params![user_uid],
+                |r| r.get(0),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !active {
+            warnings.push(ImportWarning {
+                row: m.row,
+                code: "warn_favorite_inactive_member".into(),
+                message: format!(
+                    "Row {}: member is inactive — favorite weapon {no} skipped",
+                    m.row
+                ),
+            });
+            continue;
+        }
         // Skip if the member already has a live preference (never overwrite).
         let existing_pref: Option<i64> = tx
             .query_row(
@@ -1228,6 +1249,50 @@ mod tests {
             )
             .unwrap();
         assert_eq!(pref, Some(w_a.uid));
+    }
+
+    #[test]
+    fn favorite_skipped_for_inactive_matched_member() {
+        // Pre-create a member, deactivate them, then import a sheet that matches
+        // them and references a favorite weapon.  The member's preferred_weapon_uid
+        // must stay NULL and the warning code must be present.
+        let conn = migrated_in_memory();
+        let member = user_create(
+            &conn,
+            NewUser {
+                display_id: Some("77".into()),
+                name: "Dave Inactive".into(),
+                ssn: Some("19850101-0099".into()),
+                is_staff: false,
+                email: None, phone: None, address: None, notes: None,
+            },
+        )
+        .unwrap();
+        // Deactivate (clear tag so the partial-unique index doesn't block us).
+        user_set_active(&conn, member.uid, false, true).unwrap();
+
+        // Import: row 3, same SSN, favorite weapon "55".
+        let mut m = make_member(3, "Dave Inactive", Some("19850101-0099"), vec![]);
+        m.favorite_weapon_no = Some("55".into());
+        let sheet = parsed_sheet(vec![m]);
+
+        let plan = build_plan(&conn, &sheet).unwrap();
+        let result = execute(&conn, &plan, false).unwrap();
+
+        // Warning must be present.
+        let warn = result.warnings.iter().find(|w| w.code == "warn_favorite_inactive_member");
+        assert!(warn.is_some(), "expected warn_favorite_inactive_member");
+        assert_eq!(warn.unwrap().row, 3);
+
+        // Member's preference must still be NULL.
+        let pref: Option<i64> = conn
+            .query_row(
+                "SELECT preferred_weapon_uid FROM users WHERE uid = ?1",
+                params![member.uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(pref.is_none(), "inactive member must not gain a favorite");
     }
 
     #[test]
