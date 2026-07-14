@@ -168,6 +168,31 @@ export function CheckoutPage() {
       ? t('banner_debt', { amount: ev.userOutstandingDebtKr })
       : undefined;
 
+  // Member's favorite weapon is currently out — informational, shown whenever
+  // the member is selected (autofill already fell back to last-used).
+  const favoriteOut = (() => {
+    const prefUid = selectedUser?.preferredWeaponUid;
+    if (prefUid == null) return null;
+    const o = (open.data ?? []).find((x) => x.weaponUid === prefUid);
+    if (!o) return null;
+    const w = (weapons.data ?? []).find((x) => x.uid === prefUid);
+    return t('banner_favorite_out', {
+      member: selectedUser!.name,
+      weapon: w
+        ? weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t)
+        : '',
+      holder: userLabel(o.userName, o.userDisplayId, o.userActive, t),
+    });
+  })();
+
+  // Chosen weapon is another member's favorite — informational, never blocks.
+  const weaponFavoriteNote = (() => {
+    if (weaponUid == null) return undefined;
+    const p = preferrerOf(weaponUid);
+    if (!p || p.uid === userUid) return undefined;
+    return t('banner_weapon_is_favorite', { name: p.name });
+  })();
+
   const matchCheckin = (id: string): React.ReactNode | null => {
     const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
     if (!o) return null;
@@ -262,6 +287,7 @@ export function CheckoutPage() {
               )}
             </Group>
             {weaponDescription && <Text fz="xs" c="orange.7">{weaponDescription}</Text>}
+            {weaponFavoriteNote && <Text fz="xs" c="orange.7">{weaponFavoriteNote}</Text>}
             {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
           </Stack>
 
@@ -291,6 +317,7 @@ export function CheckoutPage() {
               })}
             </Alert>
           )}
+          {favoriteOut && <Alert color="orange">{favoriteOut}</Alert>}
 
           <TextInput
             label={t('field_checkout_notes')}
