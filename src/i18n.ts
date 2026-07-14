@@ -100,6 +100,7 @@ const resources = {
       err_weapon_already_out: 'Vapnet är redan utlånat.',
       err_checkout_not_found: 'Utlämningen hittades inte.',
       err_already_checked_in: 'Vapnet är redan återlämnat.',
+      err_weapon_already_preferred: 'Vapnet är redan favoritvapen för {{name}}.',
 
       // Checkout / checkin (M2)
       checkout_new: 'Ny utlämning',
@@ -108,6 +109,7 @@ const resources = {
       select_weapon_ph: 'Välj vapen (ID, märke, modell)',
       select_member_ph: 'Välj medlem (ID, namn)',
       enter_id: 'Ange ID',
+      enter_weapon_id: 'Ange vapen-ID',
       confirm: 'Bekräfta',
       no_match: 'Ingen träff',
       banner_weapon_inactive: 'Vapnet är inaktivt: {{reason}}',
@@ -118,6 +120,8 @@ const resources = {
       banner_fresher: 'Senast använt av {{name}} ({{date}}).',
       banner_suggested_user_busy: '{{name}} (senaste användaren) har redan lånat ett vapen.',
       banner_suggested_weapon_out: 'Senast använda vapnet ({{label}}) är redan utlånat.',
+      banner_favorite_out: '{{member}}s favoritvapen ({{weapon}}) är utlånat till {{holder}}.',
+      banner_weapon_is_favorite: 'Vapnet är {{name}}s favoritvapen.',
       confirm_checkout: 'Lämna ut',
       field_checkout_notes: 'Anteckning',
       checked_out_ok: 'Utlämnat',
@@ -127,6 +131,8 @@ const resources = {
       return_weapon: 'Återlämna',
       fast_checkin: 'Snabb återlämning',
       label_checked_out_at: 'Utlånat',
+      mark_favorite: 'Gör till favoritvapen',
+      unmark_favorite: 'Ta bort som favoritvapen',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Skuldbeloppet måste vara större än noll.',
@@ -228,6 +234,20 @@ const resources = {
       err_encrypt_failed: 'Krypteringsfel',
       err_decrypt_failed: 'Dekrypteringsfel — fel lösenfras?',
       err_passphrase_required: 'Lösenfras krävs för att återställa',
+
+      // Picker modals (M7)
+      pick_weapon: 'Välj vapen',
+      pick_member: 'Välj medlem',
+      filter_text_weapon: 'Sök märke, modell, serienummer',
+      filter_name: 'Sök namn',
+      filter_brand: 'Märke',
+      filter_caliber: 'Kaliber',
+      badge_preferred: 'Favorit',
+      badge_last: 'Senast',
+      picker_last_used: 'Senast: {{name}} · {{date}}',
+      clear_selection: 'Rensa',
+      field_preferred_weapon: 'Favoritvapen',
+      none_set: 'Inget valt',
     },
   },
   en: {
@@ -325,6 +345,7 @@ const resources = {
       err_weapon_already_out: 'Weapon is already checked out.',
       err_checkout_not_found: 'Checkout not found.',
       err_already_checked_in: 'Weapon is already checked in.',
+      err_weapon_already_preferred: 'Weapon is already the preferred weapon of {{name}}.',
 
       // Checkout / checkin (M2)
       checkout_new: 'New checkout',
@@ -333,6 +354,7 @@ const resources = {
       select_weapon_ph: 'Select weapon (ID, brand, model)',
       select_member_ph: 'Select member (ID, name)',
       enter_id: 'Enter ID',
+      enter_weapon_id: 'Enter weapon ID',
       confirm: 'Confirm',
       no_match: 'No match',
       banner_weapon_inactive: 'Weapon is inactive: {{reason}}',
@@ -343,6 +365,8 @@ const resources = {
       banner_fresher: 'Last used by {{name}} ({{date}}).',
       banner_suggested_user_busy: '{{name}} (last user) already has a weapon checked out.',
       banner_suggested_weapon_out: 'Last-used weapon ({{label}}) is already checked out.',
+      banner_favorite_out: "{{member}}'s favorite weapon ({{weapon}}) is out with {{holder}}.",
+      banner_weapon_is_favorite: "Weapon is {{name}}'s favorite.",
       confirm_checkout: 'Check out',
       field_checkout_notes: 'Note',
       checked_out_ok: 'Checked out',
@@ -352,6 +376,8 @@ const resources = {
       return_weapon: 'Return',
       fast_checkin: 'Quick return',
       label_checked_out_at: 'Checked out',
+      mark_favorite: 'Set as favorite weapon',
+      unmark_favorite: 'Remove as favorite weapon',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Debt amount must be greater than zero.',
@@ -453,6 +479,20 @@ const resources = {
       err_encrypt_failed: 'Encryption failed',
       err_decrypt_failed: 'Decryption failed — wrong passphrase?',
       err_passphrase_required: 'Passphrase required to restore',
+
+      // Picker modals (M7)
+      pick_weapon: 'Select weapon',
+      pick_member: 'Select member',
+      filter_text_weapon: 'Search brand, model, serial',
+      filter_name: 'Search name',
+      filter_brand: 'Brand',
+      filter_caliber: 'Caliber',
+      badge_preferred: 'Favorite',
+      badge_last: 'Last used',
+      picker_last_used: 'Last: {{name}} · {{date}}',
+      clear_selection: 'Clear',
+      field_preferred_weapon: 'Favorite weapon',
+      none_set: 'None set',
     },
   },
 };

@@ -150,6 +150,47 @@ pub fn last_shot_dates(db: State<Db>) -> Result<Vec<LastShot>, AppError> {
     last_shot_dates_q(&conn)
 }
 
+/// Most recent user per weapon (latest checkout row; `checked_out_at DESC,
+/// id DESC` tiebreak — same ordering as `checkout::most_recent_checkout`).
+/// Identity resolved live by uid. Weapons with no history are absent.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeaponLastUse {
+    pub weapon_uid: i64,
+    pub user_uid: i64,
+    pub user_name: Option<String>,
+    pub user_display_id: Option<String>,
+    pub user_active: bool,
+    pub last_used_at: String,
+}
+
+fn last_weapon_users_q(conn: &Connection) -> Result<Vec<WeaponLastUse>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT c.weapon_uid, c.user_uid, u.name, u.display_id, u.active, c.checked_out_at
+         FROM checkouts c
+         JOIN users u ON u.uid = c.user_uid
+         WHERE c.id = (SELECT c2.id FROM checkouts c2 WHERE c2.weapon_uid = c.weapon_uid
+                       ORDER BY c2.checked_out_at DESC, c2.id DESC LIMIT 1)",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(WeaponLastUse {
+            weapon_uid: r.get(0)?,
+            user_uid: r.get(1)?,
+            user_name: r.get(2)?,
+            user_display_id: r.get(3)?,
+            user_active: r.get(4)?,
+            last_used_at: r.get(5)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+#[tauri::command]
+pub fn last_weapon_users(db: State<Db>) -> Result<Vec<WeaponLastUse>, AppError> {
+    let conn = lock(&db)?;
+    last_weapon_users_q(&conn)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,5 +279,29 @@ mod tests {
         assert_eq!(rows.len(), 1); // only Anna shot
         assert_eq!(rows[0].user_uid, anna);
         assert_eq!(rows[0].last_shot_at, expected_max);
+    }
+
+    #[test]
+    fn last_weapon_users_returns_latest_user_per_weapon() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", true);
+        let anna = mk_user(&conn, "Anna", false);
+        let bjorn = mk_user(&conn, "Björn", false);
+        let w1 = mk_weapon(&conn, "W1");
+        let _unused = mk_weapon(&conn, "W2"); // no history → absent
+
+        // Anna then Björn on W1 — Björn is the latest (same timestamps possible;
+        // id DESC tiebreak must pick the later row).
+        let c1 = do_checkout(&conn, w1, anna, op, None).unwrap();
+        do_checkin(&conn, c1.id, op).unwrap();
+        let c2 = do_checkout(&conn, w1, bjorn, op, None).unwrap();
+
+        let rows = last_weapon_users_q(&conn).unwrap();
+        assert_eq!(rows.len(), 1); // only W1 has history
+        assert_eq!(rows[0].weapon_uid, w1);
+        assert_eq!(rows[0].user_uid, bjorn);
+        assert_eq!(rows[0].user_name.as_deref(), Some("Björn"));
+        assert!(rows[0].user_active);
+        assert_eq!(rows[0].last_used_at, c2.checked_out_at);
     }
 }

@@ -17,7 +17,7 @@ use chrono::{Duration, Utc};
 use rusqlite::{params, Connection};
 
 use crate::checkout::{do_checkin, do_checkout};
-use crate::commands::{user_create, user_set_active, weapon_create, weapon_set_active};
+use crate::commands::{user_create, user_set_active, user_set_preferred_weapon, weapon_create, weapon_set_active};
 use crate::error::AppError;
 use crate::models::{NewUser, NewWeapon};
 use crate::{debt, service};
@@ -84,6 +84,9 @@ fn delete_tables(conn: &Connection, tables: &[&str]) -> Result<(), AppError> {
 /// Wipe all domain rows (child → parent; `foreign_keys` is ON).
 /// `app_meta` and the schema itself are left intact.
 pub fn wipe_all(conn: &Connection) -> Result<(), AppError> {
+    // Clear the weapon FK on users first so weapons can be deleted before users.
+    // ponytail: targeted NULL rather than reordering, since users is both parent (checkouts/debts) and child (preferred_weapon_uid → weapons).
+    conn.execute("UPDATE users SET preferred_weapon_uid = NULL", [])?;
     delete_tables(conn, &["debts", "weapon_service_log", "checkouts", "weapons", "users"])
 }
 
@@ -96,6 +99,9 @@ pub fn wipe_users(conn: &Connection) -> Result<(), AppError> {
 /// Wipe weapons and all rows that reference them (checkouts, service log, debts).
 /// Users are kept.
 pub fn wipe_weapons(conn: &Connection) -> Result<(), AppError> {
+    // Clear the weapon FK on users first so weapons can be deleted while users are kept.
+    // ponytail: same fix as wipe_all — users.preferred_weapon_uid → weapons FK.
+    conn.execute("UPDATE users SET preferred_weapon_uid = NULL", [])?;
     delete_tables(conn, &["debts", "weapon_service_log", "checkouts", "weapons"])
 }
 
@@ -159,6 +165,12 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
             },
         )?;
         weapon_uids.push(w.uid);
+    }
+
+    // --- Preferred weapons: a few members favor a specific weapon (exclusive,
+    // one member per weapon — mirrors the partial unique index). ---
+    for (ui, wi) in [(2usize, 0usize), (5, 3), (9, 7)] {
+        user_set_preferred_weapon(conn, user_uids[ui], Some(weapon_uids[wi]))?;
     }
 
     // --- Checkout history. The first `returned` weapons get a couple of returned
@@ -282,5 +294,16 @@ mod tests {
         seed_dev_database(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20);
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
+    }
+
+    #[test]
+    fn wipe_weapons_succeeds_with_preferred_weapon_refs() {
+        let conn = migrated_in_memory();
+        seed_dev_database(&conn).unwrap();
+        // Weapons are FK-referenced from users.preferred_weapon_uid; wipe_weapons must
+        // clear those refs first or the DELETE fails with FOREIGN KEY constraint failed.
+        wipe_weapons(&conn).unwrap();
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 0);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20); // users kept
     }
 }

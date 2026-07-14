@@ -96,6 +96,9 @@ pub struct CheckoutEval {
     pub suggested_weapon_active: bool,
     /// That suggested weapon is currently out → don't autofill, warn instead.
     pub suggested_weapon_out: bool,
+    /// Member's most recent weapon uid — pinned as "last" in the weapon picker,
+    /// independent of which weapon the suggestion picked.
+    pub last_weapon_uid: Option<i64>,
     pub weapon_inactive: bool,
     pub weapon_inactive_reason: Option<String>,
     pub weapon_already_out: bool,
@@ -253,11 +256,23 @@ fn evaluate(
         }
     }
 
-    // Symmetric autopopulate: member picked, weapon not → suggest member's most
-    // recent weapon (unless it's currently out — then warn, don't autofill).
+    // Symmetric autopopulate: member picked, weapon not → suggest the member's
+    // preferred weapon (when active and available), else their most recent one
+    // (unless it's currently out — then warn, don't autofill).
     if weapon_uid.is_none() {
         if let Some(uuid) = user_uid {
-            if let Some(wuid) = most_recent_weapon_uid_for_user(conn, uuid)? {
+            eval.last_weapon_uid = most_recent_weapon_uid_for_user(conn, uuid)?;
+            let preferred = user_get(conn, uuid)?.and_then(|u| u.preferred_weapon_uid);
+            let mut pick: Option<i64> = None;
+            if let Some(puid) = preferred {
+                if let Some(w) = weapon_get(conn, puid)? {
+                    if w.active && open_checkout_for(conn, puid)?.is_none() {
+                        pick = Some(puid);
+                    }
+                }
+            }
+            let pick = pick.or(eval.last_weapon_uid);
+            if let Some(wuid) = pick {
                 if let Some(w) = weapon_get(conn, wuid)? {
                     eval.suggested_weapon_uid = Some(wuid);
                     eval.suggested_weapon_brand = w.brand;
@@ -398,7 +413,9 @@ pub fn list_open_checkouts(db: State<Db>) -> Result<Vec<OpenCheckout>, AppError>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::{user_create, user_set_active, weapon_create, weapon_set_active};
+    use crate::commands::{
+        user_create, user_set_active, user_set_preferred_weapon, weapon_create, weapon_set_active,
+    };
     use crate::db::migrated_in_memory;
     use crate::models::{NewUser, NewWeapon};
 
@@ -591,6 +608,66 @@ mod tests {
         assert!(e.user_inactive);
         assert!(!e.can_checkout);
         assert!(do_checkout(&conn, w, anna, op, None).is_err());
+    }
+
+    #[test]
+    fn preferred_weapon_suggested_over_last_used() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let w_last = mk_weapon(&conn, "W1");
+        let w_pref = mk_weapon(&conn, "W2");
+
+        let c = do_checkout(&conn, w_last, anna, op, None).unwrap();
+        do_checkin(&conn, c.id, op).unwrap();
+        user_set_preferred_weapon(&conn, anna, Some(w_pref)).unwrap();
+
+        let e = evaluate(&conn, None, Some(anna)).unwrap();
+        assert_eq!(e.suggested_weapon_uid, Some(w_pref));
+        assert!(!e.suggested_weapon_out);
+        // Last-used is exposed separately so the picker can pin both.
+        assert_eq!(e.last_weapon_uid, Some(w_last));
+    }
+
+    #[test]
+    fn preferred_weapon_falls_back_when_out_or_inactive() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let bjorn = mk_user(&conn, "Björn", "11", false);
+        let w_last = mk_weapon(&conn, "W1");
+        let w_pref = mk_weapon(&conn, "W2");
+
+        let c = do_checkout(&conn, w_last, anna, op, None).unwrap();
+        do_checkin(&conn, c.id, op).unwrap();
+        user_set_preferred_weapon(&conn, anna, Some(w_pref)).unwrap();
+
+        // Preferred weapon out (held by Björn) → fall back to last-used.
+        do_checkout(&conn, w_pref, bjorn, op, None).unwrap();
+        let e = evaluate(&conn, None, Some(anna)).unwrap();
+        assert_eq!(e.suggested_weapon_uid, Some(w_last));
+
+        // Preferred weapon inactive → fall back too. (Deactivation is allowed
+        // after the preference was set; only *setting* requires an active weapon.)
+        let c2 = open_checkout_for(&conn, w_pref).unwrap().unwrap();
+        do_checkin(&conn, c2.0, op).unwrap();
+        weapon_set_active(&conn, w_pref, false, Some("repair".into()), false).unwrap();
+        let e = evaluate(&conn, None, Some(anna)).unwrap();
+        assert_eq!(e.suggested_weapon_uid, Some(w_last));
+    }
+
+    #[test]
+    fn last_weapon_uid_exposed_without_preference() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let w = mk_weapon(&conn, "W1");
+        let c = do_checkout(&conn, w, anna, op, None).unwrap();
+        do_checkin(&conn, c.id, op).unwrap();
+
+        let e = evaluate(&conn, None, Some(anna)).unwrap();
+        assert_eq!(e.last_weapon_uid, Some(w));
+        assert_eq!(e.suggested_weapon_uid, Some(w));
     }
 
     #[test]
