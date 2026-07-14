@@ -99,6 +99,9 @@ pub fn wipe_users(conn: &Connection) -> Result<(), AppError> {
 /// Wipe weapons and all rows that reference them (checkouts, service log, debts).
 /// Users are kept.
 pub fn wipe_weapons(conn: &Connection) -> Result<(), AppError> {
+    // Clear the weapon FK on users first so weapons can be deleted while users are kept.
+    // ponytail: same fix as wipe_all — users.preferred_weapon_uid → weapons FK.
+    conn.execute("UPDATE users SET preferred_weapon_uid = NULL", [])?;
     delete_tables(conn, &["debts", "weapon_service_log", "checkouts", "weapons"])
 }
 
@@ -291,5 +294,16 @@ mod tests {
         seed_dev_database(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20);
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
+    }
+
+    #[test]
+    fn wipe_weapons_succeeds_with_preferred_weapon_refs() {
+        let conn = migrated_in_memory();
+        seed_dev_database(&conn).unwrap();
+        // Weapons are FK-referenced from users.preferred_weapon_uid; wipe_weapons must
+        // clear those refs first or the DELETE fails with FOREIGN KEY constraint failed.
+        wipe_weapons(&conn).unwrap();
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 0);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20); // users kept
     }
 }
