@@ -96,6 +96,8 @@ export function CheckoutPage() {
       reset();
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
+      qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
+      qc.invalidateQueries({ queryKey: ['lastShotDates'] });
     },
     onError,
   });
@@ -106,6 +108,8 @@ export function CheckoutPage() {
       notifications.show({ message: t('returned_ok') });
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
+      qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
+      qc.invalidateQueries({ queryKey: ['lastShotDates'] });
     },
     onError,
   });
@@ -175,12 +179,12 @@ export function CheckoutPage() {
     if (prefUid == null) return null;
     const o = (open.data ?? []).find((x) => x.weaponUid === prefUid);
     if (!o) return null;
+    if (o.userUid === userUid) return null;
     const w = (weapons.data ?? []).find((x) => x.uid === prefUid);
+    if (!w) return null;
     return t('banner_favorite_out', {
       member: selectedUser!.name,
-      weapon: w
-        ? weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t)
-        : '',
+      weapon: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t),
       holder: userLabel(o.userName, o.userDisplayId, o.userActive, t),
     });
   })();
