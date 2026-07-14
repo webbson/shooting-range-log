@@ -242,6 +242,8 @@ const resources = {
       badge_preferred: 'Favorit',
       badge_last: 'Senast',
       clear_selection: 'Rensa',
+      field_preferred_weapon: 'Favoritvapen',
+      none_set: 'Inget valt',
     },
   },
   en: {
@@ -481,6 +483,8 @@ const resources = {
       badge_preferred: 'Favorite',
       badge_last: 'Last used',
       clear_selection: 'Clear',
+      field_preferred_weapon: 'Favorite weapon',
+      none_set: 'None set',
     },
   },
 };

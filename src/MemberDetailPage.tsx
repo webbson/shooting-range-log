@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { type ReactNode } from 'react';
-import { getUser, listCheckouts } from './api';
+import { getUser, listCheckouts, listWeapons } from './api';
 import { userLabel, weaponLabel } from './labels';
 import { fmtDateTime } from './format';
 
@@ -22,6 +22,7 @@ export function MemberDetailPage() {
     queryFn: () => listCheckouts({ userUid: n }),
     enabled: valid,
   });
+  const weaponsQ = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
 
   const back = (
     <Button variant="default" onClick={() => navigate('/members')}>
@@ -47,12 +48,26 @@ export function MemberDetailPage() {
     );
   }
   const u = userQ.data;
+  const prefWeapon = (weaponsQ.data ?? []).find((w) => w.uid === u.preferredWeaponUid);
 
   const info: [string, ReactNode][] = [
     [t('field_email'), u.email ?? '—'],
     [t('field_phone'), u.phone ?? '—'],
     [t('field_address'), u.address ?? '—'],
     [t('field_ssn'), u.ssn ?? '—'],
+    [
+      t('field_preferred_weapon'),
+      prefWeapon
+        ? weaponLabel(
+            prefWeapon.brand,
+            prefWeapon.model,
+            prefWeapon.caliber,
+            prefWeapon.displayId,
+            prefWeapon.active,
+            t,
+          )
+        : '—',
+    ],
     [
       t('status'),
       <Badge color={u.active ? 'teal' : 'gray'} variant="light">
