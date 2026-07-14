@@ -175,13 +175,14 @@ pub(crate) fn user_set_active(
         )?;
     } else if clear_display_id {
         // Free the physical tag so it can be reassigned to another member.
+        // Deactivation also frees the member's favorite weapon for others.
         conn.execute(
-            "UPDATE users SET active = 0, display_id = NULL, updated_at = ?2 WHERE uid = ?1",
+            "UPDATE users SET active = 0, display_id = NULL, preferred_weapon_uid = NULL, updated_at = ?2 WHERE uid = ?1",
             params![uid, now_utc()],
         )?;
     } else {
         conn.execute(
-            "UPDATE users SET active = 0, updated_at = ?2 WHERE uid = ?1",
+            "UPDATE users SET active = 0, preferred_weapon_uid = NULL, updated_at = ?2 WHERE uid = ?1",
             params![uid, now_utc()],
         )?;
     }
@@ -596,6 +597,24 @@ mod tests {
         assert_eq!(err.code, "err_weapon_not_found");
         let err = user_set_preferred_weapon(&conn, 9999, None).unwrap_err();
         assert_eq!(err.code, "err_user_not_found");
+    }
+
+    #[test]
+    fn deactivating_member_clears_preferred_weapon() {
+        let conn = migrated_in_memory();
+        let a = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        let b = user_create(&conn, new_user("Björn", Some("11"), false)).unwrap();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+
+        user_set_preferred_weapon(&conn, a.uid, Some(w.uid)).unwrap();
+        let a = user_set_active(&conn, a.uid, false, false).unwrap();
+        assert_eq!(a.preferred_weapon_uid, None);
+        // Freed slot is claimable by another member.
+        let b = user_set_preferred_weapon(&conn, b.uid, Some(w.uid)).unwrap();
+        assert_eq!(b.preferred_weapon_uid, Some(w.uid));
+        // Reactivation does not restore the old favorite.
+        let a = user_set_active(&conn, a.uid, true, false).unwrap();
+        assert_eq!(a.preferred_weapon_uid, None);
     }
 
     #[test]
