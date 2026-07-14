@@ -7,11 +7,13 @@ Batch of ten UX refinements. Single feature branch, one implementation plan.
 
 ## 1. Scrollable lists with fixed filters (Members / Weapons / Logs)
 
-Reuse the checkout open-loans pattern: filters/search `Group` stays above the scroll
-region; the existing `Table.ScrollContainer` is wrapped in
-`ScrollArea.Autosize mah="calc(100vh - Npx)"` and the table gets Mantine `stickyHeader`
-so column headers stay visible while rows scroll. `N` is a per-page magic offset,
-tuned at live-smoke, marked with a `ponytail:` comment (same as CheckoutPage.tsx:358).
+Filters/search `Group` stays above the scroll region; the existing
+`Table.ScrollContainer` gets `maxHeight="calc(100vh - Npx)"` (its documented prop —
+it uses ScrollArea internally, no extra wrapper needed) and the table gets Mantine
+`stickyHeader` so column headers stay visible while rows scroll. `N` is a per-page
+magic offset, tuned at live-smoke, marked with a `ponytail:` comment (same as
+CheckoutPage.tsx:358). Fallback if sticky misbehaves inside the scroll-area
+container: `type="native"` on `Table.ScrollContainer`.
 
 Files: `MembersPage.tsx`, `WeaponsPage.tsx`, `LogsPage.tsx`.
 
