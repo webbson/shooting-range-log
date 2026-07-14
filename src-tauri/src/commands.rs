@@ -620,6 +620,13 @@ mod tests {
     }
 
     #[test]
+    fn user_has_no_preferred_weapon_by_default() {
+        let conn = migrated_in_memory();
+        let u = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        assert_eq!(u.preferred_weapon_uid, None);
+    }
+
+    #[test]
     fn weapon_caliber_round_trips() {
         let conn = migrated_in_memory();
         let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();

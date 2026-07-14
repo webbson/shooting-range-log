@@ -8,7 +8,7 @@ use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 
 pub const USER_COLS: &str =
-    "uid, display_id, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at";
+    "uid, display_id, name, email, phone, address, ssn, is_staff, active, notes, preferred_weapon_uid, created_at, updated_at";
 pub const WEAPON_COLS: &str =
     "uid, display_id, brand, model, serial, caliber, active, inactive_reason, notes, created_at, updated_at";
 
@@ -25,6 +25,7 @@ pub struct User {
     pub is_staff: bool,
     pub active: bool,
     pub notes: Option<String>,
+    pub preferred_weapon_uid: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -42,6 +43,7 @@ impl User {
             is_staff: row.get("is_staff")?,
             active: row.get("active")?,
             notes: row.get("notes")?,
+            preferred_weapon_uid: row.get("preferred_weapon_uid")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
         })
