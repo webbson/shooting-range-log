@@ -13,6 +13,7 @@ export function IdNumpadModal({
   title,
   match,
   confirmLabel,
+  placeholder,
   onClose,
   onSubmit,
 }: {
@@ -20,6 +21,7 @@ export function IdNumpadModal({
   title: string;
   match: (id: string) => React.ReactNode | null;
   confirmLabel?: string;
+  placeholder?: string;
   onClose: () => void;
   onSubmit: (id: string) => void;
 }) {
@@ -46,7 +48,7 @@ export function IdNumpadModal({
   return (
     <Modal opened={opened} onClose={onClose} title={title} centered size="xs">
       <Stack onKeyDown={onKeyDown}>
-        <Numpad value={value} onChange={setValue} />
+        <Numpad value={value} onChange={setValue} placeholder={placeholder} />
         <Paper withBorder p="xs" ta="center">
           {matched ? (
             <Text fw={600} c="teal">
