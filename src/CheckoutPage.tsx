@@ -35,6 +35,8 @@ import { DebtModal } from './DebtModal';
 import { IdNumpadModal } from './IdNumpadModal';
 import { WeaponPickerModal } from './WeaponPickerModal';
 import { MemberPickerModal } from './MemberPickerModal';
+import { MemberInfoModal } from './MemberInfoModal';
+import { WeaponInfoModal } from './WeaponInfoModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -45,6 +47,8 @@ export function CheckoutPage() {
   const [userUid, setUserUid] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [debtUser, setDebtUser] = useState<{ uid: number; name: string } | null>(null);
+  const [infoMember, setInfoMember] = useState<number | null>(null);
+  const [infoWeapon, setInfoWeapon] = useState<number | null>(null);
   // Which picker modal is open (replaces the old per-field numpad entry).
   const [picker, setPicker] = useState<'weapon' | 'member' | null>(null);
   const [fastCheckinOpen, setFastCheckinOpen] = useState(false);
@@ -275,10 +279,18 @@ export function CheckoutPage() {
               <Card key={o.id} withBorder padding="sm">
                 <Group justify="space-between" wrap="nowrap">
                   <Stack gap={2}>
-                    <Text fw={600}>
+                    <Text
+                      fw={600}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setInfoWeapon(o.weaponUid)}
+                    >
                       {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
                     </Text>
-                    <Text size="sm">
+                    <Text
+                      size="sm"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setInfoMember(o.userUid)}
+                    >
                       {userLabel(o.userName, o.userDisplayId, o.userActive, t)}
                     </Text>
                     <Text size="xs" c="dimmed">
@@ -352,6 +364,17 @@ export function CheckoutPage() {
         userName={debtUser?.name ?? ''}
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}
+      />
+
+      <MemberInfoModal
+        uid={infoMember}
+        opened={infoMember != null}
+        onClose={() => setInfoMember(null)}
+      />
+      <WeaponInfoModal
+        uid={infoWeapon}
+        opened={infoWeapon != null}
+        onClose={() => setInfoWeapon(null)}
       />
 
       <MemberPickerModal
