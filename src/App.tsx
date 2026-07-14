@@ -2,6 +2,7 @@ import '@mantine/core/styles.css';
 // ‼️ notifications styles must be imported after core styles
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
+import './global.css';
 import 'dayjs/locale/sv';
 
 import { ColorSchemeScript, MantineProvider } from '@mantine/core';
@@ -15,7 +16,6 @@ import { theme } from './theme';
 import { AppLayout } from './AppLayout';
 import { CheckoutPage } from './CheckoutPage';
 import { MembersPage } from './MembersPage';
-import { MemberDetailPage } from './MemberDetailPage';
 import { WeaponsPage } from './WeaponsPage';
 import { LogsPage } from './LogsPage';
 import { SettingsPage } from './SettingsPage';
@@ -44,7 +44,6 @@ export default function App() {
                 <Route index element={<Navigate to="/checkout" replace />} />
                 <Route path="checkout" element={<CheckoutPage />} />
                 <Route path="members" element={<MembersPage />} />
-                <Route path="members/:uid" element={<MemberDetailPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />
                 <Route path="logs" element={<LogsPage />} />
                 <Route path="settings" element={<SettingsPage />} />

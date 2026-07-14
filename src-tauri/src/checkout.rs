@@ -1,8 +1,8 @@
 //! Checkout / checkin: the core flow.
 //!
-//! `evaluate_checkout` computes everything the UI needs to autopopulate + render
-//! banners (rules live here, not in JS). `checkout` re-validates server-side and
-//! records only uids (weapon/user/operator); identity is resolved live by uid when
+//! `evaluate_checkout` computes everything the UI needs to autofill the weapon
+//! and render notices (rules live here, not in JS). `checkout` re-validates
+//! server-side and records only uids (weapon/user/operator); identity is resolved live by uid when
 //! logs are read, so it always reflects current values. Logs are append-only:
 //! checkin updates the open row's return fields; nothing is deleted.
 
@@ -78,13 +78,6 @@ pub struct OpenCheckout {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckoutEval {
-    /// Weapon's most-recent user, suggested when no user is picked yet.
-    pub suggested_user_uid: Option<i64>,
-    pub suggested_user_name: Option<String>,
-    pub suggested_user_display_id: Option<String>,
-    pub suggested_user_active: bool,
-    /// That suggested user already holds a weapon → don't autofill, warn instead.
-    pub suggested_user_busy: bool,
     /// Member's most-recent weapon, suggested when no weapon is picked yet.
     /// Identity resolved live by uid; composed for display by the frontend.
     pub suggested_weapon_uid: Option<i64>,
@@ -108,29 +101,7 @@ pub struct CheckoutEval {
     pub open_checkout_id: Option<i64>,
     pub user_inactive: bool,
     pub user_outstanding_debt_kr: i64,
-    /// Set when the picked user differs from the weapon's most-recent user.
-    pub fresher_user_name: Option<String>,
-    pub fresher_user_display: Option<String>,
-    pub fresher_user_active: bool,
-    pub fresher_user_at: Option<String>,
     pub can_checkout: bool,
-}
-
-/// (user_uid, checked_out_at) of the weapon's most recent checkout. The user's
-/// identity is resolved live by uid (snapshots are not used for display).
-fn most_recent_checkout(
-    conn: &Connection,
-    weapon_uid: i64,
-) -> Result<Option<(i64, String)>, AppError> {
-    Ok(conn
-        .query_row(
-            "SELECT user_uid, checked_out_at
-             FROM checkouts WHERE weapon_uid = ?1
-             ORDER BY checked_out_at DESC, id DESC LIMIT 1",
-            params![weapon_uid],
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-        )
-        .optional()?)
 }
 
 /// (checkout_id, holder_uid) if the weapon is currently out. The holder's
@@ -166,18 +137,6 @@ fn most_recent_weapon_uid_for_user(
         .optional()?)
 }
 
-/// True if the member currently holds any weapon (open checkout).
-fn user_has_open(conn: &Connection, user_uid: i64) -> Result<bool, AppError> {
-    Ok(conn
-        .query_row(
-            "SELECT 1 FROM checkouts WHERE user_uid = ?1 AND checked_in_at IS NULL LIMIT 1",
-            params![user_uid],
-            |_| Ok(()),
-        )
-        .optional()?
-        .is_some())
-}
-
 fn outstanding_debt(conn: &Connection, user_uid: i64) -> Result<i64, AppError> {
     Ok(conn.query_row(
         "SELECT COALESCE(SUM(amount_kr), 0) FROM debts WHERE user_uid = ?1 AND settled_at IS NULL",
@@ -200,7 +159,6 @@ fn evaluate(
 ) -> Result<CheckoutEval, AppError> {
     let mut eval = CheckoutEval::default();
 
-    let mut most_recent: Option<(i64, String)> = None;
     if let Some(wuid) = weapon_uid {
         if let Some(w) = weapon_get(conn, wuid)? {
             if !w.active {
@@ -216,7 +174,6 @@ fn evaluate(
                     eval.open_holder_active = h.active;
                 }
             }
-            most_recent = most_recent_checkout(conn, wuid)?;
         }
     }
 
@@ -225,35 +182,6 @@ fn evaluate(
             eval.user_inactive = !u.active;
         }
         eval.user_outstanding_debt_kr = outstanding_debt(conn, uuid)?;
-    }
-
-    // Suggestion / fresher-user only make sense when the weapon is available
-    // (if it's already out, the already-out banner says it all).
-    if !eval.weapon_already_out {
-        if let Some((muid, mat)) = most_recent {
-            // Resolve the most-recent user's identity live by uid (not snapshot).
-            let live = user_get(conn, muid)?;
-            match user_uid {
-                None => {
-                    eval.suggested_user_uid = Some(muid);
-                    eval.suggested_user_name = live.as_ref().map(|u| u.name.clone());
-                    eval.suggested_user_display_id =
-                        live.as_ref().and_then(|u| u.display_id.clone());
-                    eval.suggested_user_active = live.as_ref().map(|u| u.active).unwrap_or(false);
-                    // Don't autofill a user who already holds a weapon — warn instead.
-                    eval.suggested_user_busy = user_has_open(conn, muid)?;
-                }
-                Some(uuid) if uuid != muid => {
-                    if let Some(u) = live {
-                        eval.fresher_user_name = Some(u.name);
-                        eval.fresher_user_display = u.display_id;
-                        eval.fresher_user_active = u.active;
-                    }
-                    eval.fresher_user_at = Some(mat);
-                }
-                _ => {}
-            }
-        }
     }
 
     // Symmetric autopopulate: member picked, weapon not → suggest the member's
@@ -494,42 +422,6 @@ mod tests {
     }
 
     #[test]
-    fn suggestion_and_fresher_user() {
-        let conn = migrated_in_memory();
-        let op = mk_user(&conn, "Op", "1", true);
-        let anna = mk_user(&conn, "Anna", "10", false);
-        let bjorn = mk_user(&conn, "Björn", "11", false);
-        let w = mk_weapon(&conn, "W1");
-        let fresh = mk_weapon(&conn, "W2");
-
-        let c = do_checkout(&conn, w, anna, op, None).unwrap();
-        do_checkin(&conn, c.id, op).unwrap();
-
-        // No user picked → suggest Anna, no fresher warning.
-        let e = evaluate(&conn, Some(w), None).unwrap();
-        assert_eq!(e.suggested_user_uid, Some(anna));
-        assert_eq!(e.suggested_user_name.as_deref(), Some("Anna"));
-        assert_eq!(e.suggested_user_display_id.as_deref(), Some("10"));
-        assert!(e.suggested_user_active);
-        assert!(e.fresher_user_name.is_none());
-
-        // Different user picked → fresher warning naming Anna.
-        let e = evaluate(&conn, Some(w), Some(bjorn)).unwrap();
-        assert_eq!(e.fresher_user_name.as_deref(), Some("Anna"));
-        assert!(e.suggested_user_uid.is_none());
-
-        // Same user picked → no warning, no suggestion.
-        let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
-        assert!(e.fresher_user_name.is_none());
-        assert!(e.suggested_user_uid.is_none());
-
-        // Weapon with no history → neither.
-        let e = evaluate(&conn, Some(fresh), None).unwrap();
-        assert!(e.suggested_user_uid.is_none());
-        assert!(e.fresher_user_name.is_none());
-    }
-
-    #[test]
     fn member_to_weapon_suggestion() {
         let conn = migrated_in_memory();
         let op = mk_user(&conn, "Op", "1", true);
@@ -561,31 +453,6 @@ mod tests {
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.suggested_weapon_uid, Some(w));
         assert!(e.suggested_weapon_out);
-    }
-
-    #[test]
-    fn suggested_user_busy_and_fresher_suppressed_when_out() {
-        let conn = migrated_in_memory();
-        let op = mk_user(&conn, "Op", "1", true);
-        let anna = mk_user(&conn, "Anna", "10", false);
-        let w1 = mk_weapon(&conn, "W1");
-        let w2 = mk_weapon(&conn, "W2");
-
-        // Anna used W1 (returned), then took W2 (still out).
-        let c = do_checkout(&conn, w1, anna, op, None).unwrap();
-        do_checkin(&conn, c.id, op).unwrap();
-        do_checkout(&conn, w2, anna, op, None).unwrap();
-
-        // Picking W1, no user → suggests Anna but flags her busy (holds W2).
-        let e = evaluate(&conn, Some(w1), None).unwrap();
-        assert_eq!(e.suggested_user_uid, Some(anna));
-        assert!(e.suggested_user_busy);
-
-        // W2 is out; selecting it with another user → no fresher banner.
-        let bjorn = mk_user(&conn, "Björn", "11", false);
-        let e = evaluate(&conn, Some(w2), Some(bjorn)).unwrap();
-        assert!(e.weapon_already_out);
-        assert!(e.fresher_user_name.is_none());
     }
 
     #[test]

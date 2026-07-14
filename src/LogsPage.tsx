@@ -16,6 +16,8 @@ import { useState } from 'react';
 import { listWeapons, listUsers, listOperators, listCheckouts } from './api';
 import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
+import { MemberInfoModal } from './MemberInfoModal';
+import { WeaponInfoModal } from './WeaponInfoModal';
 
 export function LogsPage() {
   const { t } = useTranslation();
@@ -26,6 +28,8 @@ export function LogsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const [infoMember, setInfoMember] = useState<number | null>(null);
+  const [infoWeapon, setInfoWeapon] = useState<number | null>(null);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -76,10 +80,12 @@ export function LogsPage() {
   const rows = (logs.data ?? []).map((c) => (
     <Table.Tr key={c.id}>
       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
-      <Table.Td>
+      <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoWeapon(c.weaponUid)}>
         {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
       </Table.Td>
-      <Table.Td>{userLabel(c.userName, c.userDisplayId, c.userActive, t)}</Table.Td>
+      <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoMember(c.userUid)}>
+        {userLabel(c.userName, c.userDisplayId, c.userActive, t)}
+      </Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>
         {c.checkedInAt ? (
@@ -156,8 +162,9 @@ export function LogsPage() {
       {(logs.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={900}>
-          <Table striped highlightOnHover>
+        // ponytail: offset ≈ shell header + title + filter row — tune at live-smoke if clipped.
+        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 340px)">
+          <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>{t('label_checked_out_at')}</Table.Th>
@@ -173,6 +180,17 @@ export function LogsPage() {
           </Table>
         </Table.ScrollContainer>
       )}
+
+      <MemberInfoModal
+        uid={infoMember}
+        opened={infoMember != null}
+        onClose={() => setInfoMember(null)}
+      />
+      <WeaponInfoModal
+        uid={infoWeapon}
+        opened={infoWeapon != null}
+        onClose={() => setInfoWeapon(null)}
+      />
     </Stack>
   );
 }
