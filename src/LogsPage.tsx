@@ -156,8 +156,10 @@ export function LogsPage() {
       {(logs.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={900}>
-          <Table striped highlightOnHover>
+        <>
+          {/* ponytail: offset ≈ shell header + title + filter row — tune at live-smoke if clipped. */}
+          <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 300px)">
+            <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>{t('label_checked_out_at')}</Table.Th>
@@ -172,6 +174,7 @@ export function LogsPage() {
             <Table.Tbody>{rows}</Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+        </>
       )}
     </Stack>
   );
