@@ -422,6 +422,7 @@ export function CheckoutPage() {
         title={t('fast_checkin')}
         match={matchCheckin}
         confirmLabel={t('return_weapon')}
+        placeholder={t('enter_weapon_id')}
         onClose={() => setFastCheckinOpen(false)}
         onSubmit={onFastCheckinSubmit}
       />
