@@ -161,8 +161,8 @@ pub fn last_shot_dates(db: State<Db>) -> Result<Vec<LastShot>, AppError> {
 }
 
 /// Most recent user per weapon (latest checkout row; `checked_out_at DESC,
-/// id DESC` tiebreak — same ordering as `checkout::most_recent_checkout`).
-/// Identity resolved live by uid. Weapons with no history are absent.
+/// id DESC` tiebreak). Identity resolved live by uid. Weapons with no history
+/// are absent.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeaponLastUse {
