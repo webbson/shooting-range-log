@@ -128,17 +128,27 @@ pub fn list_checkouts(
 pub struct LastShot {
     pub user_uid: i64,
     pub last_shot_at: String,
+    /// Most recent shot strictly before today (local time); None when the member's
+    /// only shooting is today. The checkout member picker sorts by this so
+    /// today's activity doesn't reshuffle the list mid-session.
+    pub last_shot_before_today: Option<String>,
 }
 
 fn last_shot_dates_q(conn: &Connection) -> Result<Vec<LastShot>, AppError> {
+    // checked_out_at is UTC RFC3339 ("...Z"); date(x, 'localtime') converts to the
+    // operator's local calendar day, matching what "today" means at the counter.
     let mut stmt = conn.prepare(
-        "SELECT user_uid, MAX(checked_out_at) AS last_shot_at
+        "SELECT user_uid,
+                MAX(checked_out_at) AS last_shot_at,
+                MAX(CASE WHEN date(checked_out_at, 'localtime') < date('now', 'localtime')
+                         THEN checked_out_at END) AS last_shot_before_today
          FROM checkouts GROUP BY user_uid",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(LastShot {
             user_uid: r.get(0)?,
             last_shot_at: r.get(1)?,
+            last_shot_before_today: r.get(2)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -303,5 +313,36 @@ mod tests {
         assert_eq!(rows[0].user_name.as_deref(), Some("Björn"));
         assert!(rows[0].user_active);
         assert_eq!(rows[0].last_used_at, c2.checked_out_at);
+    }
+
+    #[test]
+    fn last_shot_dates_excludes_today_from_before_today() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", true);
+        let anna = mk_user(&conn, "Anna", false);
+        let bjorn = mk_user(&conn, "Björn", false);
+        let w1 = mk_weapon(&conn, "W1");
+        let w2 = mk_weapon(&conn, "W2");
+
+        // Anna: one checkout yesterday (raw insert — do_checkout always stamps now),
+        // one today via the real fn.
+        let yesterday = (chrono::Utc::now() - chrono::Duration::days(1)).to_rfc3339();
+        conn.execute(
+            "INSERT INTO checkouts (weapon_uid, user_uid, operator_out_uid, checked_out_at, checked_in_at)
+             VALUES (?1, ?2, ?3, ?4, ?4)",
+            params![w1, anna, op, yesterday],
+        )
+        .unwrap();
+        let today = do_checkout(&conn, w1, anna, op, None).unwrap();
+
+        // Björn: only today.
+        do_checkout(&conn, w2, bjorn, op, None).unwrap();
+
+        let rows = last_shot_dates_q(&conn).unwrap();
+        let a = rows.iter().find(|r| r.user_uid == anna).unwrap();
+        assert_eq!(a.last_shot_at, today.checked_out_at);
+        assert_eq!(a.last_shot_before_today.as_deref(), Some(yesterday.as_str()));
+        let b = rows.iter().find(|r| r.user_uid == bjorn).unwrap();
+        assert!(b.last_shot_before_today.is_none());
     }
 }
