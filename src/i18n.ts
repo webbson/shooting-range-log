@@ -100,6 +100,7 @@ const resources = {
       err_weapon_already_out: 'Vapnet är redan utlånat.',
       err_checkout_not_found: 'Utlämningen hittades inte.',
       err_already_checked_in: 'Vapnet är redan återlämnat.',
+      err_weapon_already_preferred: 'Vapnet är redan favoritvapen för {{name}}.',
 
       // Checkout / checkin (M2)
       checkout_new: 'Ny utlämning',
@@ -325,6 +326,7 @@ const resources = {
       err_weapon_already_out: 'Weapon is already checked out.',
       err_checkout_not_found: 'Checkout not found.',
       err_already_checked_in: 'Weapon is already checked in.',
+      err_weapon_already_preferred: 'Weapon is already the preferred weapon of {{name}}.',
 
       // Checkout / checkin (M2)
       checkout_new: 'New checkout',
