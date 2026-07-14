@@ -17,7 +17,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use tauri::State;
 
-use crate::commands::{user_create, weapon_create};
+use crate::commands::{user_create, user_set_preferred_weapon, weapon_create};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{NewUser, NewWeapon};
@@ -74,6 +74,7 @@ pub struct ParsedMember {
     pub row: u32, // 1-based spreadsheet row (the member's "ID")
     pub name: String,
     pub ssn: Option<String>,
+    pub favorite_weapon_no: Option<String>, // col 2 (`vapen`) — numeric tag or None
     pub loans: Vec<ParsedLoan>,
 }
 
@@ -91,6 +92,7 @@ struct MemberAction {
     ssn: Option<String>,
     display_id: Option<String>, // row number string, or None if tag is taken
     existing_uid: Option<i64>,  // Some = already in DB, None = needs create
+    favorite_weapon_no: Option<String>,
 }
 
 struct WeaponAction {
@@ -269,6 +271,20 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
 
         let ssn = row.get(1).and_then(|c| cell_as_str(c)).and_then(|s| normalize_ssn(&s));
 
+        // Col 2: favorite weapon number (numeric tag only).
+        let favorite_weapon_no = match row.get(2).and_then(|c| cell_as_str(c)) {
+            None => None,
+            Some(v) if is_weapon_no(&v) => Some(v),
+            Some(v) => {
+                warnings.push(ImportWarning {
+                    row: row_num,
+                    code: "warn_junk_cell".into(),
+                    message: format!("Row {row_num}: non-numeric value '{v}' ignored"),
+                });
+                None
+            }
+        };
+
         // Parse loan entries for this row.
         let mut loans: Vec<ParsedLoan> = Vec::new();
         for (utlev_col, inlev_col, date_opt) in &pairs {
@@ -328,6 +344,10 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
 
         if let Some(idx) = merge_into {
             members[idx].loans.extend(loans);
+            // Keep the first non-empty favorite across duplicate rows.
+            if members[idx].favorite_weapon_no.is_none() {
+                members[idx].favorite_weapon_no = favorite_weapon_no;
+            }
             warnings.push(ImportWarning {
                 row: row_num,
                 code: "warn_duplicate_member".into(),
@@ -341,7 +361,7 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
                 ssn_to_idx.insert(s.clone(), idx);
             }
             name_to_idx.insert(norm_name, idx);
-            members.push(ParsedMember { row: row_num, name, ssn, loans });
+            members.push(ParsedMember { row: row_num, name, ssn, favorite_weapon_no, loans });
         }
     }
 
@@ -461,14 +481,16 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
             ssn: pm.ssn.clone(),
             display_id,
             existing_uid,
+            favorite_weapon_no: pm.favorite_weapon_no.clone(),
         });
     }
 
-    // Collect every weapon number referenced in the file.
+    // Collect every weapon number referenced in the file (loans + favorites).
     let all_weapon_nos: HashSet<String> = parsed
         .members
         .iter()
         .flat_map(|m| m.loans.iter().map(|l| l.weapon_no.clone()))
+        .chain(parsed.members.iter().filter_map(|m| m.favorite_weapon_no.clone()))
         .collect();
 
     let mut weapon_actions: Vec<WeaponAction> = Vec::new();
@@ -702,6 +724,47 @@ fn execute(
         loans_created += 1;
     }
 
+    // Set favorite weapons — after members and weapons are guaranteed to exist.
+    // Never overwrites a pre-existing preference (skip silently for matched members).
+    // First row wins within-file: on conflict, push a warning and continue.
+    let mut warnings = plan.warnings.clone();
+    for m in &plan.members {
+        let no = match &m.favorite_weapon_no {
+            Some(n) => n,
+            None => continue,
+        };
+        let user_uid = match row_to_uid.get(&m.row) {
+            Some(&u) => u,
+            None => continue,
+        };
+        let weapon_uid = match wno_to_uid.get(no.as_str()) {
+            Some(&w) => w,
+            None => continue,
+        };
+        // Skip if the member already has a live preference (never overwrite).
+        let existing_pref: Option<i64> = tx
+            .query_row(
+                "SELECT preferred_weapon_uid FROM users WHERE uid = ?1",
+                params![user_uid],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        if existing_pref.is_some() {
+            continue;
+        }
+        if let Err(_) = user_set_preferred_weapon(&tx, user_uid, Some(weapon_uid)) {
+            warnings.push(ImportWarning {
+                row: m.row,
+                code: "warn_favorite_conflict".into(),
+                message: format!(
+                    "Row {}: favorite weapon {no} already belongs to another member — skipped",
+                    m.row
+                ),
+            });
+        }
+    }
+
     tx.commit()?;
 
     Ok(ImportResult {
@@ -712,7 +775,7 @@ fn execute(
         loans_created,
         loans_skipped,
         open_loans_marked_returned,
-        warnings: plan.warnings.clone(),
+        warnings,
     })
 }
 
@@ -775,6 +838,7 @@ mod tests {
             row,
             name: name.into(),
             ssn: ssn.map(String::from),
+            favorite_weapon_no: None, // override after construction when needed
             loans,
         }
     }
@@ -1036,6 +1100,134 @@ mod tests {
         )]);
         let plan = build_plan(&conn, &sheet).unwrap();
         assert_eq!(plan.weapons[0].existing_uid, Some(existing_w.uid));
+    }
+
+    // ── favorite weapon ──
+
+    #[test]
+    fn favorite_weapon_parsed_and_set_on_commit() {
+        // Scenario 1: member row has favorite_weapon_no "7"; no loan references "7".
+        // After commit: member's preferred_weapon_uid = the created weapon with tag "7".
+        let conn = migrated_in_memory();
+        let mut member = make_member(4, "Tom", Some("19890330-0001"), vec![]);
+        member.favorite_weapon_no = Some("7".into());
+        let sheet = parsed_sheet(vec![member]);
+
+        let plan = build_plan(&conn, &sheet).unwrap();
+        // "7" must be in weapon actions even though no loan references it.
+        assert!(plan.weapons.iter().any(|w| w.display_id == "7"));
+
+        let result = execute(&conn, &plan, false).unwrap();
+        assert_eq!(result.members_created, 1);
+        assert_eq!(result.weapons_created, 1);
+        assert!(result.warnings.iter().all(|w| w.code != "warn_favorite_conflict"));
+
+        // Member's preferred_weapon_uid must be the weapon with display_id "7".
+        let (member_pref, weapon_uid): (Option<i64>, i64) = conn
+            .query_row(
+                "SELECT u.preferred_weapon_uid, w.uid \
+                 FROM users u, weapons w \
+                 WHERE u.name = 'Tom' AND w.display_id = '7'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(member_pref, Some(weapon_uid));
+    }
+
+    #[test]
+    fn favorite_weapon_conflict_first_row_wins() {
+        // Scenario 2: two members share the same favorite "7".
+        // Row 4 (lower row) gets it; row 5 receives warn_favorite_conflict.
+        let conn = migrated_in_memory();
+        let mut m1 = make_member(4, "Alice", Some("19890330-0001"), vec![]);
+        m1.favorite_weapon_no = Some("7".into());
+        let mut m2 = make_member(5, "Bob", Some("19900101-0002"), vec![]);
+        m2.favorite_weapon_no = Some("7".into());
+        let sheet = parsed_sheet(vec![m1, m2]);
+
+        let plan = build_plan(&conn, &sheet).unwrap();
+        let result = execute(&conn, &plan, false).unwrap();
+
+        // Row 5 should have the conflict warning.
+        let conflict = result.warnings.iter().find(|w| w.code == "warn_favorite_conflict");
+        assert!(conflict.is_some(), "expected warn_favorite_conflict for second member");
+        assert_eq!(conflict.unwrap().row, 5);
+
+        // Alice (row 4) has the weapon; Bob (row 5) does not.
+        let alice_pref: Option<i64> = conn
+            .query_row(
+                "SELECT preferred_weapon_uid FROM users WHERE name = 'Alice'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let bob_pref: Option<i64> = conn
+            .query_row(
+                "SELECT preferred_weapon_uid FROM users WHERE name = 'Bob'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(alice_pref.is_some(), "Alice should have the preferred weapon");
+        assert!(bob_pref.is_none(), "Bob should have no preferred weapon");
+    }
+
+    #[test]
+    fn favorite_weapon_not_overwritten_for_existing_member() {
+        // Scenario 3: pre-create member+weapon and set preference to W_A.
+        // Import file says W_B — after commit, preference must still be W_A.
+        let conn = migrated_in_memory();
+        let member = user_create(
+            &conn,
+            NewUser {
+                display_id: Some("9".into()),
+                name: "Carol".into(),
+                ssn: Some("19920101-0003".into()),
+                is_staff: false,
+                email: None, phone: None, address: None, notes: None,
+            },
+        )
+        .unwrap();
+        let w_a = weapon_create(
+            &conn,
+            NewWeapon {
+                display_id: Some("11".into()),
+                brand: None, model: None, serial: None, caliber: None, notes: None,
+            },
+        )
+        .unwrap();
+        let _w_b = weapon_create(
+            &conn,
+            NewWeapon {
+                display_id: Some("22".into()),
+                brand: None, model: None, serial: None, caliber: None, notes: None,
+            },
+        )
+        .unwrap();
+        // Pre-set preference to W_A.
+        user_set_preferred_weapon(&conn, member.uid, Some(w_a.uid)).unwrap();
+
+        // Import says favorite is "22" (W_B).
+        let mut m = make_member(4, "Carol", Some("19920101-0003"), vec![]);
+        m.favorite_weapon_no = Some("22".into());
+        let sheet = parsed_sheet(vec![m]);
+
+        let plan = build_plan(&conn, &sheet).unwrap();
+        let result = execute(&conn, &plan, false).unwrap();
+
+        // No conflict warning — silence is the correct response.
+        assert!(result.warnings.iter().all(|w| w.code != "warn_favorite_conflict"));
+
+        // Preference is still W_A.
+        let pref: Option<i64> = conn
+            .query_row(
+                "SELECT preferred_weapon_uid FROM users WHERE uid = ?1",
+                params![member.uid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pref, Some(w_a.uid));
     }
 
     #[test]
