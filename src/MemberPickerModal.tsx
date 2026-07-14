@@ -2,15 +2,17 @@ import {
   Modal,
   Grid,
   Stack,
+  Group,
   ScrollArea,
   Card,
   Text,
+  Badge,
   TextInput,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { lastShotDates, listUsers, type User } from './api';
+import { lastShotDates, listUsers, outstandingDebts, type User } from './api';
 import { userLabel } from './labels';
 import { fmtDate } from './format';
 import { Numpad } from './Numpad';
@@ -39,7 +41,20 @@ export function MemberPickerModal({
 
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: opened });
   const shots = useQuery({ queryKey: ['lastShotDates'], queryFn: lastShotDates, enabled: opened });
+  const debts = useQuery({
+    queryKey: ['outstandingDebts'],
+    queryFn: outstandingDebts,
+    enabled: opened,
+  });
+  const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
   const lastMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
+  // Sort key: last shot BEFORE today — checking a member out today must not
+  // reshuffle the list for the rest of the session. Display still shows lastMap.
+  const beforeMap = new Map(
+    (shots.data ?? [])
+      .filter((s) => s.lastShotBeforeToday != null)
+      .map((s) => [s.userUid, s.lastShotBeforeToday!] as const),
+  );
   const pool = (users.data ?? []).filter((u) => u.active);
 
   const q = text.trim().toLowerCase();
@@ -52,8 +67,8 @@ export function MemberPickerModal({
   const sorted = [...filtered].sort((a, b) => {
     const r = rank(a) - rank(b);
     if (r !== 0) return r;
-    const av = lastMap.get(a.uid);
-    const bv = lastMap.get(b.uid);
+    const av = beforeMap.get(a.uid);
+    const bv = beforeMap.get(b.uid);
     if (av !== bv) {
       if (!av) return 1;
       if (!bv) return -1;
@@ -77,14 +92,21 @@ export function MemberPickerModal({
                   style={{ cursor: 'pointer' }}
                   onClick={() => onSelect(u.uid)}
                 >
-                  <Stack gap={2}>
-                    <Text fw={600}>{userLabel(u.name, u.displayId, true, t)}</Text>
-                    {lastMap.has(u.uid) && (
-                      <Text size="xs" c="dimmed">
-                        {t('field_last_shot')}: {fmtDate(lastMap.get(u.uid)!)}
-                      </Text>
+                  <Group justify="space-between" wrap="nowrap">
+                    <Stack gap={2}>
+                      <Text fw={600}>{userLabel(u.name, u.displayId, true, t)}</Text>
+                      {lastMap.has(u.uid) && (
+                        <Text size="xs" c="dimmed">
+                          {t('field_last_shot')}: {fmtDate(lastMap.get(u.uid)!)}
+                        </Text>
+                      )}
+                    </Stack>
+                    {debtMap.has(u.uid) && (
+                      <Badge color="red" variant="filled">
+                        {t('debt_badge', { amount: debtMap.get(u.uid) })}
+                      </Badge>
                     )}
-                  </Stack>
+                  </Group>
                 </Card>
               ))}
             </Stack>
