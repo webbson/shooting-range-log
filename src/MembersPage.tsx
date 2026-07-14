@@ -13,6 +13,8 @@ import {
   Text,
   Tooltip,
   UnstyledButton,
+  Input,
+  CloseButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
@@ -26,13 +28,16 @@ import {
   createUser,
   updateUser,
   setUserActive,
+  setPreferredWeapon,
   nextUserDisplayId,
   outstandingDebts,
   lastShotDates,
+  listWeapons,
   type User,
 } from './api';
 import { errorMessage } from './errors';
-import { userLabel } from './labels';
+import { userLabel, weaponLabel } from './labels';
+import { WeaponPickerModal } from './WeaponPickerModal';
 import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
 
@@ -70,6 +75,13 @@ export function MembersPage() {
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [debtUser, setDebtUser] = useState<User | null>(null);
+
+  // Preferred weapon: separate from the form — saved via set_preferred_weapon.
+  const [prefUid, setPrefUid] = useState<number | null>(null);
+  const [prefPickerOpen, setPrefPickerOpen] = useState(false);
+
+  const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
+  const prefWeapon = (weapons.data ?? []).find((w) => w.uid === prefUid);
 
   // Deactivation flow (optional tag release).
   const [deactivating, setDeactivating] = useState<User | null>(null);
@@ -112,9 +124,18 @@ export function MembersPage() {
     qc.invalidateQueries({ queryKey: ['operators'] });
   };
 
+  const savePreference = async (uid: number) => {
+    if ((editing?.preferredWeaponUid ?? null) !== prefUid) {
+      await setPreferredWeapon(uid, prefUid);
+    }
+  };
+
   const save = useMutation({
-    mutationFn: (v: MemberForm) =>
-      editing ? updateUser({ ...v, uid: editing.uid }) : createUser(v),
+    mutationFn: async (v: MemberForm) => {
+      const u = editing ? await updateUser({ ...v, uid: editing.uid }) : await createUser(v);
+      await savePreference(u.uid);
+      return u;
+    },
     onSuccess: () => {
       invalidate();
       close();
@@ -129,6 +150,7 @@ export function MembersPage() {
     mutationFn: async (v: MemberForm) => {
       if (!editing) throw new Error('no member');
       await updateUser({ ...v, uid: editing.uid });
+      await savePreference(editing.uid);
       return setUserActive(editing.uid, true);
     },
     onSuccess: () => {
@@ -158,6 +180,7 @@ export function MembersPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setPrefUid(null);
     form.setValues(EMPTY);
     form.resetDirty(EMPTY);
     open();
@@ -165,6 +188,7 @@ export function MembersPage() {
 
   const openEdit = (u: User) => {
     setEditing(u);
+    setPrefUid(u.preferredWeaponUid ?? null);
     form.setValues({
       displayId: u.displayId ?? '',
       name: u.name,
@@ -371,6 +395,36 @@ export function MembersPage() {
             </Group>
             <TextInput label={t('field_address')} {...form.getInputProps('address')} />
             <TextInput label={t('field_ssn')} {...form.getInputProps('ssn')} />
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <Input.Wrapper label={t('field_preferred_weapon')} style={{ flex: 1 }}>
+                <Button
+                  fullWidth
+                  variant="default"
+                  justify="space-between"
+                  rightSection="▾"
+                  onClick={() => setPrefPickerOpen(true)}
+                  c={prefWeapon ? undefined : 'dimmed'}
+                >
+                  {prefWeapon
+                    ? weaponLabel(
+                        prefWeapon.brand,
+                        prefWeapon.model,
+                        prefWeapon.caliber,
+                        prefWeapon.displayId,
+                        prefWeapon.active,
+                        t,
+                      )
+                    : t('none_set')}
+                </Button>
+              </Input.Wrapper>
+              {prefUid != null && (
+                <CloseButton
+                  size="lg"
+                  aria-label={t('clear_selection')}
+                  onClick={() => setPrefUid(null)}
+                />
+              )}
+            </Group>
             <Switch
               label={t('field_is_staff')}
               {...form.getInputProps('isStaff', { type: 'checkbox' })}
@@ -458,6 +512,15 @@ export function MembersPage() {
         }
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}
+      />
+
+      <WeaponPickerModal
+        opened={prefPickerOpen}
+        onClose={() => setPrefPickerOpen(false)}
+        onSelect={(uid) => {
+          setPrefUid(uid);
+          setPrefPickerOpen(false);
+        }}
       />
     </Stack>
   );
