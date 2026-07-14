@@ -13,6 +13,7 @@ import {
   ActionIcon,
   Tooltip,
 } from '@mantine/core';
+import { IconCoins, IconArrowBackUp } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -390,26 +391,34 @@ export function CheckoutPage() {
                         </Tooltip>
                       );
                     })()}
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      onClick={() =>
-                        setDebtUser({
-                          uid: o.userUid,
-                          name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
-                        })
-                      }
-                    >
-                      {t('add_debt')}
-                    </Button>
-                    <Button
-                      variant="light"
-                      color="teal"
-                      loading={checkinMut.isPending}
-                      onClick={() => checkinMut.mutate(o.id)}
-                    >
-                      {t('return_weapon')}
-                    </Button>
+                    <Tooltip label={t('add_debt')}>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="lg"
+                        aria-label={t('add_debt')}
+                        onClick={() =>
+                          setDebtUser({
+                            uid: o.userUid,
+                            name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
+                          })
+                        }
+                      >
+                        <IconCoins />
+                      </ActionIcon>
+                    </Tooltip>
+                    <Tooltip label={t('return_weapon')}>
+                      <ActionIcon
+                        variant="light"
+                        color="teal"
+                        size="lg"
+                        aria-label={t('return_weapon')}
+                        loading={checkinMut.isPending}
+                        onClick={() => checkinMut.mutate(o.id)}
+                      >
+                        <IconArrowBackUp />
+                      </ActionIcon>
+                    </Tooltip>
                   </Group>
                 </Group>
               </Card>
