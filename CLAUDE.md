@@ -106,20 +106,25 @@ commit on a `feat/*` branch → merge to `main`.
   `s3.rs` (rust-s3: test_connection, upload, list_remote, download, delete, retention_remote),
   `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
-  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (picker-modal selection, eval warnings,
-  scrollable open-loans list with favorite-star/debt/return actions),
+  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (member-first flow: weapon picker disabled
+  until member chosen; picker-modal selection, eval warnings, scrollable open-loans list with
+  favorite-star/debt/return actions),
   `Numpad.tsx` (shared keypad) + `IdNumpadModal.tsx` (fast check-in),
   `WeaponPickerModal.tsx` / `MemberPickerModal.tsx` (touch pickers: tag numpad + filters,
-  favorite/last badges, exact-tag-match-first sort), `MembersPage.tsx` (list: sortable, last-shot
-  column, row → detail; edit modal incl. preferred weapon), `MemberDetailPage.tsx` (read-only info grid + shooting history),
+  favorite/last badges, exact-tag-match-first sort),
+  `MemberInfoModal.tsx` / `WeaponInfoModal.tsx` (read-only info + history modals, launched from
+  lists/logs/open-loans), `MembersPage.tsx` (list: sortable, last-shot
+  column, row → info modal; edit modal incl. preferred weapon),
   `WeaponsPage.tsx` (list + create/edit; brand/model/caliber Autocomplete + "base on existing weapon"),
   `weaponPresets.ts` (curated brand/caliber lists + DB-merge suggestion helper),
   `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),
-  `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`.
+  `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`, `global.css` (app-wide
+  user-select off).
 
 ## Status
 M0–M6 done on `main` (M6 backup/restore live-smoked). Picker modals + preferred-weapon
-feature (3 waves, 2026-07-14) merged to `main` after live-smoke.
+feature (3 waves, 2026-07-14) merged to `main` after live-smoke
++ UX refinements wave (2026-07-14): member-first checkout, info modals, inner-scroll lists.
 M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
 Git is local-only (no remote yet → Windows installer not yet built).
 

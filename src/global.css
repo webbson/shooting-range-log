@@ -1,0 +1,10 @@
+/* Kiosk-style touch UI: no text selection anywhere except text entry. */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}

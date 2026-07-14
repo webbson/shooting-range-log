@@ -20,8 +20,8 @@ import { Numpad } from './Numpad';
 
 // Touch-first weapon selector: box list left, tag numpad + filters right.
 // `pinned` floats the member's preferred / last-used weapon to the top with
-// badges. `availableOnly` restricts to active weapons not currently out
-// (checkout); otherwise all active weapons (member edit).
+// badges. `availableOnly` (checkout) greys out currently-out weapons and shows
+// the holder; otherwise all active weapons are selectable (member edit).
 export function WeaponPickerModal({
   opened,
   onClose,
@@ -57,7 +57,8 @@ export function WeaponPickerModal({
     queryFn: listOpenCheckouts,
     enabled: opened && availableOnly,
   });
-  const outSet = new Set((open.data ?? []).map((o) => o.weaponUid));
+  // weapon uid → its open checkout (holder shown on the disabled row).
+  const outMap = new Map((open.data ?? []).map((o) => [o.weaponUid, o] as const));
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: opened });
   const lastUses = useQuery({
     queryKey: ['lastWeaponUsers'],
@@ -72,9 +73,7 @@ export function WeaponPickerModal({
       .map((u) => [u.preferredWeaponUid as number, u] as const),
   );
 
-  const pool = (weapons.data ?? []).filter(
-    (w) => w.active && (!availableOnly || !outSet.has(w.uid)),
-  );
+  const pool = (weapons.data ?? []).filter((w) => w.active);
 
   // Filter option values from the visible pool, not the whole table.
   const brands = [...new Set(pool.map((w) => w.brand).filter(Boolean) as string[])].sort();
@@ -112,50 +111,62 @@ export function WeaponPickerModal({
           <ScrollArea h={420} type="auto">
             <Stack gap="xs">
               {sorted.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
-              {sorted.map((w) => (
-                <Card
-                  key={w.uid}
-                  withBorder
-                  padding="sm"
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => onSelect(w.uid)}
-                >
-                  <Group justify="space-between" wrap="nowrap">
-                    <Stack gap={2}>
-                      <Text fw={600}>{label(w)}</Text>
-                      {lastUseMap.has(w.uid) && (
-                        <Text size="xs" c="dimmed">
-                          {t('picker_last_used', {
-                            name: userLabel(
-                              lastUseMap.get(w.uid)!.userName,
-                              lastUseMap.get(w.uid)!.userDisplayId,
-                              lastUseMap.get(w.uid)!.userActive,
-                              t,
-                            ),
-                            date: fmtDate(lastUseMap.get(w.uid)!.lastUsedAt),
-                          })}
-                        </Text>
-                      )}
-                    </Stack>
-                    <Group gap={4} wrap="nowrap">
-                      {w.uid === pinned?.preferredUid ? (
-                        <Badge color="yellow" variant="light">
-                          ★ {t('badge_preferred')}
-                        </Badge>
-                      ) : preferrerMap.has(w.uid) ? (
-                        <Badge color="yellow" variant="light">
-                          ★ {preferrerMap.get(w.uid)!.name}
-                        </Badge>
-                      ) : null}
-                      {w.uid === pinned?.lastUid && (
-                        <Badge color="gray" variant="light">
-                          {t('badge_last')}
-                        </Badge>
-                      )}
+              {sorted.map((w) => {
+                const out = availableOnly ? outMap.get(w.uid) : undefined;
+                return (
+                  <Card
+                    key={w.uid}
+                    withBorder
+                    padding="sm"
+                    opacity={out ? 0.5 : 1}
+                    style={{ cursor: out ? 'default' : 'pointer' }}
+                    onClick={out ? undefined : () => onSelect(w.uid)}
+                  >
+                    <Group justify="space-between" wrap="nowrap">
+                      <Stack gap={2}>
+                        <Text fw={600}>{label(w)}</Text>
+                        {out ? (
+                          <Text size="xs" c="red.7">
+                            {t('picker_out_held_by', {
+                              name: userLabel(out.userName, out.userDisplayId, out.userActive, t),
+                            })}
+                          </Text>
+                        ) : (
+                          lastUseMap.has(w.uid) && (
+                            <Text size="xs" c="dimmed">
+                              {t('picker_last_used', {
+                                name: userLabel(
+                                  lastUseMap.get(w.uid)!.userName,
+                                  lastUseMap.get(w.uid)!.userDisplayId,
+                                  lastUseMap.get(w.uid)!.userActive,
+                                  t,
+                                ),
+                                date: fmtDate(lastUseMap.get(w.uid)!.lastUsedAt),
+                              })}
+                            </Text>
+                          )
+                        )}
+                      </Stack>
+                      <Group gap={4} wrap="nowrap">
+                        {w.uid === pinned?.preferredUid ? (
+                          <Badge color="yellow" variant="light">
+                            ★ {t('badge_preferred')}
+                          </Badge>
+                        ) : preferrerMap.has(w.uid) ? (
+                          <Badge color="yellow" variant="light">
+                            ★ {preferrerMap.get(w.uid)!.name}
+                          </Badge>
+                        ) : null}
+                        {w.uid === pinned?.lastUid && (
+                          <Badge color="gray" variant="light">
+                            {t('badge_last')}
+                          </Badge>
+                        )}
+                      </Group>
                     </Group>
-                  </Group>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </Stack>
           </ScrollArea>
         </Grid.Col>
