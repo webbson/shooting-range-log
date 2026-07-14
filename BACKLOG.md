@@ -11,6 +11,7 @@ _Collect tweaks here as they come up._
 - [ ] Review touch sizing/layout at 1920×1080 / 1920×1200 / 2560×1440 on the actual laptop.
 - [ ] (add items here)
 - [x] Retired members retain their preferred-weapon slot (star hidden for all on that weapon; exclusivity error names the retired holder) — decide policy: clear preference on deactivation, or allow taking over a weapon from an inactive holder. — resolved: deactivation clears the favorite
+- [ ] Centralize the "inactive member never holds the exclusive favorite slot" invariant inside `user_set_preferred_weapon` instead of per-call-site guards — blocked by MembersPage `activate` flow which saves the preference BEFORE `setUserActive(true)` (reorder that first); related edge: activation failing after preference save leaves an inactive member holding a favorite.
 
 ## M6 — Backup / restore (deferred)
 - Auto snapshot via SQLite `VACUUM INTO` to a local backups dir; on app close + periodic.
