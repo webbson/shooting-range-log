@@ -128,6 +128,8 @@ const resources = {
       return_weapon: 'Återlämna',
       fast_checkin: 'Snabb återlämning',
       label_checked_out_at: 'Utlånat',
+      mark_favorite: 'Gör till favoritvapen',
+      unmark_favorite: 'Ta bort som favoritvapen',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Skuldbeloppet måste vara större än noll.',
@@ -365,6 +367,8 @@ const resources = {
       return_weapon: 'Return',
       fast_checkin: 'Quick return',
       label_checked_out_at: 'Checked out',
+      mark_favorite: 'Set as favorite weapon',
+      unmark_favorite: 'Remove as favorite weapon',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Debt amount must be greater than zero.',

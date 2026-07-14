@@ -10,6 +10,8 @@ import {
   TextInput,
   Button,
   Alert,
+  ActionIcon,
+  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,6 +24,7 @@ import {
   evaluateCheckout,
   doCheckout,
   doCheckin,
+  setPreferredWeapon,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -106,6 +109,21 @@ export function CheckoutPage() {
     },
     onError,
   });
+
+  // Star button: weapon can be one member's favorite. Setting replaces the
+  // borrower's previous favorite; tapping their own filled star clears it.
+  const favMut = useMutation({
+    mutationFn: (args: { userUid: number; weaponUid: number | null }) =>
+      setPreferredWeapon(args.userUid, args.weaponUid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['eval'] });
+    },
+    onError,
+  });
+
+  const preferrerOf = (weaponUid: number) =>
+    (users.data ?? []).find((u) => u.preferredWeaponUid === weaponUid);
 
   const selectedWeapon = (weapons.data ?? []).find((w) => w.uid === weaponUid);
   const selectedUser = (users.data ?? []).find((u) => u.uid === userUid);
@@ -304,6 +322,29 @@ export function CheckoutPage() {
                     </Text>
                   </Stack>
                   <Group gap="xs" wrap="nowrap">
+                    {(() => {
+                      const p = preferrerOf(o.weaponUid);
+                      if (p && p.uid !== o.userUid) return null; // another member's favorite
+                      const mine = p != null;
+                      return (
+                        <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
+                          <ActionIcon
+                            variant={mine ? 'light' : 'subtle'}
+                            color="yellow"
+                            size="lg"
+                            aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
+                            onClick={() =>
+                              favMut.mutate({
+                                userUid: o.userUid,
+                                weaponUid: mine ? null : o.weaponUid,
+                              })
+                            }
+                          >
+                            {mine ? '★' : '☆'}
+                          </ActionIcon>
+                        </Tooltip>
+                      );
+                    })()}
                     <Button
                       variant="subtle"
                       color="red"
