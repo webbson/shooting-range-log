@@ -53,8 +53,8 @@ const resources = {
       member_info: 'Medlemsuppgifter',
       field_member_since: 'Medlem sedan',
       shooting_history: 'Skjuthistorik',
+      usage_history: 'Användningshistorik',
       no_shooting_history: 'Ingen skjuthistorik.',
-      back: 'Tillbaka',
 
       // Weapons
       new_weapon: 'Nytt vapen',
@@ -294,8 +294,8 @@ const resources = {
       member_info: 'Member details',
       field_member_since: 'Member since',
       shooting_history: 'Shooting history',
+      usage_history: 'Usage history',
       no_shooting_history: 'No shooting history.',
-      back: 'Back',
 
       // Weapons
       new_weapon: 'New weapon',

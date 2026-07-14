@@ -22,7 +22,6 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   listUsers,
   createUser,
@@ -40,6 +39,7 @@ import { userLabel, weaponLabel } from './labels';
 import { WeaponPickerModal } from './WeaponPickerModal';
 import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
+import { MemberInfoModal } from './MemberInfoModal';
 
 const SSN_RE = /^\d{8}-\d{4}$/;
 const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
@@ -71,10 +71,10 @@ const EMPTY: MemberForm = {
 export function MembersPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [debtUser, setDebtUser] = useState<User | null>(null);
+  const [infoUid, setInfoUid] = useState<number | null>(null);
 
   // Preferred weapon: separate from the form — saved via set_preferred_weapon.
   const [prefUid, setPrefUid] = useState<number | null>(null);
@@ -269,7 +269,7 @@ export function MembersPage() {
       key={u.uid}
       opacity={u.active ? 1 : 0.5}
       style={{ cursor: 'pointer' }}
-      onClick={() => navigate(`/members/${u.uid}`)}
+      onClick={() => setInfoUid(u.uid)}
     >
       <Table.Td>{u.displayId}</Table.Td>
       <Table.Td>
@@ -516,6 +516,12 @@ export function MembersPage() {
         }
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}
+      />
+
+      <MemberInfoModal
+        uid={infoUid}
+        opened={infoUid != null}
+        onClose={() => setInfoUid(null)}
       />
 
       <WeaponPickerModal
