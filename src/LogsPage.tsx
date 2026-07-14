@@ -163,7 +163,7 @@ export function LogsPage() {
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
         // ponytail: offset ≈ shell header + title + filter row — tune at live-smoke if clipped.
-        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 300px)">
+        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 340px)">
           <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>
