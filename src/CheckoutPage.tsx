@@ -5,12 +5,16 @@ import {
   Group,
   Title,
   Text,
-  Select,
+  Input,
+  CloseButton,
   TextInput,
   Button,
   Alert,
+  ActionIcon,
   Tooltip,
+  ScrollArea,
 } from '@mantine/core';
+import { IconCoins, IconArrowBackUp } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +26,7 @@ import {
   evaluateCheckout,
   doCheckout,
   doCheckin,
+  setPreferredWeapon,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -29,6 +34,8 @@ import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
 import { DebtModal } from './DebtModal';
 import { IdNumpadModal } from './IdNumpadModal';
+import { WeaponPickerModal } from './WeaponPickerModal';
+import { MemberPickerModal } from './MemberPickerModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -39,8 +46,8 @@ export function CheckoutPage() {
   const [userUid, setUserUid] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [debtUser, setDebtUser] = useState<{ uid: number; name: string } | null>(null);
-  // Numpad ID entry (touch alternative to the dropdowns).
-  const [numpad, setNumpad] = useState<'weapon' | 'member' | null>(null);
+  // Which picker modal is open (replaces the old per-field numpad entry).
+  const [picker, setPicker] = useState<'weapon' | 'member' | null>(null);
   const [fastCheckinOpen, setFastCheckinOpen] = useState(false);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
@@ -58,8 +65,7 @@ export function CheckoutPage() {
   // manual clear sticks instead of being re-filled. We skip autofill when the
   // suggested counterpart is unavailable (busy member / weapon already out);
   // the reactive eval below surfaces a warning banner for that case.
-  const onWeaponChange = async (v: string | null) => {
-    const wid = v ? Number(v) : null;
+  const onWeaponChange = async (wid: number | null) => {
     setWeaponUid(wid);
     if (wid != null && userUid == null) {
       const e = await evaluateCheckout(wid, null);
@@ -67,12 +73,12 @@ export function CheckoutPage() {
     }
   };
 
-  const onMemberChange = async (v: string | null) => {
-    const uid = v ? Number(v) : null;
+  const onMemberChange = async (uid: number | null) => {
     setUserUid(uid);
     if (uid != null) {
       const e = await evaluateCheckout(null, uid);
-      if (e.suggestedWeaponUid != null) setWeaponUid(e.suggestedWeaponUid);
+      if (e.suggestedWeaponUid != null && !e.suggestedWeaponOut)
+        setWeaponUid(e.suggestedWeaponUid);
     }
   };
 
@@ -92,6 +98,8 @@ export function CheckoutPage() {
       reset();
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
+      qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
+      qc.invalidateQueries({ queryKey: ['lastShotDates'] });
     },
     onError,
   });
@@ -102,54 +110,39 @@ export function CheckoutPage() {
       notifications.show({ message: t('returned_ok') });
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
+      qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
+      qc.invalidateQueries({ queryKey: ['lastShotDates'] });
     },
     onError,
   });
 
-  const outMap = new Map(
-    (open.data ?? []).map((o) => [o.weaponUid, o.userName ?? ''] as const),
-  );
+  // Star button: weapon can be one member's favorite. Setting replaces the
+  // borrower's previous favorite; tapping their own filled star clears it.
+  const favMut = useMutation({
+    mutationFn: (args: { userUid: number; weaponUid: number | null }) =>
+      setPreferredWeapon(args.userUid, args.weaponUid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['eval'] });
+    },
+    onError,
+  });
 
-  // Only available weapons (active and not currently out) and active members
-  // are offered for checkout. If an unavailable item is selected (e.g. via numpad),
-  // append it so the closed Select still renders its label.
-  const weaponData = (weapons.data ?? [])
-    .filter((w) => w.active && !outMap.has(w.uid))
-    .map((w) => ({
-      value: String(w.uid),
-      label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t),
-    }));
-  if (weaponUid != null && !weaponData.some((d) => d.value === String(weaponUid))) {
-    const w = (weapons.data ?? []).find((x) => x.uid === weaponUid);
-    if (w) weaponData.push({ value: String(w.uid), label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) });
-  }
+  const preferrerOf = (weaponUid: number) =>
+    (users.data ?? []).find((u) => u.preferredWeaponUid === weaponUid);
 
-  const userData = (users.data ?? [])
-    .filter((u) => u.active)
-    .map((u) => ({
-      value: String(u.uid),
-      label: userLabel(u.name, u.displayId, true, t),
-    }));
-  if (userUid != null && !userData.some((d) => d.value === String(userUid))) {
-    const u = (users.data ?? []).find((x) => x.uid === userUid);
-    if (u) userData.push({ value: String(u.uid), label: userLabel(u.name, u.displayId, u.active, t) });
-  }
+  const selectedWeapon = (weapons.data ?? []).find((w) => w.uid === weaponUid);
+  const selectedUser = (users.data ?? []).find((u) => u.uid === userUid);
 
-  // Resolve an entered tag (display_id) against all known weapons/members.
-  // Inactive and loaned-out items match too — the eval will surface an error state.
-  const matchId = (id: string): { uid: number; label: string } | null => {
-    if (numpad === 'weapon') {
-      const w = (weapons.data ?? []).find((x) => x.displayId === id);
-      return w ? { uid: w.uid, label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) } : null;
-    }
-    if (numpad === 'member') {
-      const u = (users.data ?? []).find((x) => x.displayId === id);
-      return u ? { uid: u.uid, label: userLabel(u.name, u.displayId, u.active, t) } : null;
-    }
-    return null;
-  };
+  // Pin data for the weapon picker: preferred from the selected member,
+  // last-used from the member-only eval (weapon deliberately null).
+  const pinEval = useQuery({
+    queryKey: ['eval', null, userUid],
+    queryFn: () => evaluateCheckout(null, userUid),
+    enabled: picker === 'weapon' && userUid != null,
+  });
 
-  // Embedded notices — attached directly to the relevant Select instead of free-floating banners.
+  // Embedded notices — attached directly to the relevant field instead of free-floating banners.
   const weaponError: string | undefined = (() => {
     if (!ev) return undefined;
     if (ev.weaponInactive) {
@@ -181,14 +174,30 @@ export function CheckoutPage() {
       ? t('banner_debt', { amount: ev.userOutstandingDebtKr })
       : undefined;
 
-  // Drive the existing change handlers so autopopulate + eval behave like a dropdown pick.
-  const onNumpadSubmit = (id: string) => {
-    const m = matchId(id);
-    if (!m) return;
-    if (numpad === 'weapon') onWeaponChange(String(m.uid));
-    else onMemberChange(String(m.uid));
-    setNumpad(null);
-  };
+  // Member's favorite weapon is currently out — informational, shown whenever
+  // the member is selected (autofill already fell back to last-used).
+  const favoriteOut = (() => {
+    const prefUid = selectedUser?.preferredWeaponUid;
+    if (prefUid == null) return null;
+    const o = (open.data ?? []).find((x) => x.weaponUid === prefUid);
+    if (!o) return null;
+    if (o.userUid === userUid) return null;
+    const w = (weapons.data ?? []).find((x) => x.uid === prefUid);
+    if (!w) return null;
+    return t('banner_favorite_out', {
+      member: selectedUser!.name,
+      weapon: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t),
+      holder: userLabel(o.userName, o.userDisplayId, o.userActive, t),
+    });
+  })();
+
+  // Chosen weapon is another member's favorite — informational, never blocks.
+  const weaponFavoriteNote = (() => {
+    if (weaponUid == null) return undefined;
+    const p = preferrerOf(weaponUid);
+    if (!p || p.uid === userUid) return undefined;
+    return t('banner_weapon_is_favorite', { name: p.name });
+  })();
 
   const matchCheckin = (id: string): React.ReactNode | null => {
     const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
@@ -225,46 +234,66 @@ export function CheckoutPage() {
 
           <Stack gap={4}>
             <Group align="flex-end" gap="xs" wrap="nowrap">
-              <Select
-                label={t('field_member')}
-                placeholder={t('select_member_ph')}
-                data={userData}
-                value={userUid != null ? String(userUid) : null}
-                onChange={onMemberChange}
-                searchable
-                clearable
-                style={{ flex: 1 }}
-                error={!!memberError}
-              />
-              <Tooltip label={t('enter_id')}>
-                <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('member')}>
-                  ⌨
+              <Input.Wrapper label={t('field_member')} style={{ flex: 1 }}>
+                <Button
+                  fullWidth
+                  variant="default"
+                  justify="space-between"
+                  rightSection="▾"
+                  onClick={() => setPicker('member')}
+                  styles={memberError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
+                  c={selectedUser ? undefined : 'dimmed'}
+                >
+                  {selectedUser
+                    ? userLabel(selectedUser.name, selectedUser.displayId, selectedUser.active, t)
+                    : t('select_member_ph')}
                 </Button>
-              </Tooltip>
+              </Input.Wrapper>
+              {userUid != null && (
+                <CloseButton
+                  size="lg"
+                  aria-label={t('clear_selection')}
+                  onClick={() => setUserUid(null)}
+                />
+              )}
             </Group>
             {memberDescription && <Text fz="xs" c="orange.7">{memberDescription}</Text>}
             {memberError && <Text fz="xs" c="red">{memberError}</Text>}
           </Stack>
           <Stack gap={4}>
             <Group align="flex-end" gap="xs" wrap="nowrap">
-              <Select
-                label={t('field_weapon')}
-                placeholder={t('select_weapon_ph')}
-                data={weaponData}
-                value={weaponUid != null ? String(weaponUid) : null}
-                onChange={onWeaponChange}
-                searchable
-                clearable
-                style={{ flex: 1 }}
-                error={!!weaponError}
-              />
-              <Tooltip label={t('enter_id')}>
-                <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('weapon')}>
-                  ⌨
+              <Input.Wrapper label={t('field_weapon')} style={{ flex: 1 }}>
+                <Button
+                  fullWidth
+                  variant="default"
+                  justify="space-between"
+                  rightSection="▾"
+                  onClick={() => setPicker('weapon')}
+                  styles={weaponError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
+                  c={selectedWeapon ? undefined : 'dimmed'}
+                >
+                  {selectedWeapon
+                    ? weaponLabel(
+                        selectedWeapon.brand,
+                        selectedWeapon.model,
+                        selectedWeapon.caliber,
+                        selectedWeapon.displayId,
+                        selectedWeapon.active,
+                        t,
+                      )
+                    : t('select_weapon_ph')}
                 </Button>
-              </Tooltip>
+              </Input.Wrapper>
+              {weaponUid != null && (
+                <CloseButton
+                  size="lg"
+                  aria-label={t('clear_selection')}
+                  onClick={() => setWeaponUid(null)}
+                />
+              )}
             </Group>
             {weaponDescription && <Text fz="xs" c="orange.7">{weaponDescription}</Text>}
+            {weaponFavoriteNote && <Text fz="xs" c="orange.7">{weaponFavoriteNote}</Text>}
             {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
           </Stack>
 
@@ -280,6 +309,21 @@ export function CheckoutPage() {
               })}
             </Alert>
           )}
+          {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
+            <Alert color="orange">
+              {t('banner_suggested_weapon_out', {
+                label: weaponLabel(
+                  ev.suggestedWeaponBrand,
+                  ev.suggestedWeaponModel,
+                  ev.suggestedWeaponCaliber,
+                  ev.suggestedWeaponDisplayId,
+                  ev.suggestedWeaponActive,
+                  t,
+                ),
+              })}
+            </Alert>
+          )}
+          {favoriteOut && <Alert color="orange">{favoriteOut}</Alert>}
 
           <TextInput
             label={t('field_checkout_notes')}
@@ -310,7 +354,11 @@ export function CheckoutPage() {
           {(open.data?.length ?? 0) === 0 ? (
             <Text c="dimmed">{t('no_open_checkouts')}</Text>
           ) : (
-            (open.data ?? []).map((o) => (
+            // List scrolls inside the card; title + fast check-in stay put.
+            // ponytail: 240px ≈ shell header + card chrome — tune at live-smoke if clipped.
+            <ScrollArea.Autosize mah="calc(100vh - 240px)" type="auto">
+              <Stack gap="sm">
+                {(open.data ?? []).map((o) => (
               <Card key={o.id} withBorder padding="sm">
                 <Group justify="space-between" wrap="nowrap">
                   <Stack gap={2}>
@@ -325,30 +373,63 @@ export function CheckoutPage() {
                     </Text>
                   </Stack>
                   <Group gap="xs" wrap="nowrap">
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      onClick={() =>
-                        setDebtUser({
-                          uid: o.userUid,
-                          name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
-                        })
-                      }
-                    >
-                      {t('add_debt')}
-                    </Button>
-                    <Button
-                      variant="light"
-                      color="teal"
-                      loading={checkinMut.isPending}
-                      onClick={() => checkinMut.mutate(o.id)}
-                    >
-                      {t('return_weapon')}
-                    </Button>
+                    {(() => {
+                      const p = preferrerOf(o.weaponUid);
+                      if (p && p.uid !== o.userUid) return null; // another member's favorite
+                      const mine = p != null;
+                      return (
+                        <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
+                          <ActionIcon
+                            variant={mine ? 'light' : 'subtle'}
+                            color="yellow"
+                            size="lg"
+                            aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
+                            onClick={() =>
+                              favMut.mutate({
+                                userUid: o.userUid,
+                                weaponUid: mine ? null : o.weaponUid,
+                              })
+                            }
+                          >
+                            {mine ? '★' : '☆'}
+                          </ActionIcon>
+                        </Tooltip>
+                      );
+                    })()}
+                    <Tooltip label={t('add_debt')}>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="lg"
+                        aria-label={t('add_debt')}
+                        onClick={() =>
+                          setDebtUser({
+                            uid: o.userUid,
+                            name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
+                          })
+                        }
+                      >
+                        <IconCoins />
+                      </ActionIcon>
+                    </Tooltip>
+                    <Tooltip label={t('return_weapon')}>
+                      <ActionIcon
+                        variant="light"
+                        color="teal"
+                        size="lg"
+                        aria-label={t('return_weapon')}
+                        loading={checkinMut.isPending}
+                        onClick={() => checkinMut.mutate(o.id)}
+                      >
+                        <IconArrowBackUp />
+                      </ActionIcon>
+                    </Tooltip>
                   </Group>
                 </Group>
               </Card>
-            ))
+                ))}
+              </Stack>
+            </ScrollArea.Autosize>
           )}
         </Stack>
       </Card>
@@ -360,12 +441,27 @@ export function CheckoutPage() {
         onClose={() => setDebtUser(null)}
       />
 
-      <IdNumpadModal
-        opened={numpad != null}
-        title={numpad === 'member' ? t('field_member') : t('field_weapon')}
-        match={(id) => matchId(id)?.label ?? null}
-        onClose={() => setNumpad(null)}
-        onSubmit={onNumpadSubmit}
+      <MemberPickerModal
+        opened={picker === 'member'}
+        onClose={() => setPicker(null)}
+        onSelect={(uid) => {
+          setPicker(null);
+          onMemberChange(uid);
+        }}
+      />
+
+      <WeaponPickerModal
+        opened={picker === 'weapon'}
+        onClose={() => setPicker(null)}
+        onSelect={(uid) => {
+          setPicker(null);
+          onWeaponChange(uid);
+        }}
+        availableOnly
+        pinned={{
+          preferredUid: selectedUser?.preferredWeaponUid,
+          lastUid: pinEval.data?.lastWeaponUid,
+        }}
       />
 
       <IdNumpadModal
@@ -373,6 +469,7 @@ export function CheckoutPage() {
         title={t('fast_checkin')}
         match={matchCheckin}
         confirmLabel={t('return_weapon')}
+        placeholder={t('enter_weapon_id')}
         onClose={() => setFastCheckinOpen(false)}
         onSubmit={onFastCheckinSubmit}
       />
