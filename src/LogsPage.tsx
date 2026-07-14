@@ -165,20 +165,20 @@ export function LogsPage() {
         // ponytail: offset ≈ shell header + title + filter row — tune at live-smoke if clipped.
         <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 300px)">
           <Table striped highlightOnHover stickyHeader>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('label_checked_out_at')}</Table.Th>
-              <Table.Th>{t('field_weapon')}</Table.Th>
-              <Table.Th>{t('field_member')}</Table.Th>
-              <Table.Th>{t('operator_out')}</Table.Th>
-              <Table.Th>{t('label_checked_in_at')}</Table.Th>
-              <Table.Th>{t('operator_in')}</Table.Th>
-              <Table.Th>{t('field_checkout_notes')}</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>{rows}</Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t('label_checked_out_at')}</Table.Th>
+                <Table.Th>{t('field_weapon')}</Table.Th>
+                <Table.Th>{t('field_member')}</Table.Th>
+                <Table.Th>{t('operator_out')}</Table.Th>
+                <Table.Th>{t('label_checked_in_at')}</Table.Th>
+                <Table.Th>{t('operator_in')}</Table.Th>
+                <Table.Th>{t('field_checkout_notes')}</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>{rows}</Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       <MemberInfoModal

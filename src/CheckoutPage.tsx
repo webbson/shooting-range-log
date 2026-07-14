@@ -276,82 +276,82 @@ export function CheckoutPage() {
             <ScrollArea.Autosize mah="calc(100vh - 240px)" type="auto">
               <Stack gap="sm">
                 {(open.data ?? []).map((o) => (
-              <Card key={o.id} withBorder padding="sm">
-                <Group justify="space-between" wrap="nowrap">
-                  <Stack gap={2}>
-                    <Text
-                      fw={600}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setInfoWeapon(o.weaponUid)}
-                    >
-                      {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
-                    </Text>
-                    <Text
-                      size="sm"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setInfoMember(o.userUid)}
-                    >
-                      {userLabel(o.userName, o.userDisplayId, o.userActive, t)}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
-                    </Text>
-                  </Stack>
-                  <Group gap="xs" wrap="nowrap">
-                    {(() => {
-                      const p = preferrerOf(o.weaponUid);
-                      if (p && p.uid !== o.userUid) return null; // another member's favorite
-                      const mine = p != null;
-                      return (
-                        <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
+                  <Card key={o.id} withBorder padding="sm">
+                    <Group justify="space-between" wrap="nowrap">
+                      <Stack gap={2}>
+                        <Text
+                          fw={600}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setInfoWeapon(o.weaponUid)}
+                        >
+                          {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
+                        </Text>
+                        <Text
+                          size="sm"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setInfoMember(o.userUid)}
+                        >
+                          {userLabel(o.userName, o.userDisplayId, o.userActive, t)}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
+                        </Text>
+                      </Stack>
+                      <Group gap="xs" wrap="nowrap">
+                        {(() => {
+                          const p = preferrerOf(o.weaponUid);
+                          if (p && p.uid !== o.userUid) return null; // another member's favorite
+                          const mine = p != null;
+                          return (
+                            <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
+                              <ActionIcon
+                                variant={mine ? 'light' : 'subtle'}
+                                color="yellow"
+                                size="lg"
+                                aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
+                                onClick={() =>
+                                  favMut.mutate({
+                                    userUid: o.userUid,
+                                    weaponUid: mine ? null : o.weaponUid,
+                                  })
+                                }
+                              >
+                                {mine ? '★' : '☆'}
+                              </ActionIcon>
+                            </Tooltip>
+                          );
+                        })()}
+                        <Tooltip label={t('add_debt')}>
                           <ActionIcon
-                            variant={mine ? 'light' : 'subtle'}
-                            color="yellow"
+                            variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
+                            color="red"
                             size="lg"
-                            aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
+                            aria-label={t('add_debt')}
                             onClick={() =>
-                              favMut.mutate({
-                                userUid: o.userUid,
-                                weaponUid: mine ? null : o.weaponUid,
+                              setDebtUser({
+                                uid: o.userUid,
+                                name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
                               })
                             }
                           >
-                            {mine ? '★' : '☆'}
+                            <IconCoins />
                           </ActionIcon>
                         </Tooltip>
-                      );
-                    })()}
-                    <Tooltip label={t('add_debt')}>
-                      <ActionIcon
-                        variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
-                        color="red"
-                        size="lg"
-                        aria-label={t('add_debt')}
-                        onClick={() =>
-                          setDebtUser({
-                            uid: o.userUid,
-                            name: userLabel(o.userName, o.userDisplayId, o.userActive, t),
-                          })
-                        }
-                      >
-                        <IconCoins />
-                      </ActionIcon>
-                    </Tooltip>
-                    <Tooltip label={t('return_weapon')}>
-                      <ActionIcon
-                        variant="light"
-                        color="teal"
-                        size="lg"
-                        aria-label={t('return_weapon')}
-                        loading={checkinMut.isPending}
-                        onClick={() => checkinMut.mutate(o.id)}
-                      >
-                        <IconArrowBackUp />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                </Group>
-              </Card>
+                        <Tooltip label={t('return_weapon')}>
+                          <ActionIcon
+                            variant="light"
+                            color="teal"
+                            size="lg"
+                            aria-label={t('return_weapon')}
+                            loading={checkinMut.isPending}
+                            onClick={() => checkinMut.mutate(o.id)}
+                          >
+                            <IconArrowBackUp />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Group>
+                  </Card>
                 ))}
               </Stack>
             </ScrollArea.Autosize>
