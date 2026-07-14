@@ -20,7 +20,15 @@ import { WeaponsPage } from './WeaponsPage';
 import { LogsPage } from './LogsPage';
 import { SettingsPage } from './SettingsPage';
 
-const queryClient = new QueryClient();
+// Tauri invoke is IPC, not HTTP — never pause queries/mutations on
+// navigator.onLine (default networkMode 'online' froze refetches when the
+// WebView thought it was offline, leaving the open-checkouts list stale).
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { networkMode: 'always' },
+    mutations: { networkMode: 'always' },
+  },
+});
 
 export default function App() {
   return (
