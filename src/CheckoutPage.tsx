@@ -5,11 +5,11 @@ import {
   Group,
   Title,
   Text,
-  Select,
+  Input,
+  CloseButton,
   TextInput,
   Button,
   Alert,
-  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,6 +29,8 @@ import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
 import { DebtModal } from './DebtModal';
 import { IdNumpadModal } from './IdNumpadModal';
+import { WeaponPickerModal } from './WeaponPickerModal';
+import { MemberPickerModal } from './MemberPickerModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -39,8 +41,8 @@ export function CheckoutPage() {
   const [userUid, setUserUid] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [debtUser, setDebtUser] = useState<{ uid: number; name: string } | null>(null);
-  // Numpad ID entry (touch alternative to the dropdowns).
-  const [numpad, setNumpad] = useState<'weapon' | 'member' | null>(null);
+  // Which picker modal is open (replaces the old per-field numpad entry).
+  const [picker, setPicker] = useState<'weapon' | 'member' | null>(null);
   const [fastCheckinOpen, setFastCheckinOpen] = useState(false);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
@@ -58,8 +60,7 @@ export function CheckoutPage() {
   // manual clear sticks instead of being re-filled. We skip autofill when the
   // suggested counterpart is unavailable (busy member / weapon already out);
   // the reactive eval below surfaces a warning banner for that case.
-  const onWeaponChange = async (v: string | null) => {
-    const wid = v ? Number(v) : null;
+  const onWeaponChange = async (wid: number | null) => {
     setWeaponUid(wid);
     if (wid != null && userUid == null) {
       const e = await evaluateCheckout(wid, null);
@@ -67,12 +68,12 @@ export function CheckoutPage() {
     }
   };
 
-  const onMemberChange = async (v: string | null) => {
-    const uid = v ? Number(v) : null;
+  const onMemberChange = async (uid: number | null) => {
     setUserUid(uid);
     if (uid != null) {
       const e = await evaluateCheckout(null, uid);
-      if (e.suggestedWeaponUid != null) setWeaponUid(e.suggestedWeaponUid);
+      if (e.suggestedWeaponUid != null && !e.suggestedWeaponOut)
+        setWeaponUid(e.suggestedWeaponUid);
     }
   };
 
@@ -106,50 +107,18 @@ export function CheckoutPage() {
     onError,
   });
 
-  const outMap = new Map(
-    (open.data ?? []).map((o) => [o.weaponUid, o.userName ?? ''] as const),
-  );
+  const selectedWeapon = (weapons.data ?? []).find((w) => w.uid === weaponUid);
+  const selectedUser = (users.data ?? []).find((u) => u.uid === userUid);
 
-  // Only available weapons (active and not currently out) and active members
-  // are offered for checkout. If an unavailable item is selected (e.g. via numpad),
-  // append it so the closed Select still renders its label.
-  const weaponData = (weapons.data ?? [])
-    .filter((w) => w.active && !outMap.has(w.uid))
-    .map((w) => ({
-      value: String(w.uid),
-      label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t),
-    }));
-  if (weaponUid != null && !weaponData.some((d) => d.value === String(weaponUid))) {
-    const w = (weapons.data ?? []).find((x) => x.uid === weaponUid);
-    if (w) weaponData.push({ value: String(w.uid), label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) });
-  }
+  // Pin data for the weapon picker: preferred from the selected member,
+  // last-used from the member-only eval (weapon deliberately null).
+  const pinEval = useQuery({
+    queryKey: ['eval', null, userUid],
+    queryFn: () => evaluateCheckout(null, userUid),
+    enabled: picker === 'weapon' && userUid != null,
+  });
 
-  const userData = (users.data ?? [])
-    .filter((u) => u.active)
-    .map((u) => ({
-      value: String(u.uid),
-      label: userLabel(u.name, u.displayId, true, t),
-    }));
-  if (userUid != null && !userData.some((d) => d.value === String(userUid))) {
-    const u = (users.data ?? []).find((x) => x.uid === userUid);
-    if (u) userData.push({ value: String(u.uid), label: userLabel(u.name, u.displayId, u.active, t) });
-  }
-
-  // Resolve an entered tag (display_id) against all known weapons/members.
-  // Inactive and loaned-out items match too — the eval will surface an error state.
-  const matchId = (id: string): { uid: number; label: string } | null => {
-    if (numpad === 'weapon') {
-      const w = (weapons.data ?? []).find((x) => x.displayId === id);
-      return w ? { uid: w.uid, label: weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) } : null;
-    }
-    if (numpad === 'member') {
-      const u = (users.data ?? []).find((x) => x.displayId === id);
-      return u ? { uid: u.uid, label: userLabel(u.name, u.displayId, u.active, t) } : null;
-    }
-    return null;
-  };
-
-  // Embedded notices — attached directly to the relevant Select instead of free-floating banners.
+  // Embedded notices — attached directly to the relevant field instead of free-floating banners.
   const weaponError: string | undefined = (() => {
     if (!ev) return undefined;
     if (ev.weaponInactive) {
@@ -180,15 +149,6 @@ export function CheckoutPage() {
     userUid != null && ev != null && ev.userOutstandingDebtKr > 0
       ? t('banner_debt', { amount: ev.userOutstandingDebtKr })
       : undefined;
-
-  // Drive the existing change handlers so autopopulate + eval behave like a dropdown pick.
-  const onNumpadSubmit = (id: string) => {
-    const m = matchId(id);
-    if (!m) return;
-    if (numpad === 'weapon') onWeaponChange(String(m.uid));
-    else onMemberChange(String(m.uid));
-    setNumpad(null);
-  };
 
   const matchCheckin = (id: string): React.ReactNode | null => {
     const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
@@ -225,44 +185,63 @@ export function CheckoutPage() {
 
           <Stack gap={4}>
             <Group align="flex-end" gap="xs" wrap="nowrap">
-              <Select
-                label={t('field_member')}
-                placeholder={t('select_member_ph')}
-                data={userData}
-                value={userUid != null ? String(userUid) : null}
-                onChange={onMemberChange}
-                searchable
-                clearable
-                style={{ flex: 1 }}
-                error={!!memberError}
-              />
-              <Tooltip label={t('enter_id')}>
-                <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('member')}>
-                  ⌨
+              <Input.Wrapper label={t('field_member')} style={{ flex: 1 }}>
+                <Button
+                  fullWidth
+                  variant="default"
+                  justify="space-between"
+                  rightSection="▾"
+                  onClick={() => setPicker('member')}
+                  styles={memberError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
+                  c={selectedUser ? undefined : 'dimmed'}
+                >
+                  {selectedUser
+                    ? userLabel(selectedUser.name, selectedUser.displayId, selectedUser.active, t)
+                    : t('select_member_ph')}
                 </Button>
-              </Tooltip>
+              </Input.Wrapper>
+              {userUid != null && (
+                <CloseButton
+                  size="lg"
+                  aria-label={t('clear_selection')}
+                  onClick={() => setUserUid(null)}
+                />
+              )}
             </Group>
             {memberDescription && <Text fz="xs" c="orange.7">{memberDescription}</Text>}
             {memberError && <Text fz="xs" c="red">{memberError}</Text>}
           </Stack>
           <Stack gap={4}>
             <Group align="flex-end" gap="xs" wrap="nowrap">
-              <Select
-                label={t('field_weapon')}
-                placeholder={t('select_weapon_ph')}
-                data={weaponData}
-                value={weaponUid != null ? String(weaponUid) : null}
-                onChange={onWeaponChange}
-                searchable
-                clearable
-                style={{ flex: 1 }}
-                error={!!weaponError}
-              />
-              <Tooltip label={t('enter_id')}>
-                <Button variant="default" fz={26} px="md" aria-label={t('enter_id')} onClick={() => setNumpad('weapon')}>
-                  ⌨
+              <Input.Wrapper label={t('field_weapon')} style={{ flex: 1 }}>
+                <Button
+                  fullWidth
+                  variant="default"
+                  justify="space-between"
+                  rightSection="▾"
+                  onClick={() => setPicker('weapon')}
+                  styles={weaponError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
+                  c={selectedWeapon ? undefined : 'dimmed'}
+                >
+                  {selectedWeapon
+                    ? weaponLabel(
+                        selectedWeapon.brand,
+                        selectedWeapon.model,
+                        selectedWeapon.caliber,
+                        selectedWeapon.displayId,
+                        selectedWeapon.active,
+                        t,
+                      )
+                    : t('select_weapon_ph')}
                 </Button>
-              </Tooltip>
+              </Input.Wrapper>
+              {weaponUid != null && (
+                <CloseButton
+                  size="lg"
+                  aria-label={t('clear_selection')}
+                  onClick={() => setWeaponUid(null)}
+                />
+              )}
             </Group>
             {weaponDescription && <Text fz="xs" c="orange.7">{weaponDescription}</Text>}
             {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
@@ -360,12 +339,27 @@ export function CheckoutPage() {
         onClose={() => setDebtUser(null)}
       />
 
-      <IdNumpadModal
-        opened={numpad != null}
-        title={numpad === 'member' ? t('field_member') : t('field_weapon')}
-        match={(id) => matchId(id)?.label ?? null}
-        onClose={() => setNumpad(null)}
-        onSubmit={onNumpadSubmit}
+      <MemberPickerModal
+        opened={picker === 'member'}
+        onClose={() => setPicker(null)}
+        onSelect={(uid) => {
+          setPicker(null);
+          onMemberChange(uid);
+        }}
+      />
+
+      <WeaponPickerModal
+        opened={picker === 'weapon'}
+        onClose={() => setPicker(null)}
+        onSelect={(uid) => {
+          setPicker(null);
+          onWeaponChange(uid);
+        }}
+        availableOnly
+        pinned={{
+          preferredUid: selectedUser?.preferredWeaponUid,
+          lastUid: pinEval.data?.lastWeaponUid,
+        }}
       />
 
       <IdNumpadModal
