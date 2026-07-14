@@ -277,6 +277,20 @@ export function CheckoutPage() {
               })}
             </Alert>
           )}
+          {userUid != null && weaponUid == null && ev?.suggestedWeaponOut && (
+            <Alert color="orange">
+              {t('banner_suggested_weapon_out', {
+                label: weaponLabel(
+                  ev.suggestedWeaponBrand,
+                  ev.suggestedWeaponModel,
+                  ev.suggestedWeaponCaliber,
+                  ev.suggestedWeaponDisplayId,
+                  ev.suggestedWeaponActive,
+                  t,
+                ),
+              })}
+            </Alert>
+          )}
 
           <TextInput
             label={t('field_checkout_notes')}
