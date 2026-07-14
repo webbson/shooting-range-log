@@ -279,7 +279,7 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
                 warnings.push(ImportWarning {
                     row: row_num,
                     code: "warn_junk_cell".into(),
-                    message: format!("Row {row_num}: non-numeric value '{v}' ignored"),
+                    message: format!("Row {row_num}: non-numeric value '{v}' in vapen column ignored"),
                 });
                 None
             }
@@ -774,15 +774,19 @@ fn execute(
         if existing_pref.is_some() {
             continue;
         }
-        if let Err(_) = user_set_preferred_weapon(&tx, user_uid, Some(weapon_uid)) {
-            warnings.push(ImportWarning {
-                row: m.row,
-                code: "warn_favorite_conflict".into(),
-                message: format!(
-                    "Row {}: favorite weapon {no} already belongs to another member — skipped",
-                    m.row
-                ),
-            });
+        match user_set_preferred_weapon(&tx, user_uid, Some(weapon_uid)) {
+            Ok(_) => {}
+            Err(e) if e.code == "err_weapon_already_preferred" => {
+                warnings.push(ImportWarning {
+                    row: m.row,
+                    code: "warn_favorite_conflict".into(),
+                    message: format!(
+                        "Row {}: favorite weapon {no} already belongs to another member — skipped",
+                        m.row
+                    ),
+                });
+            }
+            Err(e) => return Err(e),
         }
     }
 
