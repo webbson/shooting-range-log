@@ -55,7 +55,14 @@ export function CheckoutPage() {
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
-  const open = useQuery({ queryKey: ['openCheckouts'], queryFn: listOpenCheckouts });
+  const open = useQuery({
+    queryKey: ['openCheckouts'],
+    queryFn: listOpenCheckouts,
+    // Self-heal: intermittent stale list after a return was seen at live-smoke
+    // but never reproduced under investigation (see BACKLOG). Periodic refetch
+    // bounds any staleness at 30s; a local SELECT every 30s is free.
+    refetchInterval: 30_000,
+  });
   const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
   const debtMap = new Map((debts.data ?? []).map((d) => [d.userUid, d.amountKr] as const));
 
