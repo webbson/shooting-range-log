@@ -2,6 +2,7 @@ import '@mantine/core/styles.css';
 // ‼️ notifications styles must be imported after core styles
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
+import './global.css';
 import 'dayjs/locale/sv';
 
 import { ColorSchemeScript, MantineProvider } from '@mantine/core';
