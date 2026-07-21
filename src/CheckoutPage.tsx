@@ -2,20 +2,30 @@ import {
   Card,
   Stack,
   Group,
-  Title,
+  SimpleGrid,
   Text,
-  Input,
   TextInput,
   Button,
+  Badge,
 } from '@mantine/core';
+import { IconUser, IconTargetArrow } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { listUsers, listWeapons, evaluateCheckout, doCheckout } from './api';
+import {
+  listUsers,
+  listWeapons,
+  evaluateCheckout,
+  doCheckout,
+  lastShotDates,
+  outstandingDebts,
+  activeTagKeys,
+} from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
 import { userLabel, weaponLabel } from './labels';
+import { fmtDate } from './format';
 import { WeaponPickerModal } from './WeaponPickerModal';
 import { MemberPickerModal } from './MemberPickerModal';
 import { GuestModal } from './GuestModal';
@@ -34,6 +44,10 @@ export function CheckoutPage() {
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
+  const shots = useQuery({ queryKey: ['lastShotDates'], queryFn: lastShotDates });
+  const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
+  const lastMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
+  const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
 
   const evalQ = useQuery({
     queryKey: ['eval', weaponUid, userUid],
@@ -112,89 +126,142 @@ export function CheckoutPage() {
       : undefined;
 
   return (
-    <Card withBorder padding="lg" maw={560} mx="auto">
-      <Stack>
-        <Title order={3}>{t('checkout_new')}</Title>
-
+    <Stack>
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
         <Stack gap={4}>
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Input.Wrapper label={t('field_member')} style={{ flex: 1 }}>
-              <Button
-                fullWidth
-                variant="default"
-                justify="space-between"
-                rightSection="▾"
-                onClick={() => setPicker('member')}
-                styles={memberError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
-                c={selectedUser ? undefined : 'dimmed'}
-              >
-                {selectedUser
-                  ? userLabel(
-                      selectedUser.name,
-                      selectedUser.displayId,
-                      selectedUser.active,
-                      t,
-                      selectedUser.isGuest,
-                    )
-                  : t('select_member_ph')}
-              </Button>
-            </Input.Wrapper>
+          <Group justify="space-between">
+            <Text fw={600}>{t('field_member')}</Text>
             <Button variant="default" onClick={() => setGuestOpen(true)}>
               {t('guest_button')}
             </Button>
           </Group>
-          {memberError && <Text fz="xs" c="red">{memberError}</Text>}
+          <Card
+            withBorder
+            padding="lg"
+            mih={140}
+            onClick={() => setPicker('member')}
+            style={{
+              cursor: 'pointer',
+              ...(selectedUser
+                ? {}
+                : { borderStyle: 'dashed' }),
+              ...(memberError ? { borderColor: 'var(--mantine-color-red-6)' } : {}),
+            }}
+          >
+            {selectedUser ? (
+              <Stack gap={4} justify="center" h="100%">
+                <Text fz="xl" fw={600}>
+                  {userLabel(
+                    selectedUser.name,
+                    selectedUser.displayId,
+                    selectedUser.active,
+                    t,
+                    selectedUser.isGuest,
+                  )}
+                </Text>
+                {lastMap.has(selectedUser.uid) && (
+                  <Text size="sm" c="dimmed">
+                    {t('field_last_shot')}: {fmtDate(lastMap.get(selectedUser.uid)!)}
+                  </Text>
+                )}
+                {debtMap.has(selectedUser.uid) && (
+                  <Badge color="red" variant="filled">
+                    {t('debt_badge', { amount: debtMap.get(selectedUser.uid) })}
+                  </Badge>
+                )}
+                {memberError && (
+                  <Text fz="sm" c="red">
+                    {memberError}
+                  </Text>
+                )}
+              </Stack>
+            ) : (
+              <Stack align="center" justify="center" h="100%" gap={4} c="dimmed">
+                <IconUser size={32} />
+                <Text>{t('select_member_ph')}</Text>
+              </Stack>
+            )}
+          </Card>
         </Stack>
+
         <Stack gap={4}>
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Input.Wrapper label={t('field_weapon')} style={{ flex: 1 }}>
-              <Button
-                fullWidth
-                variant="default"
-                justify="space-between"
-                rightSection="▾"
-                disabled={userUid == null}
-                onClick={() => setPicker('weapon')}
-                styles={weaponError ? { root: { borderColor: 'var(--mantine-color-red-6)' } } : undefined}
-                c={selectedWeapon ? undefined : 'dimmed'}
-              >
-                {selectedWeapon
-                  ? weaponLabel(
-                      selectedWeapon.brand,
-                      selectedWeapon.model,
-                      selectedWeapon.caliber,
-                      selectedWeapon.displayId,
-                      selectedWeapon.active,
-                      t,
-                    )
-                  : t('select_weapon_ph')}
-              </Button>
-            </Input.Wrapper>
-          </Group>
-          {userUid == null && (
-            <Text fz="xs" c="dimmed">
-              {t('choose_member_first')}
-            </Text>
-          )}
-          {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
-          {weaponWarning && <Text fz="xs" c="orange">{weaponWarning}</Text>}
+          <Text fw={600}>{t('field_weapon')}</Text>
+          <Card
+            withBorder
+            padding="lg"
+            mih={140}
+            opacity={userUid == null ? 0.5 : 1}
+            onClick={userUid == null ? undefined : () => setPicker('weapon')}
+            style={{
+              cursor: userUid == null ? 'default' : 'pointer',
+              ...(selectedWeapon
+                ? {}
+                : { borderStyle: 'dashed' }),
+              ...(weaponError ? { borderColor: 'var(--mantine-color-red-6)' } : {}),
+            }}
+          >
+            {userUid == null ? (
+              <Stack align="center" justify="center" h="100%" gap={4} c="dimmed">
+                <Text>{t('choose_member_first')}</Text>
+              </Stack>
+            ) : selectedWeapon ? (
+              <Stack gap={4} justify="center" h="100%">
+                <Text fz="xl" fw={600}>
+                  {weaponLabel(
+                    selectedWeapon.brand,
+                    selectedWeapon.model,
+                    selectedWeapon.caliber,
+                    selectedWeapon.displayId,
+                    selectedWeapon.active,
+                    t,
+                  )}
+                </Text>
+                {activeTagKeys(selectedWeapon).length > 0 && (
+                  <Group gap={4}>
+                    {activeTagKeys(selectedWeapon).map((k) => (
+                      <Badge key={k} color="orange" variant="light" size="xs">
+                        {t(`tag_${k}`)}
+                      </Badge>
+                    ))}
+                  </Group>
+                )}
+                {weaponError && (
+                  <Text fz="sm" c="red">
+                    {weaponError}
+                  </Text>
+                )}
+                {weaponWarning && (
+                  <Text fz="sm" c="orange">
+                    {weaponWarning}
+                  </Text>
+                )}
+              </Stack>
+            ) : (
+              <Stack align="center" justify="center" h="100%" gap={4} c="dimmed">
+                <IconTargetArrow size={32} />
+                <Text>{t('select_weapon_ph')}</Text>
+              </Stack>
+            )}
+          </Card>
         </Stack>
+      </SimpleGrid>
 
-        <TextInput
-          label={t('field_checkout_notes')}
-          value={notes}
-          onChange={(e) => setNotes(e.currentTarget.value)}
-        />
+      <TextInput
+        size="lg"
+        label={t('field_checkout_notes')}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+      />
 
-        <Button
-          size="lg"
-          disabled={!ev?.canCheckout || !operator}
-          loading={checkoutMut.isPending}
-          onClick={() => checkoutMut.mutate()}
-        >
-          {t('confirm_checkout')}
-        </Button>
-      </Stack>
+      <Button
+        size="xl"
+        fullWidth
+        disabled={!ev?.canCheckout || !operator}
+        loading={checkoutMut.isPending}
+        onClick={() => checkoutMut.mutate()}
+      >
+        {t('confirm_checkout')}
+      </Button>
 
       <MemberPickerModal
         opened={picker === 'member'}
@@ -224,6 +291,6 @@ export function CheckoutPage() {
           lastUid: pinEval.data?.lastWeaponUid,
         }}
       />
-    </Card>
+    </Stack>
   );
 }
