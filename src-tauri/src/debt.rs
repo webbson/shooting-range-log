@@ -189,6 +189,7 @@ mod tests {
                 address: None,
                 ssn: None,
                 is_staff: false,
+                is_admin: false,
                 notes: None,
             },
         )

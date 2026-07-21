@@ -141,6 +141,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
                     1000 + n
                 )),
                 is_staff: i < N_STAFF,
+                is_admin: false,
                 notes: None,
             },
         )?;
