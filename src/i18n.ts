@@ -8,6 +8,7 @@ const resources = {
     translation: {
       app_title: 'Skjutbaneliggare',
       nav_checkout: 'Utlämning',
+      nav_checkin: 'Återlämning',
       nav_members: 'Medlemmar',
       nav_weapons: 'Vapen',
       nav_logs: 'Loggar',
@@ -254,6 +255,7 @@ const resources = {
     translation: {
       app_title: 'Shooting Range Log',
       nav_checkout: 'Checkout',
+      nav_checkin: 'Check-in',
       nav_members: 'Members',
       nav_weapons: 'Weapons',
       nav_logs: 'Logs',

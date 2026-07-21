@@ -15,6 +15,7 @@ import './i18n';
 import { theme } from './theme';
 import { AppLayout } from './AppLayout';
 import { CheckoutPage } from './CheckoutPage';
+import { CheckinPage } from './CheckinPage';
 import { MembersPage } from './MembersPage';
 import { WeaponsPage } from './WeaponsPage';
 import { LogsPage } from './LogsPage';
@@ -43,6 +44,7 @@ export default function App() {
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Navigate to="/checkout" replace />} />
                 <Route path="checkout" element={<CheckoutPage />} />
+                <Route path="checkin" element={<CheckinPage />} />
                 <Route path="members" element={<MembersPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />
                 <Route path="logs" element={<LogsPage />} />
