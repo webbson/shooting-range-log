@@ -245,7 +245,9 @@ export function CheckoutPage() {
               </Stack>
             ) : selectedWeapon ? (
               <Stack gap="sm" justify="center" h="100%">
-                <Group justify="space-between" wrap="nowrap" align="flex-start">
+                {/* Badges keep natural width (no shrink-ellipsis) and wrap onto
+                    new lines under the title when space runs out. */}
+                <Group justify="space-between" align="flex-start">
                   <Text fz={32} fw={700}>
                     {weaponLabel(
                       selectedWeapon.brand,
@@ -256,18 +258,18 @@ export function CheckoutPage() {
                       t,
                     )}
                   </Text>
-                  <Group gap={4} wrap="nowrap">
+                  <Group gap={4}>
                     {selectedWeapon.uid === selectedUser?.preferredWeaponUid ? (
-                      <Badge color="yellow" variant="light" size="lg">
+                      <Badge color="yellow" variant="light" size="lg" style={{ flexShrink: 0 }}>
                         ★ {t('badge_preferred')}
                       </Badge>
                     ) : otherFavorite ? (
-                      <Badge color="yellow" variant="filled" size="lg">
+                      <Badge color="yellow" variant="filled" size="lg" style={{ flexShrink: 0 }}>
                         ★ {otherFavorite.name}
                       </Badge>
                     ) : null}
                     {selectedWeapon.uid === pinEval.data?.lastWeaponUid && (
-                      <Badge color="gray" variant="light" size="lg">
+                      <Badge color="gray" variant="light" size="lg" style={{ flexShrink: 0 }}>
                         {t('badge_last')}
                       </Badge>
                     )}
