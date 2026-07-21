@@ -223,6 +223,58 @@ pub(crate) fn user_set_preferred_weapon(
     user_require(conn, user_uid)
 }
 
+/// Guest checkout entry: find an active user by SSN or create a guest.
+/// Active guest with this SSN → returned as-is (name is not overwritten).
+/// Active member with this SSN → error (use the normal member flow).
+pub(crate) fn user_upsert_guest(
+    conn: &Connection,
+    name: String,
+    ssn: String,
+) -> Result<User, AppError> {
+    let ssn = norm(Some(ssn)).ok_or_else(AppError::ssn_required)?;
+    let name = require_name(name)?;
+    let sql = format!("SELECT {USER_COLS} FROM users WHERE ssn = ?1 AND active = 1");
+    let existing = conn
+        .query_row(&sql, params![ssn], |r| User::from_row(r))
+        .optional()?;
+    if let Some(u) = existing {
+        if u.is_guest {
+            return Ok(u);
+        }
+        return Err(AppError::ssn_belongs_to_member(&u.name));
+    }
+    let now = now_utc();
+    conn.execute(
+        "INSERT INTO users (name, ssn, is_guest, active, created_at, updated_at)
+         VALUES (?1, ?2, 1, 1, ?3, ?3)",
+        params![name, ssn, now],
+    )?;
+    user_require(conn, conn.last_insert_rowid())
+}
+
+/// Admin-only in the UI: turn a guest into a normal member.
+pub(crate) fn user_promote_guest(conn: &Connection, uid: i64) -> Result<User, AppError> {
+    let u = user_require(conn, uid)?;
+    if !u.is_guest {
+        return Err(AppError::not_a_guest());
+    }
+    conn.execute(
+        "UPDATE users SET is_guest = 0, updated_at = ?2 WHERE uid = ?1",
+        params![uid, now_utc()],
+    )?;
+    user_require(conn, uid)
+}
+
+/// Bootstrap: when no active admin exists, the frontend disables admin gating.
+pub(crate) fn admin_exists(conn: &Connection) -> Result<bool, AppError> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND active = 1",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(n > 0)
+}
+
 // ---------- Weapons (inner) ----------
 
 fn weapons_list(conn: &Connection) -> Result<Vec<Weapon>, AppError> {
@@ -417,6 +469,24 @@ pub fn set_preferred_weapon(
 pub fn next_user_display_id(db: State<Db>) -> Result<String, AppError> {
     let conn = lock(&db)?;
     next_free_user_display_id(&conn)
+}
+
+#[tauri::command]
+pub fn upsert_guest(db: State<Db>, name: String, ssn: String) -> Result<User, AppError> {
+    let conn = lock(&db)?;
+    user_upsert_guest(&conn, name, ssn)
+}
+
+#[tauri::command]
+pub fn promote_guest(db: State<Db>, uid: i64) -> Result<User, AppError> {
+    let conn = lock(&db)?;
+    user_promote_guest(&conn, uid)
+}
+
+#[tauri::command]
+pub fn has_admin(db: State<Db>) -> Result<bool, AppError> {
+    let conn = lock(&db)?;
+    admin_exists(&conn)
 }
 
 #[tauri::command]
@@ -759,5 +829,56 @@ mod tests {
         let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
         assert!(!w.tag_needs_service && !w.tag_broken && !w.tag_missing_parts && !w.tag_needs_cleaning);
         assert_eq!(w.tag_comment, None);
+    }
+
+    #[test]
+    fn upsert_guest_creates_and_reuses_by_ssn() {
+        let conn = migrated_in_memory();
+        let g = user_upsert_guest(&conn, "Gunnar Gäst".into(), "19900101-1234".into()).unwrap();
+        assert!(g.is_guest);
+        assert!(g.active);
+        assert_eq!(g.display_id, None);
+        // Repeat visit: same SSN → same row, name NOT overwritten.
+        let g2 = user_upsert_guest(&conn, "Other Name".into(), "19900101-1234".into()).unwrap();
+        assert_eq!(g2.uid, g.uid);
+        assert_eq!(g2.name, "Gunnar Gäst");
+    }
+
+    #[test]
+    fn upsert_guest_rejects_member_ssn_and_requires_fields() {
+        let conn = migrated_in_memory();
+        let mut member = new_user("Anna", Some("10"), false);
+        member.ssn = Some("19850505-5555".into());
+        user_create(&conn, member).unwrap();
+        let err = user_upsert_guest(&conn, "Anna Igen".into(), "19850505-5555".into()).unwrap_err();
+        assert_eq!(err.code, "err_ssn_belongs_to_member");
+        let err = user_upsert_guest(&conn, "NoSsn".into(), "  ".into()).unwrap_err();
+        assert_eq!(err.code, "err_ssn_required");
+        let err = user_upsert_guest(&conn, " ".into(), "19900101-1234".into()).unwrap_err();
+        assert_eq!(err.code, "err_name_required");
+    }
+
+    #[test]
+    fn promote_guest_clears_flag_and_rejects_non_guests() {
+        let conn = migrated_in_memory();
+        let g = user_upsert_guest(&conn, "Gunnar".into(), "19900101-1234".into()).unwrap();
+        let m = user_promote_guest(&conn, g.uid).unwrap();
+        assert!(!m.is_guest);
+        let err = user_promote_guest(&conn, m.uid).unwrap_err();
+        assert_eq!(err.code, "err_not_a_guest");
+        let err = user_promote_guest(&conn, 9999).unwrap_err();
+        assert_eq!(err.code, "err_user_not_found");
+    }
+
+    #[test]
+    fn admin_exists_reflects_active_admins() {
+        let conn = migrated_in_memory();
+        assert!(!admin_exists(&conn).unwrap());
+        let mut nu = new_user("Boss", Some("1"), true);
+        nu.is_admin = true;
+        let boss = user_create(&conn, nu).unwrap();
+        assert!(admin_exists(&conn).unwrap());
+        user_set_active(&conn, boss.uid, false, false).unwrap();
+        assert!(!admin_exists(&conn).unwrap());
     }
 }

@@ -66,6 +66,7 @@ pub struct OpenCheckout {
     pub user_name: Option<String>,
     pub user_display_id: Option<String>,
     pub user_active: bool,
+    pub user_is_guest: bool,
     pub weapon_brand: Option<String>,
     pub weapon_model: Option<String>,
     pub weapon_serial: Option<String>,
@@ -273,7 +274,7 @@ pub(crate) fn do_checkin(
 fn list_open(conn: &Connection) -> Result<Vec<OpenCheckout>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT c.id, c.weapon_uid, c.user_uid,
-                u.name, u.display_id, u.active,
+                u.name, u.display_id, u.active, u.is_guest,
                 w.brand, w.model, w.serial, w.active,
                 c.checked_out_at, w.display_id, w.caliber
          FROM checkouts c
@@ -290,13 +291,14 @@ fn list_open(conn: &Connection) -> Result<Vec<OpenCheckout>, AppError> {
             user_name: r.get(3)?,
             user_display_id: r.get(4)?,
             user_active: r.get(5)?,
-            weapon_brand: r.get(6)?,
-            weapon_model: r.get(7)?,
-            weapon_serial: r.get(8)?,
-            weapon_active: r.get(9)?,
-            checked_out_at: r.get(10)?,
-            weapon_display_id: r.get(11)?,
-            weapon_caliber: r.get(12)?,
+            user_is_guest: r.get(6)?,
+            weapon_brand: r.get(7)?,
+            weapon_model: r.get(8)?,
+            weapon_serial: r.get(9)?,
+            weapon_active: r.get(10)?,
+            checked_out_at: r.get(11)?,
+            weapon_display_id: r.get(12)?,
+            weapon_caliber: r.get(13)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
