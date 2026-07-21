@@ -41,6 +41,7 @@ const resources = {
       active: 'Aktiv',
       inactive: 'Inaktiv',
       label_disabled: 'inaktiverad',
+      label_guest: 'gäst',
       status: 'Status',
       search: 'Sök',
       show_inactive: 'Visa inaktiva',
@@ -100,6 +101,10 @@ const resources = {
       err_checkout_not_found: 'Utlämningen hittades inte.',
       err_already_checked_in: 'Vapnet är redan återlämnat.',
       err_weapon_already_preferred: 'Vapnet är redan favoritvapen för {{name}}.',
+      err_ssn_required: 'Personnummer krävs för gäst.',
+      err_ssn_belongs_to_member:
+        'Personnumret tillhör medlemmen {{name}} — använd vanlig utlåning.',
+      err_not_a_guest: 'Användaren är inte en gäst.',
 
       // Checkout / checkin (M2)
       checkout_new: 'Ny utlämning',
@@ -281,6 +286,7 @@ const resources = {
       active: 'Active',
       inactive: 'Inactive',
       label_disabled: 'disabled',
+      label_guest: 'guest',
       status: 'Status',
       search: 'Search',
       show_inactive: 'Show inactive',
@@ -340,6 +346,10 @@ const resources = {
       err_checkout_not_found: 'Checkout not found.',
       err_already_checked_in: 'Weapon is already checked in.',
       err_weapon_already_preferred: 'Weapon is already the preferred weapon of {{name}}.',
+      err_ssn_required: 'SSN is required for a guest.',
+      err_ssn_belongs_to_member:
+        'The SSN belongs to member {{name}} — use a normal member checkout.',
+      err_not_a_guest: 'The user is not a guest.',
 
       // Checkout / checkin (M2)
       checkout_new: 'New checkout',

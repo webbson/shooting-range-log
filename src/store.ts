@@ -9,6 +9,7 @@ export type Lang = 'sv' | 'en';
 export interface Operator {
   uid: number;
   name: string;
+  isAdmin: boolean;
 }
 
 interface AppState {

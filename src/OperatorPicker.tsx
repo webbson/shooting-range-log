@@ -36,7 +36,7 @@ export function OperatorPicker() {
 
   const confirm = () => {
     const op = data?.find((o) => String(o.uid) === selected);
-    if (op) setOperator({ uid: op.uid, name: op.name });
+    if (op) setOperator({ uid: op.uid, name: op.name, isAdmin: op.isAdmin });
   };
 
   const goCreateFirst = () => {

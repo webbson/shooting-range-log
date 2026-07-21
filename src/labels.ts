@@ -9,10 +9,12 @@ export function userLabel(
   displayId: string | null,
   active: boolean,
   t: TFunction,
+  isGuest = false,
 ): string {
   const n = name ?? '';
-  if (!active) return `${n} [${t('label_disabled')}]`;
-  return displayId ? `${n} [${displayId}]` : n;
+  const guest = isGuest ? ` (${t('label_guest')})` : '';
+  if (!active) return `${n}${guest} [${t('label_disabled')}]`;
+  return displayId ? `${n}${guest} [${displayId}]` : `${n}${guest}`;
 }
 
 export function weaponLabel(
