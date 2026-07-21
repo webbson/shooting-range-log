@@ -32,6 +32,7 @@ import {
   outstandingDebts,
   lastShotDates,
   listWeapons,
+  promoteGuest,
   type User,
 } from './api';
 import { errorMessage } from './errors';
@@ -40,6 +41,7 @@ import { WeaponPickerModal } from './WeaponPickerModal';
 import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
 import { MemberInfoModal } from './MemberInfoModal';
+import { useIsAdmin } from './useIsAdmin';
 
 const SSN_RE = /^\d{8}-\d{4}$/;
 const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
@@ -71,6 +73,7 @@ const EMPTY: MemberForm = {
 export function MembersPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const isAdmin = useIsAdmin();
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [debtUser, setDebtUser] = useState<User | null>(null);
@@ -90,6 +93,7 @@ export function MembersPage() {
   // List view: active-only by default, with a search box + show-inactive toggle.
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  const [showGuests, setShowGuests] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'name',
     dir: 'asc',
@@ -181,6 +185,15 @@ export function MembersPage() {
     onError,
   });
 
+  const promoteMut = useMutation({
+    mutationFn: (uid: number) => promoteGuest(uid),
+    onSuccess: () => {
+      notifications.show({ message: t('promoted_ok') });
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError,
+  });
+
   const openCreate = () => {
     setEditing(null);
     setPrefUid(null);
@@ -223,6 +236,7 @@ export function MembersPage() {
   const q = search.trim().toLowerCase();
   const filtered = (users.data ?? []).filter((u) => {
     if (!showInactive && !u.active) return false;
+    if (!showGuests && u.isGuest) return false;
     if (!q) return true;
     return [u.displayId, u.name, u.email, u.phone].some((f) =>
       f?.toLowerCase().includes(q),
@@ -288,9 +302,26 @@ export function MembersPage() {
         </Group>
       </Table.Td>
       <Table.Td>{lastShotMap.has(u.uid) ? fmtDate(lastShotMap.get(u.uid)!) : '—'}</Table.Td>
-      <Table.Td>{u.isStaff && <Badge color="grape">{t('staff')}</Badge>}</Table.Td>
+      <Table.Td>
+        <Group gap="xs" wrap="nowrap">
+          {u.isStaff && <Badge color="grape">{t('staff')}</Badge>}
+          {u.isGuest && <Badge color="cyan">{t('label_guest')}</Badge>}
+        </Group>
+      </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="flex-end" wrap="nowrap">
+          {isAdmin && u.isGuest && (
+            <Button
+              size="xs"
+              variant="light"
+              onClick={(e) => {
+                e.stopPropagation();
+                promoteMut.mutate(u.uid);
+              }}
+            >
+              {t('promote_guest')}
+            </Button>
+          )}
           <Button
             size="xs"
             variant="subtle"
@@ -340,6 +371,13 @@ export function MembersPage() {
               checked={showInactive}
               onChange={(e) => setShowInactive(e.currentTarget.checked)}
             />
+            {isAdmin && (
+              <Switch
+                label={t('show_guests')}
+                checked={showGuests}
+                onChange={(e) => setShowGuests(e.target.checked)}
+              />
+            )}
           </Group>
           {filtered.length === 0 ? (
             <Text c="dimmed">{t('no_results')}</Text>
@@ -512,7 +550,7 @@ export function MembersPage() {
       <DebtModal
         userUid={debtUser?.uid ?? null}
         userName={
-          debtUser ? userLabel(debtUser.name, debtUser.displayId, debtUser.active, t) : ''
+          debtUser ? userLabel(debtUser.name, debtUser.displayId, debtUser.active, t, debtUser.isGuest) : ''
         }
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}

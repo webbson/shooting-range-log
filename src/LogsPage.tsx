@@ -84,7 +84,7 @@ export function LogsPage() {
         {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
       </Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoMember(c.userUid)}>
-        {userLabel(c.userName, c.userDisplayId, c.userActive, t)}
+        {userLabel(c.userName, c.userDisplayId, c.userActive, t, c.userIsGuest)}
       </Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>

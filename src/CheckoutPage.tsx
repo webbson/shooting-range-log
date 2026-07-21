@@ -18,6 +18,7 @@ import { errorMessage } from './errors';
 import { userLabel, weaponLabel } from './labels';
 import { WeaponPickerModal } from './WeaponPickerModal';
 import { MemberPickerModal } from './MemberPickerModal';
+import { GuestModal } from './GuestModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ export function CheckoutPage() {
   const [notes, setNotes] = useState('');
   // Which picker modal is open (replaces the old per-field numpad entry).
   const [picker, setPicker] = useState<'weapon' | 'member' | null>(null);
+  const [guestOpen, setGuestOpen] = useState(false);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -127,10 +129,19 @@ export function CheckoutPage() {
                 c={selectedUser ? undefined : 'dimmed'}
               >
                 {selectedUser
-                  ? userLabel(selectedUser.name, selectedUser.displayId, selectedUser.active, t)
+                  ? userLabel(
+                      selectedUser.name,
+                      selectedUser.displayId,
+                      selectedUser.active,
+                      t,
+                      selectedUser.isGuest,
+                    )
                   : t('select_member_ph')}
               </Button>
             </Input.Wrapper>
+            <Button variant="default" onClick={() => setGuestOpen(true)}>
+              {t('guest_button')}
+            </Button>
           </Group>
           {memberError && <Text fz="xs" c="red">{memberError}</Text>}
         </Stack>
@@ -192,6 +203,12 @@ export function CheckoutPage() {
           setPicker(null);
           onMemberChange(uid);
         }}
+      />
+
+      <GuestModal
+        opened={guestOpen}
+        onClose={() => setGuestOpen(false)}
+        onSelect={(uid) => onMemberChange(uid)}
       />
 
       <WeaponPickerModal

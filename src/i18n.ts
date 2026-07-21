@@ -134,6 +134,14 @@ const resources = {
       mark_favorite: 'Gör till favoritvapen',
       unmark_favorite: 'Ta bort som favoritvapen',
 
+      // Guests
+      guest_button: 'Gäst',
+      guest_checkout: 'Gästutlåning',
+      guest_continue: 'Fortsätt',
+      show_guests: 'Visa gäster',
+      promote_guest: 'Gör till medlem',
+      promoted_ok: 'Gästen är nu medlem',
+
       // Debt (M3)
       err_debt_amount_invalid: 'Skuldbeloppet måste vara större än noll.',
       err_debt_not_found: 'Skulden hittades inte.',
@@ -389,6 +397,14 @@ const resources = {
       label_checked_out_at: 'Checked out',
       mark_favorite: 'Set as favorite weapon',
       unmark_favorite: 'Remove as favorite weapon',
+
+      // Guests
+      guest_button: 'Guest',
+      guest_checkout: 'Guest checkout',
+      guest_continue: 'Continue',
+      show_guests: 'Show guests',
+      promote_guest: 'Make member',
+      promoted_ok: 'Guest is now a member',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Debt amount must be greater than zero.',
