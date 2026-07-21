@@ -1,6 +1,5 @@
 import {
   Group,
-  Title,
   Button,
   Table,
   Badge,
@@ -356,55 +355,48 @@ export function MembersPage() {
 
   return (
     <Stack>
-      <Group justify="space-between">
-        <Title order={2}>{t('nav_members')}</Title>
+      <Group>
+        <TextInput
+          placeholder={t('search')}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          style={{ flex: 1 }}
+        />
+        <Switch
+          label={t('show_inactive')}
+          checked={showInactive}
+          onChange={(e) => setShowInactive(e.currentTarget.checked)}
+        />
+        {isAdmin && (
+          <Switch
+            label={t('show_guests')}
+            checked={showGuests}
+            onChange={(e) => setShowGuests(e.target.checked)}
+          />
+        )}
         {isAdmin && <Button onClick={openCreate}>{t('new_member')}</Button>}
       </Group>
 
       {(users.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_members')}</Text>
+      ) : filtered.length === 0 ? (
+        <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        <>
-          <Group>
-            <TextInput
-              placeholder={t('search')}
-              value={search}
-              onChange={(e) => setSearch(e.currentTarget.value)}
-              style={{ flex: 1 }}
-            />
-            <Switch
-              label={t('show_inactive')}
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.currentTarget.checked)}
-            />
-            {isAdmin && (
-              <Switch
-                label={t('show_guests')}
-                checked={showGuests}
-                onChange={(e) => setShowGuests(e.target.checked)}
-              />
-            )}
-          </Group>
-          {filtered.length === 0 ? (
-            <Text c="dimmed">{t('no_results')}</Text>
-          ) : (
-            // ponytail: offset ≈ shell header + title + filters — tune at live-smoke if clipped.
-            <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 300px)">
-              <Table striped highlightOnHover stickyHeader>
-                <Table.Thead>
-                  <Table.Tr>
-                    <SortTh label={t('field_display_id')} k="id" />
-                    <SortTh label={t('field_name')} k="name" />
-                    <SortTh label={t('field_last_shot')} k="lastShot" />
-                    <Table.Th />
-                    <Table.Th />
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>{rows}</Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          )}
-        </>
+        // ponytail: offset ≈ shell header + filters — tune at live-smoke if clipped.
+        <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 300px)">
+          <Table striped highlightOnHover stickyHeader>
+            <Table.Thead>
+              <Table.Tr>
+                <SortTh label={t('field_display_id')} k="id" />
+                <SortTh label={t('field_name')} k="name" />
+                <SortTh label={t('field_last_shot')} k="lastShot" />
+                <Table.Th />
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>{rows}</Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {/* Create / edit */}
