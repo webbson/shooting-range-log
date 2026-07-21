@@ -138,7 +138,9 @@ const resources = {
       guest_button: 'Gäst',
       guest_checkout: 'Gästutlåning',
       guest_continue: 'Fortsätt',
-      show_guests: 'Visa gäster',
+      filter_active: 'Aktiva',
+      filter_inactive: 'Inaktiva',
+      filter_guests: 'Gäster',
       promote_guest: 'Gör till medlem',
       promoted_ok: 'Gästen är nu medlem',
 
@@ -402,7 +404,9 @@ const resources = {
       guest_button: 'Guest',
       guest_checkout: 'Guest checkout',
       guest_continue: 'Continue',
-      show_guests: 'Show guests',
+      filter_active: 'Active',
+      filter_inactive: 'Inactive',
+      filter_guests: 'Guests',
       promote_guest: 'Make member',
       promoted_ok: 'Guest is now a member',
 

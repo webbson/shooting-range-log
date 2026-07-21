@@ -7,6 +7,7 @@ import {
   TextInput,
   Textarea,
   Switch,
+  Select,
   Checkbox,
   Stack,
   Text,
@@ -93,8 +94,8 @@ export function MembersPage() {
 
   // List view: active-only by default, with a search box + show-inactive toggle.
   const [search, setSearch] = useState('');
-  const [showInactive, setShowInactive] = useState(false);
-  const [showGuests, setShowGuests] = useState(false);
+  // One exclusive list view: active members (default) / inactive / guests (admin).
+  const [view, setView] = useState<'active' | 'inactive' | 'guests'>('active');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'name',
     dir: 'asc',
@@ -238,8 +239,9 @@ export function MembersPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = (users.data ?? []).filter((u) => {
-    if (!showInactive && !u.active) return false;
-    if (!showGuests && u.isGuest) return false;
+    if (view === 'active' && (!u.active || u.isGuest)) return false;
+    if (view === 'inactive' && u.active) return false;
+    if (view === 'guests' && !u.isGuest) return false;
     if (!q) return true;
     return [u.displayId, u.name, u.email, u.phone].some((f) =>
       f?.toLowerCase().includes(q),
@@ -362,18 +364,17 @@ export function MembersPage() {
           onChange={(e) => setSearch(e.currentTarget.value)}
           style={{ flex: 1 }}
         />
-        <Switch
-          label={t('show_inactive')}
-          checked={showInactive}
-          onChange={(e) => setShowInactive(e.currentTarget.checked)}
+        <Select
+          data={[
+            { value: 'active', label: t('filter_active') },
+            { value: 'inactive', label: t('filter_inactive') },
+            ...(isAdmin ? [{ value: 'guests', label: t('filter_guests') }] : []),
+          ]}
+          value={view}
+          onChange={(v) => setView((v as 'active' | 'inactive' | 'guests') ?? 'active')}
+          allowDeselect={false}
+          w={160}
         />
-        {isAdmin && (
-          <Switch
-            label={t('show_guests')}
-            checked={showGuests}
-            onChange={(e) => setShowGuests(e.target.checked)}
-          />
-        )}
         {isAdmin && <Button onClick={openCreate}>{t('new_member')}</Button>}
       </Group>
 
