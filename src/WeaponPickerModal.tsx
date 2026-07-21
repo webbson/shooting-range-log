@@ -144,7 +144,13 @@ export function WeaponPickerModal({
                         {out ? (
                           <Text size="xs" c="red.7">
                             {t('picker_out_held_by', {
-                              name: userLabel(out.userName, out.userDisplayId, out.userActive, t),
+                              name: userLabel(
+                                out.userName,
+                                out.userDisplayId,
+                                out.userActive,
+                                t,
+                                out.userIsGuest,
+                              ),
                             })}
                           </Text>
                         ) : (
