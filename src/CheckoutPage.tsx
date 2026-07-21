@@ -135,12 +135,26 @@ export function CheckoutPage() {
         }) + (ev.weaponTagComment ? ` — ${ev.weaponTagComment}` : '')
       : undefined;
 
+  // Another member's favorite — flag loudly before it leaves the rack.
+  const otherFavorite = (() => {
+    if (!selectedWeapon) return undefined;
+    const p = preferrerMap.get(selectedWeapon.uid);
+    return p && p.uid !== selectedUser?.uid ? p : undefined;
+  })();
+
   return (
-    <Stack>
+    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // cards grow into the free space instead of leaving a void under the button.
+    <Stack gap="lg" style={{ height: 'calc(100vh - 144px)' }}>
       {/* 2×2 grid: label row + card row. Grid rows keep the two columns
           aligned no matter how tall the header content (Guest button) or card
           content gets — flex-based equalization drifted here before. */}
-      <SimpleGrid cols={2} spacing="lg" verticalSpacing={4}>
+      <SimpleGrid
+        cols={2}
+        spacing="lg"
+        verticalSpacing={4}
+        style={{ flex: 1, minHeight: 0, gridTemplateRows: 'auto 1fr' }}
+      >
         <Group justify="space-between" align="center">
           <Text fw={600}>{t('field_member')}</Text>
           <Button variant="default" onClick={() => setGuestOpen(true)}>
@@ -165,8 +179,8 @@ export function CheckoutPage() {
             }}
           >
             {selectedUser ? (
-              <Stack gap={4} justify="center" h="100%">
-                <Text fz="xl" fw={600}>
+              <Stack gap="sm" justify="center" h="100%">
+                <Text fz={32} fw={700}>
                   {userLabel(
                     selectedUser.name,
                     selectedUser.displayId,
@@ -176,25 +190,25 @@ export function CheckoutPage() {
                   )}
                 </Text>
                 {lastMap.has(selectedUser.uid) && (
-                  <Text size="sm" c="dimmed">
+                  <Text size="lg" c="dimmed">
                     {t('field_last_shot')}: {fmtDate(lastMap.get(selectedUser.uid)!)}
                   </Text>
                 )}
                 {debtMap.has(selectedUser.uid) && (
-                  <Badge color="red" variant="filled">
+                  <Badge color="red" variant="filled" size="lg">
                     {t('debt_badge', { amount: debtMap.get(selectedUser.uid) })}
                   </Badge>
                 )}
                 {memberError && (
-                  <Text fz="sm" c="red">
+                  <Text fz="lg" c="red">
                     {memberError}
                   </Text>
                 )}
               </Stack>
             ) : (
-              <Stack align="center" justify="center" h="100%" gap={4} c="dimmed">
-                <IconUser size={32} />
-                <Text>{t('select_member_ph')}</Text>
+              <Stack align="center" justify="center" h="100%" gap="xs" c="dimmed">
+                <IconUser size={48} />
+                <Text fz="lg">{t('select_member_ph')}</Text>
               </Stack>
             )}
           </Card>
@@ -211,17 +225,21 @@ export function CheckoutPage() {
               ...(selectedWeapon
                 ? {}
                 : { borderStyle: 'dashed' }),
-              ...(weaponError ? { borderColor: 'var(--mantine-color-red-6)' } : {}),
+              ...(weaponError
+                ? { borderColor: 'var(--mantine-color-red-6)' }
+                : otherFavorite
+                  ? { borderColor: 'var(--mantine-color-yellow-6)', borderWidth: 2 }
+                  : {}),
             }}
           >
             {userUid == null ? (
-              <Stack align="center" justify="center" h="100%" gap={4} c="dimmed">
-                <Text>{t('choose_member_first')}</Text>
+              <Stack align="center" justify="center" h="100%" gap="xs" c="dimmed">
+                <Text fz="lg">{t('choose_member_first')}</Text>
               </Stack>
             ) : selectedWeapon ? (
-              <Stack gap={4} justify="center" h="100%">
+              <Stack gap="sm" justify="center" h="100%">
                 <Group justify="space-between" wrap="nowrap" align="flex-start">
-                  <Text fz="xl" fw={600}>
+                  <Text fz={32} fw={700}>
                     {weaponLabel(
                       selectedWeapon.brand,
                       selectedWeapon.model,
@@ -233,32 +251,37 @@ export function CheckoutPage() {
                   </Text>
                   <Group gap={4} wrap="nowrap">
                     {selectedWeapon.uid === selectedUser?.preferredWeaponUid ? (
-                      <Badge color="yellow" variant="light">
+                      <Badge color="yellow" variant="light" size="lg">
                         ★ {t('badge_preferred')}
                       </Badge>
-                    ) : preferrerMap.has(selectedWeapon.uid) ? (
-                      <Badge color="yellow" variant="light">
-                        ★ {preferrerMap.get(selectedWeapon.uid)!.name}
+                    ) : otherFavorite ? (
+                      <Badge color="yellow" variant="filled" size="lg">
+                        ★ {otherFavorite.name}
                       </Badge>
                     ) : null}
                     {selectedWeapon.uid === pinEval.data?.lastWeaponUid && (
-                      <Badge color="gray" variant="light">
+                      <Badge color="gray" variant="light" size="lg">
                         {t('badge_last')}
                       </Badge>
                     )}
                   </Group>
                 </Group>
+                {otherFavorite && (
+                  <Text fz="lg" fw={700} c="yellow.8">
+                    {t('warning_weapon_favorite_of', { name: otherFavorite.name })}
+                  </Text>
+                )}
                 {activeTagKeys(selectedWeapon).length > 0 && (
                   <Group gap={4}>
                     {activeTagKeys(selectedWeapon).map((k) => (
-                      <Badge key={k} color="orange" variant="light" size="xs">
+                      <Badge key={k} color="orange" variant="light" size="sm">
                         {t(`tag_${k}`)}
                       </Badge>
                     ))}
                   </Group>
                 )}
                 {!ev?.weaponAlreadyOut && lastUseMap.has(selectedWeapon.uid) && (
-                  <Text size="sm" c="dimmed">
+                  <Text size="lg" c="dimmed">
                     {t('picker_last_used', {
                       name: userLabel(
                         lastUseMap.get(selectedWeapon.uid)!.userName,
@@ -271,20 +294,20 @@ export function CheckoutPage() {
                   </Text>
                 )}
                 {weaponError && (
-                  <Text fz="sm" c="red">
+                  <Text fz="lg" c="red">
                     {weaponError}
                   </Text>
                 )}
                 {weaponWarning && (
-                  <Text fz="sm" c="orange">
+                  <Text fz="lg" c="orange">
                     {weaponWarning}
                   </Text>
                 )}
               </Stack>
             ) : (
-              <Stack align="center" justify="center" h="100%" gap={4} c="dimmed">
-                <IconTargetArrow size={32} />
-                <Text>{t('select_weapon_ph')}</Text>
+              <Stack align="center" justify="center" h="100%" gap="xs" c="dimmed">
+                <IconTargetArrow size={48} />
+                <Text fz="lg">{t('select_weapon_ph')}</Text>
               </Stack>
             )}
           </Card>
@@ -299,6 +322,7 @@ export function CheckoutPage() {
 
       <Button
         size="xl"
+        mih={72}
         fullWidth
         disabled={!ev?.canCheckout || !operator}
         loading={checkoutMut.isPending}
