@@ -137,22 +137,27 @@ export function CheckoutPage() {
 
   return (
     <Stack>
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-        <Stack gap={4} h="100%">
-          <Group justify="space-between" mih={36} align="center">
-            <Text fw={600}>{t('field_member')}</Text>
-            <Button variant="default" onClick={() => setGuestOpen(true)}>
-              {t('guest_button')}
-            </Button>
-          </Group>
+      {/* 2×2 grid: label row + card row. Grid rows keep the two columns
+          aligned no matter how tall the header content (Guest button) or card
+          content gets — flex-based equalization drifted here before. */}
+      <SimpleGrid cols={2} spacing="lg" verticalSpacing={4}>
+        <Group justify="space-between" align="center">
+          <Text fw={600}>{t('field_member')}</Text>
+          <Button variant="default" onClick={() => setGuestOpen(true)}>
+            {t('guest_button')}
+          </Button>
+        </Group>
+        <Group align="center">
+          <Text fw={600}>{t('field_weapon')}</Text>
+        </Group>
           <Card
             withBorder
             padding="lg"
             mih={140}
+            h="100%"
             onClick={() => setPicker('member')}
             style={{
               cursor: 'pointer',
-              flex: 1,
               ...(selectedUser
                 ? {}
                 : { borderStyle: 'dashed' }),
@@ -193,21 +198,16 @@ export function CheckoutPage() {
               </Stack>
             )}
           </Card>
-        </Stack>
 
-        <Stack gap={4} h="100%">
-          <Group mih={36} align="center">
-            <Text fw={600}>{t('field_weapon')}</Text>
-          </Group>
           <Card
             withBorder
             padding="lg"
             mih={140}
+            h="100%"
             opacity={userUid == null ? 0.5 : 1}
             onClick={userUid == null ? undefined : () => setPicker('weapon')}
             style={{
               cursor: userUid == null ? 'default' : 'pointer',
-              flex: 1,
               ...(selectedWeapon
                 ? {}
                 : { borderStyle: 'dashed' }),
@@ -288,7 +288,6 @@ export function CheckoutPage() {
               </Stack>
             )}
           </Card>
-        </Stack>
       </SimpleGrid>
 
       <TextInput
