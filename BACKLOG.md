@@ -20,6 +20,9 @@ _Collect tweaks here as they come up._
 - [ ] Orphaned i18n keys `field_member_since`, `language` (pre-existing on main) — drop or wire up.
 - [x] `last_shot_dates` localtime-vs-UTC boundary not distinguishable by current test — obsolete: the before-today field was removed when picker grouping moved to the frontend (dayjs same-day check).
 - [ ] Intermittent stale open-loans list after a return (seen once at 2026-07-14 live-smoke: checkin succeeded + toast, list only refreshed on next interaction). Never reproduced during investigation; code path verified correct (invalidateQueries present, single conn, networkMode 'always'). Mitigation shipped: 30s `refetchInterval` on `openCheckouts`. If it recurs: cherry-pick diagnostics commit `5d204cb` and capture `[diag]` console lines (needs a devtools-enabled build).
+- [ ] GuestModal sends untrimmed name/ssn (Rust `norm`/`require_name` trim server-side, so harmless) — trim client-side in a polish pass.
+- [ ] MembersPage form: staff flag = Switch, admin flag = Checkbox — unify the control type for parallel booleans.
+- [ ] Guest-flow copy pass: GuestModal has no explanatory hint text; revisit wording with the club.
 
 ## M6 — Backup / restore (deferred)
 - Auto snapshot via SQLite `VACUUM INTO` to a local backups dir; on app close + periodic.
