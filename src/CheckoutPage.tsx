@@ -66,12 +66,19 @@ export function CheckoutPage() {
   const ev = evalQ.data;
 
   // Member drives the flow: picking a member autofills their suggested weapon
-  // (preferred, else last-used) or clears the field when nothing is available.
+  // (assigned, else last-used) or clears the field when nothing is available.
+  // The ASSIGNED weapon is selected even while checked out — the card then
+  // shows the out-error with the holder; a last-used suggestion is still
+  // skipped when out (no assignment claim to surface).
   const onMemberChange = async (uid: number) => {
     setUserUid(uid);
     const e = await evaluateCheckout(null, uid);
+    const assignedUid = (users.data ?? []).find((u) => u.uid === uid)?.preferredWeaponUid;
+    const isAssigned = e.suggestedWeaponUid != null && e.suggestedWeaponUid === assignedUid;
     setWeaponUid(
-      e.suggestedWeaponUid != null && !e.suggestedWeaponOut ? e.suggestedWeaponUid : null,
+      e.suggestedWeaponUid != null && (isAssigned || !e.suggestedWeaponOut)
+        ? e.suggestedWeaponUid
+        : null,
     );
   };
 
@@ -266,11 +273,6 @@ export function CheckoutPage() {
                     )}
                   </Group>
                 </Group>
-                {otherFavorite && (
-                  <Text fz="lg" fw={700} c="yellow.8">
-                    {t('warning_weapon_favorite_of', { name: otherFavorite.name })}
-                  </Text>
-                )}
                 {activeTagKeys(selectedWeapon).length > 0 && (
                   <Group gap={4}>
                     {activeTagKeys(selectedWeapon).map((k) => (

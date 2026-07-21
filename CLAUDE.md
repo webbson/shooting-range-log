@@ -60,7 +60,10 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   Set only via `set_preferred_weapon` (never through create/update user); deactivating a
   member clears it (frees the slot); import sets it from the `vapen` column (first row wins,
   never overwrites a live preference, skips inactive matched members). Checkout autofill
-  suggests preferred first (active + not out), else last-used.
+  suggests the assigned (preferred) weapon first whenever it is active — even while
+  checked out (selected with the out-warning shown), falling back to last-used only when
+  no active assignment exists; a last-used suggestion is not autofilled while out.
+  UI copy says "assigned/tilldelat" — code and schema keep the preferred_weapon naming.
 - **Money:** integer whole **kronor** (`amount_kr`). No floats, no öre.
 - **Time:** store UTC RFC3339; display via `src/format.ts` (sv-SE, e.g. `2026-06-16 14:30`).
 - **Operators** are users with `is_staff`. The frontend store holds `{uid, name}`; `uid` is
