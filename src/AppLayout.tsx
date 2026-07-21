@@ -11,7 +11,7 @@ import {
   useMantineColorScheme,
   useComputedColorScheme,
 } from '@mantine/core';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
@@ -30,6 +30,7 @@ const NAV = [
 export function AppLayout() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
   const operator = useAppStore((s) => s.operator);
@@ -72,7 +73,7 @@ export function AppLayout() {
                   key={item.to}
                   component={NavLink}
                   to={item.to}
-                  variant="subtle"
+                  variant={pathname === item.to ? 'light' : 'subtle'}
                   size="lg"
                   rightSection={
                     item.to === '/checkin' && openCount > 0 ? (
@@ -95,7 +96,7 @@ export function AppLayout() {
                   key={item.to}
                   component={NavLink}
                   to={item.to}
-                  variant="subtle"
+                  variant={pathname === item.to ? 'light' : 'subtle'}
                   size="md"
                 >
                   {t(item.key)}

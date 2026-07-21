@@ -1,7 +1,6 @@
 import {
   Stack,
   Group,
-  Title,
   Select,
   Switch,
   Button,
@@ -103,8 +102,6 @@ export function LogsPage() {
 
   return (
     <Stack>
-      <Title order={2}>{t('nav_logs')}</Title>
-
       <Group align="flex-end" wrap="wrap">
         <Select
           label={t('field_weapon')}
