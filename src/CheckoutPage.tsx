@@ -20,6 +20,7 @@ import {
   doCheckout,
   lastShotDates,
   outstandingDebts,
+  lastWeaponUsers,
   activeTagKeys,
 } from './api';
 import { useAppStore } from './store';
@@ -48,6 +49,14 @@ export function CheckoutPage() {
   const debts = useQuery({ queryKey: ['outstandingDebts'], queryFn: outstandingDebts });
   const lastMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
+  const lastUses = useQuery({ queryKey: ['lastWeaponUsers'], queryFn: lastWeaponUsers });
+  const lastUseMap = new Map((lastUses.data ?? []).map((l) => [l.weaponUid, l] as const));
+  // weapon uid → the member whose favorite it is (at most one; DB-enforced).
+  const preferrerMap = new Map(
+    (users.data ?? [])
+      .filter((u) => u.preferredWeaponUid != null)
+      .map((u) => [u.preferredWeaponUid as number, u] as const),
+  );
 
   const evalQ = useQuery({
     queryKey: ['eval', weaponUid, userUid],
@@ -91,12 +100,13 @@ export function CheckoutPage() {
   const selectedWeapon = (weapons.data ?? []).find((w) => w.uid === weaponUid);
   const selectedUser = (users.data ?? []).find((u) => u.uid === userUid);
 
-  // Pin data for the weapon picker: preferred from the selected member,
-  // last-used from the member-only eval (weapon deliberately null).
+  // Pin data for the weapon picker AND the selected-weapon card badges:
+  // preferred from the selected member, last-used from the member-only eval
+  // (weapon deliberately null).
   const pinEval = useQuery({
     queryKey: ['eval', null, userUid],
     queryFn: () => evaluateCheckout(null, userUid),
-    enabled: picker === 'weapon' && userUid != null,
+    enabled: userUid != null,
   });
 
   // Embedded notices — attached directly to the relevant field instead of free-floating banners.
@@ -206,16 +216,34 @@ export function CheckoutPage() {
               </Stack>
             ) : selectedWeapon ? (
               <Stack gap={4} justify="center" h="100%">
-                <Text fz="xl" fw={600}>
-                  {weaponLabel(
-                    selectedWeapon.brand,
-                    selectedWeapon.model,
-                    selectedWeapon.caliber,
-                    selectedWeapon.displayId,
-                    selectedWeapon.active,
-                    t,
-                  )}
-                </Text>
+                <Group justify="space-between" wrap="nowrap" align="flex-start">
+                  <Text fz="xl" fw={600}>
+                    {weaponLabel(
+                      selectedWeapon.brand,
+                      selectedWeapon.model,
+                      selectedWeapon.caliber,
+                      selectedWeapon.displayId,
+                      selectedWeapon.active,
+                      t,
+                    )}
+                  </Text>
+                  <Group gap={4} wrap="nowrap">
+                    {selectedWeapon.uid === selectedUser?.preferredWeaponUid ? (
+                      <Badge color="yellow" variant="light">
+                        ★ {t('badge_preferred')}
+                      </Badge>
+                    ) : preferrerMap.has(selectedWeapon.uid) ? (
+                      <Badge color="yellow" variant="light">
+                        ★ {preferrerMap.get(selectedWeapon.uid)!.name}
+                      </Badge>
+                    ) : null}
+                    {selectedWeapon.uid === pinEval.data?.lastWeaponUid && (
+                      <Badge color="gray" variant="light">
+                        {t('badge_last')}
+                      </Badge>
+                    )}
+                  </Group>
+                </Group>
                 {activeTagKeys(selectedWeapon).length > 0 && (
                   <Group gap={4}>
                     {activeTagKeys(selectedWeapon).map((k) => (
@@ -224,6 +252,19 @@ export function CheckoutPage() {
                       </Badge>
                     ))}
                   </Group>
+                )}
+                {!ev?.weaponAlreadyOut && lastUseMap.has(selectedWeapon.uid) && (
+                  <Text size="sm" c="dimmed">
+                    {t('picker_last_used', {
+                      name: userLabel(
+                        lastUseMap.get(selectedWeapon.uid)!.userName,
+                        lastUseMap.get(selectedWeapon.uid)!.userDisplayId,
+                        lastUseMap.get(selectedWeapon.uid)!.userActive,
+                        t,
+                      ),
+                      date: fmtDate(lastUseMap.get(selectedWeapon.uid)!.lastUsedAt),
+                    })}
+                  </Text>
                 )}
                 {weaponError && (
                   <Text fz="sm" c="red">
