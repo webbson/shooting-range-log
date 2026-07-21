@@ -138,8 +138,8 @@ export function CheckoutPage() {
   return (
     <Stack>
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-        <Stack gap={4}>
-          <Group justify="space-between">
+        <Stack gap={4} h="100%">
+          <Group justify="space-between" mih={36} align="center">
             <Text fw={600}>{t('field_member')}</Text>
             <Button variant="default" onClick={() => setGuestOpen(true)}>
               {t('guest_button')}
@@ -152,6 +152,7 @@ export function CheckoutPage() {
             onClick={() => setPicker('member')}
             style={{
               cursor: 'pointer',
+              flex: 1,
               ...(selectedUser
                 ? {}
                 : { borderStyle: 'dashed' }),
@@ -194,8 +195,10 @@ export function CheckoutPage() {
           </Card>
         </Stack>
 
-        <Stack gap={4}>
-          <Text fw={600}>{t('field_weapon')}</Text>
+        <Stack gap={4} h="100%">
+          <Group mih={36} align="center">
+            <Text fw={600}>{t('field_weapon')}</Text>
+          </Group>
           <Card
             withBorder
             padding="lg"
@@ -204,6 +207,7 @@ export function CheckoutPage() {
             onClick={userUid == null ? undefined : () => setPicker('weapon')}
             style={{
               cursor: userUid == null ? 'default' : 'pointer',
+              flex: 1,
               ...(selectedWeapon
                 ? {}
                 : { borderStyle: 'dashed' }),
