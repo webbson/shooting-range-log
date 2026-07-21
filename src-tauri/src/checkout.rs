@@ -194,9 +194,11 @@ fn evaluate(
         eval.user_outstanding_debt_kr = outstanding_debt(conn, uuid)?;
     }
 
-    // Symmetric autopopulate: member picked, weapon not → suggest the member's
-    // preferred weapon (when active and available), else their most recent one
-    // (unless it's currently out — then warn, don't autofill).
+    // Autopopulate: member picked, weapon not → suggest the member's assigned
+    // (preferred) weapon whenever it is active — even while checked out, so the
+    // frontend selects it and surfaces WHO holds it instead of silently falling
+    // back. Only an inactive (retired) assigned weapon falls back to the
+    // member's most recent one (which is not autofilled when out).
     if weapon_uid.is_none() {
         if let Some(uuid) = user_uid {
             eval.last_weapon_uid = most_recent_weapon_uid_for_user(conn, uuid)?;
@@ -204,7 +206,7 @@ fn evaluate(
             let mut pick: Option<i64> = None;
             if let Some(puid) = preferred {
                 if let Some(w) = weapon_get(conn, puid)? {
-                    if w.active && open_checkout_for(conn, puid)?.is_none() {
+                    if w.active {
                         pick = Some(puid);
                     }
                 }
@@ -509,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn preferred_weapon_falls_back_when_out_or_inactive() {
+    fn preferred_weapon_suggested_even_when_out_falls_back_when_inactive() {
         let conn = migrated_in_memory();
         let op = mk_user(&conn, "Op", "1", true);
         let anna = mk_user(&conn, "Anna", "10", false);
@@ -521,18 +523,22 @@ mod tests {
         do_checkin(&conn, c.id, op).unwrap();
         user_set_preferred_weapon(&conn, anna, Some(w_pref)).unwrap();
 
-        // Preferred weapon out (held by Björn) → fall back to last-used.
+        // Assigned weapon out (held by Björn) → STILL suggested, flagged out,
+        // so the UI selects it and shows who holds it (no silent fallback).
         do_checkout(&conn, w_pref, bjorn, op, None).unwrap();
         let e = evaluate(&conn, None, Some(anna)).unwrap();
-        assert_eq!(e.suggested_weapon_uid, Some(w_last));
+        assert_eq!(e.suggested_weapon_uid, Some(w_pref));
+        assert!(e.suggested_weapon_out);
 
-        // Preferred weapon inactive → fall back too. (Deactivation is allowed
-        // after the preference was set; only *setting* requires an active weapon.)
+        // Assigned weapon inactive (retired) → fall back to last-used.
+        // (Deactivation is allowed after the preference was set; only *setting*
+        // requires an active weapon.)
         let c2 = open_checkout_for(&conn, w_pref).unwrap().unwrap();
         do_checkin(&conn, c2.0, op).unwrap();
         weapon_set_active(&conn, w_pref, false, Some("repair".into()), false).unwrap();
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.suggested_weapon_uid, Some(w_last));
+        assert!(!e.suggested_weapon_out);
     }
 
     #[test]

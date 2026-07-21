@@ -101,7 +101,7 @@ const resources = {
       err_weapon_already_out: 'Vapnet är redan utlånat.',
       err_checkout_not_found: 'Utlämningen hittades inte.',
       err_already_checked_in: 'Vapnet är redan återlämnat.',
-      err_weapon_already_preferred: 'Vapnet är redan favoritvapen för {{name}}.',
+      err_weapon_already_preferred: 'Vapnet är redan tilldelat {{name}}.',
       err_ssn_required: 'Personnummer krävs för gäst.',
       err_ssn_belongs_to_member:
         'Personnumret tillhör medlemmen {{name}} — använd vanlig utlåning.',
@@ -131,14 +131,13 @@ const resources = {
       return_weapon: 'Återlämna',
       fast_checkin: 'Snabb återlämning',
       label_checked_out_at: 'Utlånat',
-      mark_favorite: 'Gör till favoritvapen',
-      unmark_favorite: 'Ta bort som favoritvapen',
+      mark_favorite: 'Tilldela detta vapen',
+      unmark_favorite: 'Ta bort tilldelning',
 
       // Guests
       guest_button: 'Gäst',
       guest_checkout: 'Gästutlåning',
       guest_continue: 'Fortsätt',
-      warning_weapon_favorite_of: 'Detta är {{name}}s favoritvapen!',
       filter_active: 'Aktiva',
       filter_inactive: 'Inaktiva',
       filter_guests: 'Gäster',
@@ -253,12 +252,12 @@ const resources = {
       filter_name: 'Sök namn',
       filter_brand: 'Märke',
       filter_caliber: 'Kaliber',
-      badge_preferred: 'Favorit',
+      badge_preferred: 'Tilldelat',
       badge_last: 'Senast',
       picker_last_used: 'Senast: {{name}} · {{date}}',
       picker_out_held_by: 'Utlånad till {{name}}',
       clear_selection: 'Rensa',
-      field_preferred_weapon: 'Favoritvapen',
+      field_preferred_weapon: 'Tilldelat vapen',
       none_set: 'Inget valt',
 
       // Weapon tags
@@ -368,7 +367,7 @@ const resources = {
       err_weapon_already_out: 'Weapon is already checked out.',
       err_checkout_not_found: 'Checkout not found.',
       err_already_checked_in: 'Weapon is already checked in.',
-      err_weapon_already_preferred: 'Weapon is already the preferred weapon of {{name}}.',
+      err_weapon_already_preferred: 'Weapon is already assigned to {{name}}.',
       err_ssn_required: 'SSN is required for a guest.',
       err_ssn_belongs_to_member:
         'The SSN belongs to member {{name}} — use a normal member checkout.',
@@ -398,14 +397,13 @@ const resources = {
       return_weapon: 'Return',
       fast_checkin: 'Quick return',
       label_checked_out_at: 'Checked out',
-      mark_favorite: 'Set as favorite weapon',
-      unmark_favorite: 'Remove as favorite weapon',
+      mark_favorite: 'Assign this weapon',
+      unmark_favorite: 'Remove assignment',
 
       // Guests
       guest_button: 'Guest',
       guest_checkout: 'Guest checkout',
       guest_continue: 'Continue',
-      warning_weapon_favorite_of: "This is {{name}}'s favorite weapon!",
       filter_active: 'Active',
       filter_inactive: 'Inactive',
       filter_guests: 'Guests',
@@ -520,12 +518,12 @@ const resources = {
       filter_name: 'Search name',
       filter_brand: 'Brand',
       filter_caliber: 'Caliber',
-      badge_preferred: 'Favorite',
+      badge_preferred: 'Assigned',
       badge_last: 'Last used',
       picker_last_used: 'Last: {{name}} · {{date}}',
       picker_out_held_by: 'Out — held by {{name}}',
       clear_selection: 'Clear',
-      field_preferred_weapon: 'Favorite weapon',
+      field_preferred_weapon: 'Assigned weapon',
       none_set: 'None set',
 
       // Weapon tags
