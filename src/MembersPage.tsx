@@ -56,6 +56,7 @@ interface MemberForm {
   address: string;
   ssn: string;
   isStaff: boolean;
+  isAdmin: boolean;
   notes: string;
 }
 
@@ -67,6 +68,7 @@ const EMPTY: MemberForm = {
   address: '',
   ssn: '',
   isStaff: false,
+  isAdmin: false,
   notes: '',
 };
 
@@ -126,6 +128,7 @@ export function MembersPage() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['users'] });
     qc.invalidateQueries({ queryKey: ['operators'] });
+    qc.invalidateQueries({ queryKey: ['hasAdmin'] });
   };
 
   const savePreference = async (uid: number) => {
@@ -213,6 +216,7 @@ export function MembersPage() {
       address: u.address ?? '',
       ssn: u.ssn ?? '',
       isStaff: u.isStaff,
+      isAdmin: u.isAdmin,
       notes: u.notes ?? '',
     });
     open();
@@ -333,16 +337,18 @@ export function MembersPage() {
           >
             {t('debt')}
           </Button>
-          <Button
-            size="xs"
-            variant="default"
-            onClick={(e) => {
-              e.stopPropagation();
-              openEdit(u);
-            }}
-          >
-            {t('edit')}
-          </Button>
+          {isAdmin && (
+            <Button
+              size="xs"
+              variant="default"
+              onClick={(e) => {
+                e.stopPropagation();
+                openEdit(u);
+              }}
+            >
+              {t('edit')}
+            </Button>
+          )}
         </Group>
       </Table.Td>
     </Table.Tr>
@@ -352,7 +358,7 @@ export function MembersPage() {
     <Stack>
       <Group justify="space-between">
         <Title order={2}>{t('nav_members')}</Title>
-        <Button onClick={openCreate}>{t('new_member')}</Button>
+        {isAdmin && <Button onClick={openCreate}>{t('new_member')}</Button>}
       </Group>
 
       {(users.data?.length ?? 0) === 0 ? (
@@ -471,6 +477,9 @@ export function MembersPage() {
               label={t('field_is_staff')}
               {...form.getInputProps('isStaff', { type: 'checkbox' })}
             />
+            {isAdmin && (
+              <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
+            )}
             <Textarea
               label={t('field_notes')}
               autosize
@@ -478,7 +487,7 @@ export function MembersPage() {
               {...form.getInputProps('notes')}
             />
             <Group justify="space-between">
-              {editing && !editing.active ? (
+              {isAdmin && editing && !editing.active ? (
                 <Button
                   variant="subtle"
                   color="teal"
@@ -487,7 +496,7 @@ export function MembersPage() {
                 >
                   {t('activate')}
                 </Button>
-              ) : editing ? (
+              ) : isAdmin && editing ? (
                 <Button
                   variant="subtle"
                   color="red"

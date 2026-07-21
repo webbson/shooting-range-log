@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
+import { useIsAdmin } from './useIsAdmin';
 
 const NAV = [
   { to: '/checkout', key: 'nav_checkout' },
@@ -34,6 +35,7 @@ export function AppLayout() {
   const setLanguage = useAppStore((s) => s.setLanguage);
   const operator = useAppStore((s) => s.operator);
   const setOperator = useAppStore((s) => s.setOperator);
+  const isAdmin = useIsAdmin();
 
   const { toggleColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light');
@@ -147,14 +149,16 @@ export function AppLayout() {
             >
               {computed === 'dark' ? '☀' : '🌙'}
             </ActionIcon>
-            <ActionIcon
-              variant="default"
-              size="lg"
-              aria-label={t('nav_settings')}
-              onClick={() => navigate('/settings')}
-            >
-              ⚙
-            </ActionIcon>
+            {isAdmin && (
+              <ActionIcon
+                variant="default"
+                size="lg"
+                aria-label={t('nav_settings')}
+                onClick={() => navigate('/settings')}
+              >
+                ⚙
+              </ActionIcon>
+            )}
           </Group>
         </Group>
       </AppShell.Footer>
