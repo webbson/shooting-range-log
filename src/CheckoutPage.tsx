@@ -245,19 +245,20 @@ export function CheckoutPage() {
               </Stack>
             ) : selectedWeapon ? (
               <Stack gap="sm" justify="center" h="100%">
-                {/* Badges keep natural width (no shrink-ellipsis) and wrap onto
-                    new lines under the title when space runs out. */}
-                <Group justify="space-between" align="flex-start">
-                  <Text fz={32} fw={700}>
-                    {weaponLabel(
-                      selectedWeapon.brand,
-                      selectedWeapon.model,
-                      selectedWeapon.caliber,
-                      selectedWeapon.displayId,
-                      selectedWeapon.active,
-                      t,
-                    )}
-                  </Text>
+                <Text fz={32} fw={700}>
+                  {weaponLabel(
+                    selectedWeapon.brand,
+                    selectedWeapon.model,
+                    selectedWeapon.caliber,
+                    selectedWeapon.displayId,
+                    selectedWeapon.active,
+                    t,
+                  )}
+                </Text>
+                {/* Own badge row under the name — full badge text, wraps freely. */}
+                {(selectedWeapon.uid === selectedUser?.preferredWeaponUid ||
+                  otherFavorite ||
+                  selectedWeapon.uid === pinEval.data?.lastWeaponUid) && (
                   <Group gap={4}>
                     {selectedWeapon.uid === selectedUser?.preferredWeaponUid ? (
                       <Badge color="yellow" variant="light" size="lg" style={{ flexShrink: 0 }}>
@@ -274,7 +275,7 @@ export function CheckoutPage() {
                       </Badge>
                     )}
                   </Group>
-                </Group>
+                )}
                 {activeTagKeys(selectedWeapon).length > 0 && (
                   <Group gap={4}>
                     {activeTagKeys(selectedWeapon).map((k) => (
