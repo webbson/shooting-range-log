@@ -9,7 +9,7 @@ import {
   Tooltip,
   ScrollArea,
 } from '@mantine/core';
-import { IconCoins, IconArrowBackUp } from '@tabler/icons-react';
+import { IconCoins, IconArrowBackUp, IconTag } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +29,7 @@ import { DebtModal } from './DebtModal';
 import { IdNumpadModal } from './IdNumpadModal';
 import { MemberInfoModal } from './MemberInfoModal';
 import { WeaponInfoModal } from './WeaponInfoModal';
+import { TagModal } from './TagModal';
 
 export function CheckinPage() {
   const { t } = useTranslation();
@@ -39,6 +40,7 @@ export function CheckinPage() {
   const [infoMember, setInfoMember] = useState<number | null>(null);
   const [infoWeapon, setInfoWeapon] = useState<number | null>(null);
   const [fastCheckinOpen, setFastCheckinOpen] = useState(false);
+  const [tagWeapon, setTagWeapon] = useState<number | null>(null);
 
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
   const open = useQuery({
@@ -170,6 +172,17 @@ export function CheckinPage() {
                           </Tooltip>
                         );
                       })()}
+                      <Tooltip label={t('edit_tags')}>
+                        <ActionIcon
+                          variant="subtle"
+                          color="orange"
+                          size="lg"
+                          aria-label={t('edit_tags')}
+                          onClick={() => setTagWeapon(o.weaponUid)}
+                        >
+                          <IconTag />
+                        </ActionIcon>
+                      </Tooltip>
                       <Tooltip label={t('add_debt')}>
                         <ActionIcon
                           variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
@@ -224,6 +237,7 @@ export function CheckinPage() {
         opened={infoWeapon != null}
         onClose={() => setInfoWeapon(null)}
       />
+      <TagModal weaponUid={tagWeapon} opened={tagWeapon != null} onClose={() => setTagWeapon(null)} />
 
       <IdNumpadModal
         opened={fastCheckinOpen}

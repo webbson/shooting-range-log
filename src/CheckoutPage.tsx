@@ -102,6 +102,13 @@ export function CheckoutPage() {
   const memberError: string | undefined =
     ev?.userInactive ? t('banner_user_inactive') : undefined;
 
+  const weaponWarning: string | undefined =
+    ev && ev.weaponTags.length > 0
+      ? t('warning_weapon_tagged', {
+          tags: ev.weaponTags.map((k) => t(`tag_${k}`)).join(', '),
+        }) + (ev.weaponTagComment ? ` — ${ev.weaponTagComment}` : '')
+      : undefined;
+
   return (
     <Card withBorder padding="lg" maw={560} mx="auto">
       <Stack>
@@ -159,6 +166,7 @@ export function CheckoutPage() {
             </Text>
           )}
           {weaponError && <Text fz="xs" c="red">{weaponError}</Text>}
+          {weaponWarning && <Text fz="xs" c="orange">{weaponWarning}</Text>}
         </Stack>
 
         <TextInput
