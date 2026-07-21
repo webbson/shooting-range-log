@@ -6,7 +6,6 @@ import { initReactI18next } from 'react-i18next';
 const resources = {
   sv: {
     translation: {
-      app_title: 'Skjutbaneliggare',
       nav_checkout: 'Utlämning',
       nav_checkin: 'Återlämning',
       nav_members: 'Medlemmar',
@@ -272,7 +271,6 @@ const resources = {
   },
   en: {
     translation: {
-      app_title: 'Shooting Range Log',
       nav_checkout: 'Checkout',
       nav_checkin: 'Check-in',
       nav_members: 'Members',
