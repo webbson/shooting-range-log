@@ -1,6 +1,6 @@
 import { Modal, Stack, TextInput, Button } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { upsertGuest } from './api';
@@ -18,6 +18,7 @@ export function GuestModal({
   onSelect: (uid: number) => void;
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [name, setName] = useState('');
   const [ssn, setSsn] = useState('');
 
@@ -31,6 +32,7 @@ export function GuestModal({
   const mut = useMutation({
     mutationFn: () => upsertGuest(name, ssn),
     onSuccess: (u) => {
+      qc.invalidateQueries({ queryKey: ['users'] });
       onSelect(u.uid);
       onClose();
     },
