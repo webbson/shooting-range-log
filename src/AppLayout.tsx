@@ -16,11 +16,12 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
-import { dbHealth, listBackups } from './api';
+import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
 
 const NAV = [
   { to: '/checkout', key: 'nav_checkout' },
+  { to: '/checkin', key: 'nav_checkin' },
   { to: '/members', key: 'nav_members' },
   { to: '/weapons', key: 'nav_weapons' },
   { to: '/logs', key: 'nav_logs' },
@@ -50,6 +51,12 @@ export function AppLayout() {
     staleTime: 5 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
   });
+  const open = useQuery({
+    queryKey: ['openCheckouts'],
+    queryFn: listOpenCheckouts,
+    refetchInterval: 30_000,
+  });
+  const openCount = open.data?.length ?? 0;
 
   return (
     <>
@@ -67,6 +74,13 @@ export function AppLayout() {
                 to={item.to}
                 variant="subtle"
                 size="md"
+                rightSection={
+                  item.to === '/checkin' && openCount > 0 ? (
+                    <Badge size="lg" circle color="teal">
+                      {openCount}
+                    </Badge>
+                  ) : undefined
+                }
               >
                 {t(item.key)}
               </Button>
