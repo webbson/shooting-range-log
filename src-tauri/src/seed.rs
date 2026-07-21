@@ -17,7 +17,10 @@ use chrono::{Duration, Utc};
 use rusqlite::{params, Connection};
 
 use crate::checkout::{do_checkin, do_checkout};
-use crate::commands::{user_create, user_set_active, user_set_preferred_weapon, weapon_create, weapon_set_active};
+use crate::commands::{
+    user_create, user_set_active, user_set_preferred_weapon, user_upsert_guest, weapon_create,
+    weapon_set_active, weapon_set_tags,
+};
 use crate::error::AppError;
 use crate::models::{NewUser, NewWeapon};
 use crate::{debt, service};
@@ -141,7 +144,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
                     1000 + n
                 )),
                 is_staff: i < N_STAFF,
-                is_admin: false,
+                is_admin: i == 0, // first operator is the seeded admin
                 notes: None,
             },
         )?;
@@ -207,6 +210,18 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
         )?;
         checkout_ids.push(c.id);
     }
+
+    // --- Guests: one repeat visitor with an open loan, one without history. ---
+    let g1 = user_upsert_guest(conn, "Gustav Gästsson".into(), "19870707-7777".into())?.uid;
+    user_upsert_guest(conn, "Greta Gästberg".into(), "19920202-2222".into())?;
+    // weapon_uids[0] was checked out+in above (returned round-robin) so it's free.
+    let c = do_checkout(conn, weapon_uids[0], g1, op(0), opt("Gästlån"))?;
+    checkout_ids.push(c.id);
+
+    // --- Weapon condition tags: current-state flags, independent of checkout status. ---
+    weapon_set_tags(conn, weapon_uids[1], true, false, false, false, Some("Kolven glappar".into()))?;
+    weapon_set_tags(conn, weapon_uids[2], false, true, true, false, None)?;
+    weapon_set_tags(conn, weapon_uids[4], false, false, false, true, None)?;
 
     // --- Debts: some settled, some linked to a real checkout, backdated. ---
     for i in 0..N_DEBTS {
@@ -281,7 +296,7 @@ mod tests {
         let conn = migrated_in_memory();
         seed_dev_database(&conn).unwrap();
 
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22); // 20 members + 2 guests
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
         assert!(count(&conn, "SELECT COUNT(*) FROM checkouts") > 0);
         assert!(count(&conn, "SELECT COUNT(*) FROM debts") > 0);
@@ -293,7 +308,7 @@ mod tests {
 
         // Re-seed wipes first → counts stay the same, not doubled.
         seed_dev_database(&conn).unwrap();
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22);
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
     }
 
@@ -305,6 +320,6 @@ mod tests {
         // clear those refs first or the DELETE fails with FOREIGN KEY constraint failed.
         wipe_weapons(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 0);
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 20); // users kept
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22); // users kept
     }
 }
