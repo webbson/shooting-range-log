@@ -210,6 +210,7 @@ mod tests {
                 address: None,
                 ssn: None,
                 is_staff: staff,
+                is_admin: false,
                 notes: None,
             },
         )

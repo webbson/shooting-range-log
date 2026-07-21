@@ -124,6 +124,19 @@ CREATE UNIQUE INDEX idx_users_preferred_weapon
   ON users(preferred_weapon_uid) WHERE preferred_weapon_uid IS NOT NULL;
 "#;
 
+/// Guest members, admin level, and weapon condition tags (migration 0004).
+/// Tags are current state (columns, not a log); the fixed tag set is defined in
+/// code — adding a tag later = one new column migration + i18n keys.
+const SCHEMA_V4: &str = r#"
+ALTER TABLE users   ADD COLUMN is_guest           INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users   ADD COLUMN is_admin           INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE weapons ADD COLUMN tag_needs_service  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE weapons ADD COLUMN tag_broken         INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE weapons ADD COLUMN tag_missing_parts  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE weapons ADD COLUMN tag_needs_cleaning INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE weapons ADD COLUMN tag_comment        TEXT;
+"#;
+
 /// Ordered list of migrations. Once a migration has shipped to a real install,
 /// never edit it — append a new one. `to_latest` applies any not yet recorded in
 /// `PRAGMA user_version`.
@@ -135,6 +148,8 @@ fn migrations() -> Migrations<'static> {
         M::up(SCHEMA_V2),
         // 0003 — preferred weapon per member.
         M::up(SCHEMA_V3),
+        // 0004 — guests, admin flag, weapon tags.
+        M::up(SCHEMA_V4),
     ])
 }
 
@@ -198,7 +213,7 @@ mod tests {
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 3, "three migrations applied");
+        assert_eq!(v, 4, "four migrations applied");
     }
 
     #[test]

@@ -133,6 +133,7 @@ mod tests {
                 address: None,
                 ssn: None,
                 is_staff: true,
+                is_admin: false,
                 notes: None,
             },
         )

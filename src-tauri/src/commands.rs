@@ -115,8 +115,8 @@ pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, App
     let now = now_utc();
     conn.execute(
         "INSERT INTO users
-           (display_id, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,1,?8,?9,?9)",
+           (display_id, name, email, phone, address, ssn, is_staff, is_admin, active, notes, created_at, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,1,?9,?10,?10)",
         params![
             display_id,
             name,
@@ -125,6 +125,7 @@ pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, App
             norm(input.address),
             norm(input.ssn),
             input.is_staff,
+            input.is_admin,
             norm(input.notes),
             now,
         ],
@@ -141,7 +142,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
     conn.execute(
         "UPDATE users SET
            display_id = ?2, name = ?3, email = ?4, phone = ?5,
-           address = ?6, ssn = ?7, is_staff = ?8, notes = ?9, updated_at = ?10
+           address = ?6, ssn = ?7, is_staff = ?8, is_admin = ?9, notes = ?10, updated_at = ?11
          WHERE uid = ?1",
         params![
             input.uid,
@@ -152,6 +153,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
             norm(input.address),
             norm(input.ssn),
             input.is_staff,
+            input.is_admin,
             norm(input.notes),
             now_utc(),
         ],
@@ -473,6 +475,7 @@ mod tests {
             address: None,
             ssn: None,
             is_staff,
+            is_admin: false,
             notes: None,
         }
     }
@@ -740,5 +743,21 @@ mod tests {
         let conn = migrated_in_memory();
         let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
         assert_eq!(w.caliber.as_deref(), Some("9mm"));
+    }
+
+    #[test]
+    fn new_user_defaults_not_guest_not_admin() {
+        let conn = migrated_in_memory();
+        let u = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        assert!(!u.is_guest);
+        assert!(!u.is_admin);
+    }
+
+    #[test]
+    fn new_weapon_defaults_no_tags() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        assert!(!w.tag_needs_service && !w.tag_broken && !w.tag_missing_parts && !w.tag_needs_cleaning);
+        assert_eq!(w.tag_comment, None);
     }
 }

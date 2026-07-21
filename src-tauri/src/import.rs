@@ -591,6 +591,7 @@ fn ensure_import_operator(conn: &Connection) -> Result<i64, AppError> {
             address: None,
             ssn: None,
             is_staff: true,
+            is_admin: false,
             notes: Some("Systemkonto för importerade historiska data.".into()),
         },
     )?;
@@ -650,6 +651,7 @@ fn execute(
                     address: None,
                     ssn: m.ssn.clone(),
                     is_staff: false,
+                    is_admin: false,
                     notes: Some("Importerad från Excel.".into()),
                 },
             )?;
@@ -927,6 +929,7 @@ mod tests {
                 name: "Tom Stevens".into(),
                 ssn: Some("19890330-4015".into()),
                 is_staff: false,
+                is_admin: false,
                 email: None,
                 phone: None,
                 address: None,
@@ -950,6 +953,7 @@ mod tests {
                 name: "Alice Ekvall".into(),
                 ssn: None,
                 is_staff: false,
+                is_admin: false,
                 email: None,
                 phone: None,
                 address: None,
@@ -1040,6 +1044,7 @@ mod tests {
                 name: "Other".into(),
                 ssn: None,
                 is_staff: false,
+                is_admin: false,
                 email: None,
                 phone: None,
                 address: None,
@@ -1210,6 +1215,7 @@ mod tests {
                 name: "Carol".into(),
                 ssn: Some("19920101-0003".into()),
                 is_staff: false,
+                is_admin: false,
                 email: None, phone: None, address: None, notes: None,
             },
         )
@@ -1268,6 +1274,7 @@ mod tests {
                 name: "Dave Inactive".into(),
                 ssn: Some("19850101-0099".into()),
                 is_staff: false,
+                is_admin: false,
                 email: None, phone: None, address: None, notes: None,
             },
         )
