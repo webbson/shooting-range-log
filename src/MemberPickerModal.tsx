@@ -49,7 +49,7 @@ export function MemberPickerModal({
   });
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
   const lastMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
-  const pool = (users.data ?? []).filter((u) => u.active);
+  const pool = (users.data ?? []).filter((u) => u.active && !u.isGuest);
 
   const q = text.trim().toLowerCase();
   const filtered = pool.filter((u) => {
