@@ -249,6 +249,16 @@ const resources = {
       clear_selection: 'Rensa',
       field_preferred_weapon: 'Favoritvapen',
       none_set: 'Inget valt',
+
+      // Weapon tags
+      tag_needs_service: 'Behöver service',
+      tag_broken: 'Trasig',
+      tag_missing_parts: 'Saknar delar',
+      tag_needs_cleaning: 'Behöver rengöring',
+      edit_tags: 'Taggar',
+      field_tag_comment: 'Kommentar',
+      tags_saved_ok: 'Taggar sparade',
+      warning_weapon_tagged: 'Vapnet är markerat: {{tags}}',
     },
   },
   en: {
@@ -495,6 +505,16 @@ const resources = {
       clear_selection: 'Clear',
       field_preferred_weapon: 'Favorite weapon',
       none_set: 'None set',
+
+      // Weapon tags
+      tag_needs_service: 'Needs service',
+      tag_broken: 'Broken',
+      tag_missing_parts: 'Missing parts',
+      tag_needs_cleaning: 'Needs cleaning',
+      edit_tags: 'Tags',
+      field_tag_comment: 'Comment',
+      tags_saved_ok: 'Tags saved',
+      warning_weapon_tagged: 'Weapon is tagged: {{tags}}',
     },
   },
 };
