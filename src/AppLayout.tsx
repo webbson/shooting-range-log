@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   AppShell,
   Group,
-  Title,
   Button,
   Text,
   Badge,
@@ -66,27 +65,43 @@ export function AppLayout() {
       <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Title order={3} style={{ flex: 1 }}>{t('app_title')}</Title>
+          <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
+            {NAV.filter((item) => item.to === '/checkout' || item.to === '/checkin').map(
+              (item) => (
+                <Button
+                  key={item.to}
+                  component={NavLink}
+                  to={item.to}
+                  variant="subtle"
+                  size="lg"
+                  rightSection={
+                    item.to === '/checkin' && openCount > 0 ? (
+                      <Badge size="lg" circle color="teal">
+                        {openCount}
+                      </Badge>
+                    ) : undefined
+                  }
+                >
+                  {t(item.key)}
+                </Button>
+              ),
+            )}
+          </Group>
           <Text fw={600} size="lg">{clock}</Text>
           <Group gap="xs" wrap="nowrap" style={{ flex: 1, justifyContent: 'flex-end' }}>
-            {NAV.map((item) => (
-              <Button
-                key={item.to}
-                component={NavLink}
-                to={item.to}
-                variant="subtle"
-                size="md"
-                rightSection={
-                  item.to === '/checkin' && openCount > 0 ? (
-                    <Badge size="lg" circle color="teal">
-                      {openCount}
-                    </Badge>
-                  ) : undefined
-                }
-              >
-                {t(item.key)}
-              </Button>
-            ))}
+            {NAV.filter((item) => item.to !== '/checkout' && item.to !== '/checkin').map(
+              (item) => (
+                <Button
+                  key={item.to}
+                  component={NavLink}
+                  to={item.to}
+                  variant="subtle"
+                  size="md"
+                >
+                  {t(item.key)}
+                </Button>
+              ),
+            )}
           </Group>
         </Group>
       </AppShell.Header>
