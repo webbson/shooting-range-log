@@ -412,6 +412,28 @@ pub(crate) fn weapon_set_active(
     weapon_require(conn, uid)
 }
 
+/// Set the fixed condition tags + free comment (current state, not history —
+/// service history lives in weapon_service_log).
+pub(crate) fn weapon_set_tags(
+    conn: &Connection,
+    uid: i64,
+    needs_service: bool,
+    broken: bool,
+    missing_parts: bool,
+    needs_cleaning: bool,
+    comment: Option<String>,
+) -> Result<Weapon, AppError> {
+    weapon_require(conn, uid)?;
+    conn.execute(
+        "UPDATE weapons SET
+           tag_needs_service = ?2, tag_broken = ?3, tag_missing_parts = ?4,
+           tag_needs_cleaning = ?5, tag_comment = ?6, updated_at = ?7
+         WHERE uid = ?1",
+        params![uid, needs_service, broken, missing_parts, needs_cleaning, norm(comment), now_utc()],
+    )?;
+    weapon_require(conn, uid)
+}
+
 // ---------- Command wrappers ----------
 
 #[tauri::command]
@@ -529,6 +551,20 @@ pub fn set_weapon_active(
 ) -> Result<Weapon, AppError> {
     let conn = lock(&db)?;
     weapon_set_active(&conn, uid, active, inactive_reason, clear_display_id)
+}
+
+#[tauri::command]
+pub fn set_weapon_tags(
+    db: State<Db>,
+    weapon_uid: i64,
+    needs_service: bool,
+    broken: bool,
+    missing_parts: bool,
+    needs_cleaning: bool,
+    comment: Option<String>,
+) -> Result<Weapon, AppError> {
+    let conn = lock(&db)?;
+    weapon_set_tags(&conn, weapon_uid, needs_service, broken, missing_parts, needs_cleaning, comment)
 }
 
 #[cfg(test)]
@@ -868,6 +904,20 @@ mod tests {
         assert_eq!(err.code, "err_not_a_guest");
         let err = user_promote_guest(&conn, 9999).unwrap_err();
         assert_eq!(err.code, "err_user_not_found");
+    }
+
+    #[test]
+    fn set_weapon_tags_round_trips_and_clears() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        let w = weapon_set_tags(&conn, w.uid, true, false, true, false, Some("kolv lös".into())).unwrap();
+        assert!(w.tag_needs_service && w.tag_missing_parts);
+        assert!(!w.tag_broken && !w.tag_needs_cleaning);
+        assert_eq!(w.tag_comment.as_deref(), Some("kolv lös"));
+        let w = weapon_set_tags(&conn, w.uid, false, false, false, false, None).unwrap();
+        assert!(!w.tag_needs_service && !w.tag_missing_parts);
+        assert_eq!(w.tag_comment, None);
+        assert!(weapon_set_tags(&conn, 9999, false, false, false, false, None).is_err());
     }
 
     #[test]

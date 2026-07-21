@@ -281,6 +281,7 @@ pub fn run() {
             commands::create_weapon,
             commands::update_weapon,
             commands::set_weapon_active,
+            commands::set_weapon_tags,
             checkout::evaluate_checkout,
             checkout::checkout,
             checkout::checkin,

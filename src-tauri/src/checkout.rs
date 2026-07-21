@@ -103,6 +103,10 @@ pub struct CheckoutEval {
     pub user_inactive: bool,
     pub user_outstanding_debt_kr: i64,
     pub can_checkout: bool,
+    /// Active condition tags on the chosen weapon (fixed keys, e.g. "needs_service").
+    /// Warn-only: tags never block checkout.
+    pub weapon_tags: Vec<String>,
+    pub weapon_tag_comment: Option<String>,
 }
 
 /// (checkout_id, holder_uid) if the weapon is currently out. The holder's
@@ -162,6 +166,11 @@ fn evaluate(
 
     if let Some(wuid) = weapon_uid {
         if let Some(w) = weapon_get(conn, wuid)? {
+            if w.tag_needs_service { eval.weapon_tags.push("needs_service".into()); }
+            if w.tag_broken { eval.weapon_tags.push("broken".into()); }
+            if w.tag_missing_parts { eval.weapon_tags.push("missing_parts".into()); }
+            if w.tag_needs_cleaning { eval.weapon_tags.push("needs_cleaning".into()); }
+            eval.weapon_tag_comment = w.tag_comment.clone();
             if !w.active {
                 eval.weapon_inactive = true;
                 eval.weapon_inactive_reason = w.inactive_reason;
@@ -538,6 +547,23 @@ mod tests {
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.last_weapon_uid, Some(w));
         assert_eq!(e.suggested_weapon_uid, Some(w));
+    }
+
+    #[test]
+    fn eval_reports_weapon_tags() {
+        let conn = migrated_in_memory();
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let w = mk_weapon(&conn, "W1");
+
+        let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
+        assert!(e.weapon_tags.is_empty());
+
+        crate::commands::weapon_set_tags(&conn, w, true, true, false, false, Some("obs".into())).unwrap();
+        let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
+        assert_eq!(e.weapon_tags, vec!["needs_service".to_string(), "broken".to_string()]);
+        assert_eq!(e.weapon_tag_comment.as_deref(), Some("obs"));
+        // Tags warn, never block.
+        assert!(e.can_checkout);
     }
 
     #[test]
