@@ -33,7 +33,10 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   (quick-access only) — uniqueness is still enforced when one is given, but a member may
   be active without one (renders as bare name, no `[]`). `serial` (weapons) is globally
   unique. Durable legal identity = serial via uid. (Members no longer carry a
-  `member_number` — column remains in the shipped migration but is unused.)
+  `member_number` — column remains in the shipped migration but is unused.) **Guests** are
+  ordinary `users` rows flagged `is_guest`, SSN-unique among active users (app-enforced,
+  not a DB constraint), created via `upsert_guest` (checkout-time walk-in) and promoted to
+  a full member via `promote_guest` (admin-only UI action).
 - **Live identity, not snapshots:** because entities are never hard-deleted (only
   `set_active(false)`) and tags are reusable, log read views resolve identity **live by uid**
   via JOIN — history reflects each entity's *current* name/status, not a point-in-time value
@@ -46,16 +49,21 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   weapon_service_log, debts) stay **append-only** — corrections/returns/settles are new rows
   or field updates, never deletes.
 - **Migrations:** `SCHEMA_V1` (domain schema) + `SCHEMA_V2` (settings table) + `SCHEMA_V3`
-  (`users.preferred_weapon_uid` + partial unique index) in `src-tauri/src/db.rs`. Currently
-  3 migrations (0001–0003). Once a migration has shipped to a real install, **never edit
-  it — append a new `M::up` (0004, …)** to the `migrations()` vec. Editing a released
-  migration silently diverges existing DBs.
+  (`users.preferred_weapon_uid` + partial unique index) + `SCHEMA_V4` (`users.is_guest`/
+  `is_admin` + weapons `tag_needs_service`/`tag_broken`/`tag_missing_parts`/
+  `tag_needs_cleaning`/`tag_comment`) in `src-tauri/src/db.rs`. Currently 4 migrations
+  (0001–0004). Once a migration has shipped to a real install, **never edit it — append a
+  new `M::up` (0005, …)** to the `migrations()` vec. Editing a released migration silently
+  diverges existing DBs.
 - **Preferred weapon:** `users.preferred_weapon_uid` — exclusive both ways (one favorite per
   member; a weapon is at most one member's favorite, DB-enforced by partial unique index).
   Set only via `set_preferred_weapon` (never through create/update user); deactivating a
   member clears it (frees the slot); import sets it from the `vapen` column (first row wins,
   never overwrites a live preference, skips inactive matched members). Checkout autofill
-  suggests preferred first (active + not out), else last-used.
+  suggests the assigned (preferred) weapon first whenever it is active — even while
+  checked out (selected with the out-warning shown), falling back to last-used only when
+  no active assignment exists; a last-used suggestion is not autofilled while out.
+  UI copy says "assigned/tilldelat" — code and schema keep the preferred_weapon naming.
 - **Money:** integer whole **kronor** (`amount_kr`). No floats, no öre.
 - **Time:** store UTC RFC3339; display via `src/format.ts` (sv-SE, e.g. `2026-06-16 14:30`).
 - **Operators** are users with `is_staff`. The frontend store holds `{uid, name}`; `uid` is
@@ -107,8 +115,13 @@ commit on a `feat/*` branch → merge to `main`.
   `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
   badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (member-first flow: weapon picker disabled
-  until member chosen; picker-modal selection, eval warnings, scrollable open-loans list with
-  favorite-star/debt/return actions),
+  until member chosen; picker-modal selection, eval warnings — no longer hosts the open-loans
+  list, see `CheckinPage.tsx`),
+  `CheckinPage.tsx` (the open-loans list: check-in/debt/service actions, tag button),
+  `GuestModal.tsx` (walk-in checkout entry: SSN identifies/creates a guest via `upsert_guest`),
+  `TagModal.tsx` (per-weapon condition tags + free comment, no admin gate — technician workflow),
+  `useIsAdmin.ts` (UI-only admin gate hook; bootstrap rule disables gating while no active
+  admin exists in the DB),
   `Numpad.tsx` (shared keypad) + `IdNumpadModal.tsx` (fast check-in),
   `WeaponPickerModal.tsx` / `MemberPickerModal.tsx` (touch pickers: tag numpad + filters,
   favorite/last badges, exact-tag-match-first sort),
@@ -125,6 +138,9 @@ commit on a `feat/*` branch → merge to `main`.
 M0–M6 done on `main` (M6 backup/restore live-smoked). Picker modals + preferred-weapon
 feature (3 waves, 2026-07-14) merged to `main` after live-smoke
 + UX refinements wave (2026-07-14): member-first checkout, info modals, inner-scroll lists.
++ Guest checkout / weapon condition tags / admin gating wave (`feat/checkin-guest-tags-admin`,
+2026-07-21): `SCHEMA_V4`, `upsert_guest`/`promote_guest`, `set_weapon_tags`, `useIsAdmin`
+bootstrap gate, `CheckinPage` split out of `CheckoutPage` — pending live-smoke.
 M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
 Git is local-only (no remote yet → Windows installer not yet built).
 

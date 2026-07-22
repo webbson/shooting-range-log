@@ -7,13 +7,18 @@ import {
   Text,
   SimpleGrid,
   ScrollArea,
+  Group,
+  ActionIcon,
+  Tooltip,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { type ReactNode } from 'react';
-import { getWeapon, listCheckouts, listWeaponService } from './api';
+import { type ReactNode, useState } from 'react';
+import { IconTag } from '@tabler/icons-react';
+import { getWeapon, listCheckouts, listWeaponService, activeTagKeys } from './api';
 import { userLabel, weaponLabel } from './labels';
 import { fmtDateTime } from './format';
+import { TagModal } from './TagModal';
 
 // Read-only weapon view: fields + usage history + service log. Launched from
 // the open-loans list and log rows.
@@ -28,6 +33,7 @@ export function WeaponInfoModal({
 }) {
   const { t } = useTranslation();
   const enabled = opened && uid != null;
+  const [tagOpen, setTagOpen] = useState(false);
 
   const weaponQ = useQuery({
     queryKey: ['weapon', uid],
@@ -68,6 +74,34 @@ export function WeaponInfoModal({
           </>,
         ],
         [t('field_notes'), w.notes ?? '—'],
+        [
+          t('edit_tags'),
+          <>
+            <Group gap={4}>
+              {activeTagKeys(w).map((k) => (
+                <Badge key={k} color="orange" variant="light" size="sm">
+                  {t(`tag_${k}`)}
+                </Badge>
+              ))}
+              <Tooltip label={t('edit_tags')}>
+                <ActionIcon
+                  variant="subtle"
+                  color="orange"
+                  size="sm"
+                  aria-label={t('edit_tags')}
+                  onClick={() => setTagOpen(true)}
+                >
+                  <IconTag size={16} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+            {w.tagComment && (
+              <Text size="xs" c="dimmed">
+                {w.tagComment}
+              </Text>
+            )}
+          </>,
+        ],
       ]
     : [];
 
@@ -75,6 +109,7 @@ export function WeaponInfoModal({
   const service = serviceQ.data ?? [];
 
   return (
+    <>
     <Modal
       opened={opened}
       onClose={onClose}
@@ -115,7 +150,7 @@ export function WeaponInfoModal({
                     <Table.Tr key={c.id}>
                       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
                       <Table.Td>
-                        {userLabel(c.userName, c.userDisplayId, c.userActive, t)}
+                        {userLabel(c.userName, c.userDisplayId, c.userActive, t, c.userIsGuest)}
                       </Table.Td>
                       <Table.Td>
                         {c.checkedInAt ? fmtDateTime(c.checkedInAt) : t('status_out')}
@@ -155,5 +190,7 @@ export function WeaponInfoModal({
         </Stack>
       )}
     </Modal>
+    <TagModal weaponUid={uid} opened={tagOpen} onClose={() => setTagOpen(false)} />
+    </>
   );
 }

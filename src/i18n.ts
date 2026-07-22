@@ -6,8 +6,8 @@ import { initReactI18next } from 'react-i18next';
 const resources = {
   sv: {
     translation: {
-      app_title: 'Skjutbaneliggare',
       nav_checkout: 'Utlämning',
+      nav_checkin: 'Återlämning',
       nav_members: 'Medlemmar',
       nav_weapons: 'Vapen',
       nav_logs: 'Loggar',
@@ -41,6 +41,7 @@ const resources = {
       active: 'Aktiv',
       inactive: 'Inaktiv',
       label_disabled: 'inaktiverad',
+      label_guest: 'gäst',
       status: 'Status',
       search: 'Sök',
       show_inactive: 'Visa inaktiva',
@@ -75,6 +76,7 @@ const resources = {
       field_address: 'Adress',
       field_ssn: 'Personnummer',
       field_is_staff: 'Personal (operatör)',
+      field_admin: 'Administratör',
       field_notes: 'Anteckningar',
       field_brand: 'Märke',
       field_model: 'Modell',
@@ -99,7 +101,11 @@ const resources = {
       err_weapon_already_out: 'Vapnet är redan utlånat.',
       err_checkout_not_found: 'Utlämningen hittades inte.',
       err_already_checked_in: 'Vapnet är redan återlämnat.',
-      err_weapon_already_preferred: 'Vapnet är redan favoritvapen för {{name}}.',
+      err_weapon_already_preferred: 'Vapnet är redan tilldelat {{name}}.',
+      err_ssn_required: 'Personnummer krävs för gäst.',
+      err_ssn_belongs_to_member:
+        'Personnumret tillhör medlemmen {{name}} — använd vanlig utlåning.',
+      err_not_a_guest: 'Användaren är inte en gäst.',
 
       // Checkout / checkin (M2)
       checkout_new: 'Ny utlämning',
@@ -125,8 +131,18 @@ const resources = {
       return_weapon: 'Återlämna',
       fast_checkin: 'Snabb återlämning',
       label_checked_out_at: 'Utlånat',
-      mark_favorite: 'Gör till favoritvapen',
-      unmark_favorite: 'Ta bort som favoritvapen',
+      mark_favorite: 'Tilldela detta vapen',
+      unmark_favorite: 'Ta bort tilldelning',
+
+      // Guests
+      guest_button: 'Gäst',
+      guest_checkout: 'Gästutlåning',
+      guest_continue: 'Fortsätt',
+      filter_active: 'Aktiva',
+      filter_inactive: 'Inaktiva',
+      filter_guests: 'Gäster',
+      promote_guest: 'Gör till medlem',
+      promoted_ok: 'Gästen är nu medlem',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Skuldbeloppet måste vara större än noll.',
@@ -236,19 +252,29 @@ const resources = {
       filter_name: 'Sök namn',
       filter_brand: 'Märke',
       filter_caliber: 'Kaliber',
-      badge_preferred: 'Favorit',
+      badge_preferred: 'Tilldelat',
       badge_last: 'Senast',
       picker_last_used: 'Senast: {{name}} · {{date}}',
       picker_out_held_by: 'Utlånad till {{name}}',
       clear_selection: 'Rensa',
-      field_preferred_weapon: 'Favoritvapen',
+      field_preferred_weapon: 'Tilldelat vapen',
       none_set: 'Inget valt',
+
+      // Weapon tags
+      tag_needs_service: 'Behöver service',
+      tag_broken: 'Trasig',
+      tag_missing_parts: 'Saknar delar',
+      tag_needs_cleaning: 'Behöver rengöring',
+      edit_tags: 'Taggar',
+      field_tag_comment: 'Kommentar',
+      tags_saved_ok: 'Taggar sparade',
+      warning_weapon_tagged: 'Vapnet är markerat: {{tags}}',
     },
   },
   en: {
     translation: {
-      app_title: 'Shooting Range Log',
       nav_checkout: 'Checkout',
+      nav_checkin: 'Check-in',
       nav_members: 'Members',
       nav_weapons: 'Weapons',
       nav_logs: 'Logs',
@@ -281,6 +307,7 @@ const resources = {
       active: 'Active',
       inactive: 'Inactive',
       label_disabled: 'disabled',
+      label_guest: 'guest',
       status: 'Status',
       search: 'Search',
       show_inactive: 'Show inactive',
@@ -315,6 +342,7 @@ const resources = {
       field_address: 'Address',
       field_ssn: 'SSN',
       field_is_staff: 'Staff (operator)',
+      field_admin: 'Administrator',
       field_notes: 'Notes',
       field_brand: 'Brand',
       field_model: 'Model',
@@ -339,7 +367,11 @@ const resources = {
       err_weapon_already_out: 'Weapon is already checked out.',
       err_checkout_not_found: 'Checkout not found.',
       err_already_checked_in: 'Weapon is already checked in.',
-      err_weapon_already_preferred: 'Weapon is already the preferred weapon of {{name}}.',
+      err_weapon_already_preferred: 'Weapon is already assigned to {{name}}.',
+      err_ssn_required: 'SSN is required for a guest.',
+      err_ssn_belongs_to_member:
+        'The SSN belongs to member {{name}} — use a normal member checkout.',
+      err_not_a_guest: 'The user is not a guest.',
 
       // Checkout / checkin (M2)
       checkout_new: 'New checkout',
@@ -365,8 +397,18 @@ const resources = {
       return_weapon: 'Return',
       fast_checkin: 'Quick return',
       label_checked_out_at: 'Checked out',
-      mark_favorite: 'Set as favorite weapon',
-      unmark_favorite: 'Remove as favorite weapon',
+      mark_favorite: 'Assign this weapon',
+      unmark_favorite: 'Remove assignment',
+
+      // Guests
+      guest_button: 'Guest',
+      guest_checkout: 'Guest checkout',
+      guest_continue: 'Continue',
+      filter_active: 'Active',
+      filter_inactive: 'Inactive',
+      filter_guests: 'Guests',
+      promote_guest: 'Make member',
+      promoted_ok: 'Guest is now a member',
 
       // Debt (M3)
       err_debt_amount_invalid: 'Debt amount must be greater than zero.',
@@ -476,13 +518,23 @@ const resources = {
       filter_name: 'Search name',
       filter_brand: 'Brand',
       filter_caliber: 'Caliber',
-      badge_preferred: 'Favorite',
+      badge_preferred: 'Assigned',
       badge_last: 'Last used',
       picker_last_used: 'Last: {{name}} · {{date}}',
       picker_out_held_by: 'Out — held by {{name}}',
       clear_selection: 'Clear',
-      field_preferred_weapon: 'Favorite weapon',
+      field_preferred_weapon: 'Assigned weapon',
       none_set: 'None set',
+
+      // Weapon tags
+      tag_needs_service: 'Needs service',
+      tag_broken: 'Broken',
+      tag_missing_parts: 'Missing parts',
+      tag_needs_cleaning: 'Needs cleaning',
+      edit_tags: 'Tags',
+      field_tag_comment: 'Comment',
+      tags_saved_ok: 'Tags saved',
+      warning_weapon_tagged: 'Weapon is tagged: {{tags}}',
     },
   },
 };

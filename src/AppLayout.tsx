@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   AppShell,
   Group,
-  Title,
   Button,
   Text,
   Badge,
@@ -12,15 +11,17 @@ import {
   useMantineColorScheme,
   useComputedColorScheme,
 } from '@mantine/core';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore, type Lang } from './store';
-import { dbHealth, listBackups } from './api';
+import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
+import { useIsAdmin } from './useIsAdmin';
 
 const NAV = [
   { to: '/checkout', key: 'nav_checkout' },
+  { to: '/checkin', key: 'nav_checkin' },
   { to: '/members', key: 'nav_members' },
   { to: '/weapons', key: 'nav_weapons' },
   { to: '/logs', key: 'nav_logs' },
@@ -29,10 +30,12 @@ const NAV = [
 export function AppLayout() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
   const operator = useAppStore((s) => s.operator);
   const setOperator = useAppStore((s) => s.setOperator);
+  const isAdmin = useIsAdmin();
 
   const { toggleColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light');
@@ -50,6 +53,12 @@ export function AppLayout() {
     staleTime: 5 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
   });
+  const open = useQuery({
+    queryKey: ['openCheckouts'],
+    queryFn: listOpenCheckouts,
+    refetchInterval: 30_000,
+  });
+  const openCount = open.data?.length ?? 0;
 
   return (
     <>
@@ -57,20 +66,43 @@ export function AppLayout() {
       <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Title order={3} style={{ flex: 1 }}>{t('app_title')}</Title>
+          <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
+            {NAV.filter((item) => item.to === '/checkout' || item.to === '/checkin').map(
+              (item) => (
+                <Button
+                  key={item.to}
+                  component={NavLink}
+                  to={item.to}
+                  variant={pathname === item.to ? 'light' : 'subtle'}
+                  size="lg"
+                  rightSection={
+                    item.to === '/checkin' && openCount > 0 ? (
+                      <Badge size="lg" circle color="teal">
+                        {openCount}
+                      </Badge>
+                    ) : undefined
+                  }
+                >
+                  {t(item.key)}
+                </Button>
+              ),
+            )}
+          </Group>
           <Text fw={600} size="lg">{clock}</Text>
           <Group gap="xs" wrap="nowrap" style={{ flex: 1, justifyContent: 'flex-end' }}>
-            {NAV.map((item) => (
-              <Button
-                key={item.to}
-                component={NavLink}
-                to={item.to}
-                variant="subtle"
-                size="md"
-              >
-                {t(item.key)}
-              </Button>
-            ))}
+            {NAV.filter((item) => item.to !== '/checkout' && item.to !== '/checkin').map(
+              (item) => (
+                <Button
+                  key={item.to}
+                  component={NavLink}
+                  to={item.to}
+                  variant={pathname === item.to ? 'light' : 'subtle'}
+                  size="md"
+                >
+                  {t(item.key)}
+                </Button>
+              ),
+            )}
           </Group>
         </Group>
       </AppShell.Header>
@@ -133,14 +165,16 @@ export function AppLayout() {
             >
               {computed === 'dark' ? '☀' : '🌙'}
             </ActionIcon>
-            <ActionIcon
-              variant="default"
-              size="lg"
-              aria-label={t('nav_settings')}
-              onClick={() => navigate('/settings')}
-            >
-              ⚙
-            </ActionIcon>
+            {isAdmin && (
+              <ActionIcon
+                variant="default"
+                size="lg"
+                aria-label={t('nav_settings')}
+                onClick={() => navigate('/settings')}
+              >
+                ⚙
+              </ActionIcon>
+            )}
           </Group>
         </Group>
       </AppShell.Footer>

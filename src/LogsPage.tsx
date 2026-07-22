@@ -1,7 +1,6 @@
 import {
   Stack,
   Group,
-  Title,
   Select,
   Switch,
   Button,
@@ -84,7 +83,7 @@ export function LogsPage() {
         {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
       </Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoMember(c.userUid)}>
-        {userLabel(c.userName, c.userDisplayId, c.userActive, t)}
+        {userLabel(c.userName, c.userDisplayId, c.userActive, t, c.userIsGuest)}
       </Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>
@@ -103,8 +102,6 @@ export function LogsPage() {
 
   return (
     <Stack>
-      <Title order={2}>{t('nav_logs')}</Title>
-
       <Group align="flex-end" wrap="wrap">
         <Select
           label={t('field_weapon')}
@@ -162,8 +159,8 @@ export function LogsPage() {
       {(logs.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        // ponytail: offset ≈ shell header + title + filter row — tune at live-smoke if clipped.
-        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 340px)">
+        // ponytail: offset ≈ shell header + filter row — tune at live-smoke if clipped.
+        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 330px)">
           <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>

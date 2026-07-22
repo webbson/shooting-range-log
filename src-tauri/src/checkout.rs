@@ -66,6 +66,7 @@ pub struct OpenCheckout {
     pub user_name: Option<String>,
     pub user_display_id: Option<String>,
     pub user_active: bool,
+    pub user_is_guest: bool,
     pub weapon_brand: Option<String>,
     pub weapon_model: Option<String>,
     pub weapon_serial: Option<String>,
@@ -102,6 +103,10 @@ pub struct CheckoutEval {
     pub user_inactive: bool,
     pub user_outstanding_debt_kr: i64,
     pub can_checkout: bool,
+    /// Active condition tags on the chosen weapon (fixed keys, e.g. "needs_service").
+    /// Warn-only: tags never block checkout.
+    pub weapon_tags: Vec<String>,
+    pub weapon_tag_comment: Option<String>,
 }
 
 /// (checkout_id, holder_uid) if the weapon is currently out. The holder's
@@ -161,6 +166,11 @@ fn evaluate(
 
     if let Some(wuid) = weapon_uid {
         if let Some(w) = weapon_get(conn, wuid)? {
+            if w.tag_needs_service { eval.weapon_tags.push("needs_service".into()); }
+            if w.tag_broken { eval.weapon_tags.push("broken".into()); }
+            if w.tag_missing_parts { eval.weapon_tags.push("missing_parts".into()); }
+            if w.tag_needs_cleaning { eval.weapon_tags.push("needs_cleaning".into()); }
+            eval.weapon_tag_comment = w.tag_comment.clone();
             if !w.active {
                 eval.weapon_inactive = true;
                 eval.weapon_inactive_reason = w.inactive_reason;
@@ -184,9 +194,11 @@ fn evaluate(
         eval.user_outstanding_debt_kr = outstanding_debt(conn, uuid)?;
     }
 
-    // Symmetric autopopulate: member picked, weapon not → suggest the member's
-    // preferred weapon (when active and available), else their most recent one
-    // (unless it's currently out — then warn, don't autofill).
+    // Autopopulate: member picked, weapon not → suggest the member's assigned
+    // (preferred) weapon whenever it is active — even while checked out, so the
+    // frontend selects it and surfaces WHO holds it instead of silently falling
+    // back. Only an inactive (retired) assigned weapon falls back to the
+    // member's most recent one (which is not autofilled when out).
     if weapon_uid.is_none() {
         if let Some(uuid) = user_uid {
             eval.last_weapon_uid = most_recent_weapon_uid_for_user(conn, uuid)?;
@@ -194,7 +206,7 @@ fn evaluate(
             let mut pick: Option<i64> = None;
             if let Some(puid) = preferred {
                 if let Some(w) = weapon_get(conn, puid)? {
-                    if w.active && open_checkout_for(conn, puid)?.is_none() {
+                    if w.active {
                         pick = Some(puid);
                     }
                 }
@@ -273,7 +285,7 @@ pub(crate) fn do_checkin(
 fn list_open(conn: &Connection) -> Result<Vec<OpenCheckout>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT c.id, c.weapon_uid, c.user_uid,
-                u.name, u.display_id, u.active,
+                u.name, u.display_id, u.active, u.is_guest,
                 w.brand, w.model, w.serial, w.active,
                 c.checked_out_at, w.display_id, w.caliber
          FROM checkouts c
@@ -290,13 +302,14 @@ fn list_open(conn: &Connection) -> Result<Vec<OpenCheckout>, AppError> {
             user_name: r.get(3)?,
             user_display_id: r.get(4)?,
             user_active: r.get(5)?,
-            weapon_brand: r.get(6)?,
-            weapon_model: r.get(7)?,
-            weapon_serial: r.get(8)?,
-            weapon_active: r.get(9)?,
-            checked_out_at: r.get(10)?,
-            weapon_display_id: r.get(11)?,
-            weapon_caliber: r.get(12)?,
+            user_is_guest: r.get(6)?,
+            weapon_brand: r.get(7)?,
+            weapon_model: r.get(8)?,
+            weapon_serial: r.get(9)?,
+            weapon_active: r.get(10)?,
+            checked_out_at: r.get(11)?,
+            weapon_display_id: r.get(12)?,
+            weapon_caliber: r.get(13)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -358,6 +371,7 @@ mod tests {
                 address: None,
                 ssn: None,
                 is_staff: staff,
+                is_admin: false,
                 notes: None,
             },
         )
@@ -497,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn preferred_weapon_falls_back_when_out_or_inactive() {
+    fn preferred_weapon_suggested_even_when_out_falls_back_when_inactive() {
         let conn = migrated_in_memory();
         let op = mk_user(&conn, "Op", "1", true);
         let anna = mk_user(&conn, "Anna", "10", false);
@@ -509,18 +523,22 @@ mod tests {
         do_checkin(&conn, c.id, op).unwrap();
         user_set_preferred_weapon(&conn, anna, Some(w_pref)).unwrap();
 
-        // Preferred weapon out (held by Björn) → fall back to last-used.
+        // Assigned weapon out (held by Björn) → STILL suggested, flagged out,
+        // so the UI selects it and shows who holds it (no silent fallback).
         do_checkout(&conn, w_pref, bjorn, op, None).unwrap();
         let e = evaluate(&conn, None, Some(anna)).unwrap();
-        assert_eq!(e.suggested_weapon_uid, Some(w_last));
+        assert_eq!(e.suggested_weapon_uid, Some(w_pref));
+        assert!(e.suggested_weapon_out);
 
-        // Preferred weapon inactive → fall back too. (Deactivation is allowed
-        // after the preference was set; only *setting* requires an active weapon.)
+        // Assigned weapon inactive (retired) → fall back to last-used.
+        // (Deactivation is allowed after the preference was set; only *setting*
+        // requires an active weapon.)
         let c2 = open_checkout_for(&conn, w_pref).unwrap().unwrap();
         do_checkin(&conn, c2.0, op).unwrap();
         weapon_set_active(&conn, w_pref, false, Some("repair".into()), false).unwrap();
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.suggested_weapon_uid, Some(w_last));
+        assert!(!e.suggested_weapon_out);
     }
 
     #[test]
@@ -535,6 +553,23 @@ mod tests {
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.last_weapon_uid, Some(w));
         assert_eq!(e.suggested_weapon_uid, Some(w));
+    }
+
+    #[test]
+    fn eval_reports_weapon_tags() {
+        let conn = migrated_in_memory();
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let w = mk_weapon(&conn, "W1");
+
+        let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
+        assert!(e.weapon_tags.is_empty());
+
+        crate::commands::weapon_set_tags(&conn, w, true, true, false, false, Some("obs".into())).unwrap();
+        let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
+        assert_eq!(e.weapon_tags, vec!["needs_service".to_string(), "broken".to_string()]);
+        assert_eq!(e.weapon_tag_comment.as_deref(), Some("obs"));
+        // Tags warn, never block.
+        assert!(e.can_checkout);
     }
 
     #[test]

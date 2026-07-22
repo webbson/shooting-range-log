@@ -8,9 +8,9 @@ use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 
 pub const USER_COLS: &str =
-    "uid, display_id, name, email, phone, address, ssn, is_staff, active, notes, preferred_weapon_uid, created_at, updated_at";
+    "uid, display_id, name, email, phone, address, ssn, is_staff, is_guest, is_admin, active, notes, preferred_weapon_uid, created_at, updated_at";
 pub const WEAPON_COLS: &str =
-    "uid, display_id, brand, model, serial, caliber, active, inactive_reason, notes, created_at, updated_at";
+    "uid, display_id, brand, model, serial, caliber, active, inactive_reason, notes, tag_needs_service, tag_broken, tag_missing_parts, tag_needs_cleaning, tag_comment, created_at, updated_at";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +23,8 @@ pub struct User {
     pub address: Option<String>,
     pub ssn: Option<String>,
     pub is_staff: bool,
+    pub is_guest: bool,
+    pub is_admin: bool,
     pub active: bool,
     pub notes: Option<String>,
     pub preferred_weapon_uid: Option<i64>,
@@ -41,6 +43,8 @@ impl User {
             address: row.get("address")?,
             ssn: row.get("ssn")?,
             is_staff: row.get("is_staff")?,
+            is_guest: row.get("is_guest")?,
+            is_admin: row.get("is_admin")?,
             active: row.get("active")?,
             notes: row.get("notes")?,
             preferred_weapon_uid: row.get("preferred_weapon_uid")?,
@@ -61,6 +65,8 @@ pub struct NewUser {
     pub ssn: Option<String>,
     #[serde(default)]
     pub is_staff: bool,
+    #[serde(default)]
+    pub is_admin: bool,
     pub notes: Option<String>,
 }
 
@@ -76,6 +82,8 @@ pub struct UpdateUser {
     pub ssn: Option<String>,
     #[serde(default)]
     pub is_staff: bool,
+    #[serde(default)]
+    pub is_admin: bool,
     pub notes: Option<String>,
 }
 
@@ -91,6 +99,11 @@ pub struct Weapon {
     pub active: bool,
     pub inactive_reason: Option<String>,
     pub notes: Option<String>,
+    pub tag_needs_service: bool,
+    pub tag_broken: bool,
+    pub tag_missing_parts: bool,
+    pub tag_needs_cleaning: bool,
+    pub tag_comment: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -107,6 +120,11 @@ impl Weapon {
             active: row.get("active")?,
             inactive_reason: row.get("inactive_reason")?,
             notes: row.get("notes")?,
+            tag_needs_service: row.get("tag_needs_service")?,
+            tag_broken: row.get("tag_broken")?,
+            tag_missing_parts: row.get("tag_missing_parts")?,
+            tag_needs_cleaning: row.get("tag_needs_cleaning")?,
+            tag_comment: row.get("tag_comment")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
         })

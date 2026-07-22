@@ -150,6 +150,22 @@ impl AppError {
             json!({ "name": name }),
         )
     }
+
+    pub fn ssn_required() -> Self {
+        AppError::new("err_ssn_required", "SSN is required for a guest.", json!({}))
+    }
+
+    pub fn ssn_belongs_to_member(name: &str) -> Self {
+        AppError::new(
+            "err_ssn_belongs_to_member",
+            format!("SSN belongs to member {name} — use a normal member checkout."),
+            json!({ "name": name }),
+        )
+    }
+
+    pub fn not_a_guest() -> Self {
+        AppError::new("err_not_a_guest", "User is not a guest.", json!({}))
+    }
 }
 
 impl From<rusqlite::Error> for AppError {
