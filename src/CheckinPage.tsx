@@ -148,69 +148,75 @@ export function CheckinPage() {
                         {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
                       </Text>
                     </Stack>
-                    <Group gap="md" wrap="nowrap">
-                      {(() => {
-                        const p = preferrerOf(o.weaponUid);
-                        if (p && p.uid !== o.userUid) return null; // another member's favorite
-                        const mine = p != null;
-                        return (
-                          <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
-                            <ActionIcon
-                              variant={mine ? 'light' : 'subtle'}
-                              color="yellow"
-                              size="xl"
-                              aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
-                              onClick={() =>
-                                favMut.mutate({
-                                  userUid: o.userUid,
-                                  weaponUid: mine ? null : o.weaponUid,
-                                })
-                              }
-                            >
-                              {mine ? '★' : '☆'}
-                            </ActionIcon>
-                          </Tooltip>
-                        );
-                      })()}
-                      <Tooltip label={t('edit_tags')}>
-                        <ActionIcon
-                          variant="subtle"
-                          color="orange"
-                          size="xl"
-                          aria-label={t('edit_tags')}
-                          onClick={() => setTagWeapon(o.weaponUid)}
-                        >
-                          <IconTag />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={t('add_debt')}>
-                        <ActionIcon
-                          variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
-                          color="red"
-                          size="xl"
-                          aria-label={t('add_debt')}
-                          onClick={() =>
-                            setDebtUser({
-                              uid: o.userUid,
-                              name: userLabel(o.userName, o.userActive, t, o.userIsGuest),
-                            })
-                          }
-                        >
-                          <IconCoins />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={t('return_weapon')}>
-                        <ActionIcon
-                          variant="light"
-                          color="teal"
-                          size="xl"
-                          aria-label={t('return_weapon')}
-                          loading={checkinMut.isPending}
-                          onClick={() => checkinMut.mutate(o.id)}
-                        >
-                          <IconArrowBackUp />
-                        </ActionIcon>
-                      </Tooltip>
+                    {/* Two clusters: member actions (assign, debt) apart from
+                        weapon actions (tag, return) — return stays rightmost. */}
+                    <Group gap="xl" wrap="nowrap">
+                      <Group gap="sm" wrap="nowrap">
+                        {(() => {
+                          const p = preferrerOf(o.weaponUid);
+                          if (p && p.uid !== o.userUid) return null; // another member's favorite
+                          const mine = p != null;
+                          return (
+                            <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
+                              <ActionIcon
+                                variant={mine ? 'light' : 'subtle'}
+                                color="yellow"
+                                size="xl"
+                                aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
+                                onClick={() =>
+                                  favMut.mutate({
+                                    userUid: o.userUid,
+                                    weaponUid: mine ? null : o.weaponUid,
+                                  })
+                                }
+                              >
+                                {mine ? '★' : '☆'}
+                              </ActionIcon>
+                            </Tooltip>
+                          );
+                        })()}
+                        <Tooltip label={t('add_debt')}>
+                          <ActionIcon
+                            variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
+                            color="red"
+                            size="xl"
+                            aria-label={t('add_debt')}
+                            onClick={() =>
+                              setDebtUser({
+                                uid: o.userUid,
+                                name: userLabel(o.userName, o.userActive, t, o.userIsGuest),
+                              })
+                            }
+                          >
+                            <IconCoins />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                      <Group gap="sm" wrap="nowrap">
+                        <Tooltip label={t('edit_tags')}>
+                          <ActionIcon
+                            variant="subtle"
+                            color="orange"
+                            size="xl"
+                            aria-label={t('edit_tags')}
+                            onClick={() => setTagWeapon(o.weaponUid)}
+                          >
+                            <IconTag />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label={t('return_weapon')}>
+                          <ActionIcon
+                            variant="light"
+                            color="teal"
+                            size="xl"
+                            aria-label={t('return_weapon')}
+                            loading={checkinMut.isPending}
+                            onClick={() => checkinMut.mutate(o.id)}
+                          >
+                            <IconArrowBackUp />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
                     </Group>
                   </Group>
                 </Card>
