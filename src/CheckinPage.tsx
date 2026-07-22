@@ -93,7 +93,7 @@ export function CheckinPage() {
           {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
         </Text>
         <Text size="sm">
-          {userLabel(o.userName, o.userDisplayId, o.userActive, t, o.userIsGuest)}
+          {userLabel(o.userName, o.userActive, t, o.userIsGuest)}
         </Text>
         <Text size="xs" c="dimmed">
           {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
@@ -142,7 +142,7 @@ export function CheckinPage() {
                         style={{ cursor: 'pointer' }}
                         onClick={() => setInfoMember(o.userUid)}
                       >
-                        {userLabel(o.userName, o.userDisplayId, o.userActive, t, o.userIsGuest)}
+                        {userLabel(o.userName, o.userActive, t, o.userIsGuest)}
                       </Text>
                       <Text size="xs" c="dimmed">
                         {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
@@ -192,7 +192,7 @@ export function CheckinPage() {
                           onClick={() =>
                             setDebtUser({
                               uid: o.userUid,
-                              name: userLabel(o.userName, o.userDisplayId, o.userActive, t, o.userIsGuest),
+                              name: userLabel(o.userName, o.userActive, t, o.userIsGuest),
                             })
                           }
                         >

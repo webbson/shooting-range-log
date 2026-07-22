@@ -4,9 +4,10 @@ import {
   Group,
   SimpleGrid,
   Text,
-  TextInput,
   Button,
   Badge,
+  Checkbox,
+  Paper,
 } from '@mantine/core';
 import { IconUser, IconTargetArrow } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -21,7 +22,10 @@ import {
   lastShotDates,
   outstandingDebts,
   lastWeaponUsers,
+  listOpenCheckouts,
   activeTagKeys,
+  type Weapon,
+  type User,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -30,15 +34,19 @@ import { fmtDate } from './format';
 import { WeaponPickerModal } from './WeaponPickerModal';
 import { MemberPickerModal } from './MemberPickerModal';
 import { GuestModal } from './GuestModal';
+import { Numpad } from './Numpad';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const operator = useAppStore((s) => s.operator);
 
+  // Weapon-first flow: numpad selector step, then the member/weapon form step.
+  const [step, setStep] = useState<'selector' | 'form'>('selector');
+  const [tag, setTag] = useState('');
+  const [assign, setAssign] = useState(false);
   const [weaponUid, setWeaponUid] = useState<number | null>(null);
   const [userUid, setUserUid] = useState<number | null>(null);
-  const [notes, setNotes] = useState('');
   // Which picker modal is open (replaces the old per-field numpad entry).
   const [picker, setPicker] = useState<'weapon' | 'member' | null>(null);
   const [guestOpen, setGuestOpen] = useState(false);
@@ -51,6 +59,8 @@ export function CheckoutPage() {
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
   const lastUses = useQuery({ queryKey: ['lastWeaponUsers'], queryFn: lastWeaponUsers });
   const lastUseMap = new Map((lastUses.data ?? []).map((l) => [l.weaponUid, l] as const));
+  const openQ = useQuery({ queryKey: ['openCheckouts'], queryFn: listOpenCheckouts });
+  const openMap = new Map((openQ.data ?? []).map((o) => [o.weaponUid, o] as const));
   // weapon uid → the member whose favorite it is (at most one; DB-enforced).
   const preferrerMap = new Map(
     (users.data ?? [])
@@ -65,12 +75,43 @@ export function CheckoutPage() {
   });
   const ev = evalQ.data;
 
+  // Selector step: tag → matched active weapon, and its auto-resolved member
+  // (assigned member first, else last borrower — never a guest).
+  const matched = tag ? (weapons.data ?? []).find((w) => w.active && w.displayId === tag) : undefined;
+  const autoUserFor = (w: Weapon): User | undefined => {
+    const p = preferrerMap.get(w.uid);
+    if (p?.active) return p;
+    const last = lastUseMap.get(w.uid);
+    const u = last && (users.data ?? []).find((x) => x.uid === last.userUid);
+    return u && u.active && !u.isGuest ? u : undefined;
+  };
+  const holder = matched ? openMap.get(matched.uid) : undefined;
+
+  const enterForm = (w: Weapon | undefined, uid: number | null) => {
+    setWeaponUid(w?.uid ?? null);
+    setUserUid(uid);
+    setAssign(false);
+    setStep('form');
+  };
+
+  const onNumpadKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key >= '0' && e.key <= '9') setTag((v) => v + e.key);
+    else if (e.key === 'Backspace') setTag((v) => v.slice(0, -1));
+    else if (e.key === 'Enter' && matched) enterForm(matched, autoUserFor(matched)?.uid ?? null);
+  };
+
   // Member drives the flow: picking a member autofills their suggested weapon
   // (assigned, else last-used) or clears the field when nothing is available.
   // The ASSIGNED weapon is selected even while checked out — the card then
   // shows the out-error with the holder; a last-used suggestion is still
   // skipped when out (no assignment claim to surface).
+  // A scanned weapon (from the selector step) is never clobbered by a member pick.
   const onMemberChange = async (uid: number) => {
+    setAssign(false);
+    if (weaponUid != null) {
+      setUserUid(uid);
+      return;
+    }
     setUserUid(uid);
     const e = await evaluateCheckout(null, uid);
     const assignedUid = (users.data ?? []).find((u) => u.uid === uid)?.preferredWeaponUid;
@@ -85,14 +126,21 @@ export function CheckoutPage() {
   const reset = () => {
     setWeaponUid(null);
     setUserUid(null);
-    setNotes('');
+    setStep('selector');
+    setTag('');
+    setAssign(false);
   };
 
   const onError = (e: unknown) =>
     notifications.show({ color: 'red', message: errorMessage(e, t) });
 
+  const selectedWeapon = (weapons.data ?? []).find((w) => w.uid === weaponUid);
+  const selectedUser = (users.data ?? []).find((u) => u.uid === userUid);
+  const alreadyAssigned = selectedWeapon != null && selectedWeapon.uid === selectedUser?.preferredWeaponUid;
+
   const checkoutMut = useMutation({
-    mutationFn: () => doCheckout(weaponUid!, userUid!, operator!.uid, notes || undefined),
+    mutationFn: () =>
+      doCheckout(weaponUid!, userUid!, operator!.uid, alreadyAssigned ? false : assign),
     onSuccess: () => {
       notifications.show({ message: t('checked_out_ok') });
       reset();
@@ -100,12 +148,10 @@ export function CheckoutPage() {
       qc.invalidateQueries({ queryKey: ['eval'] });
       qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
       qc.invalidateQueries({ queryKey: ['lastShotDates'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
     },
     onError,
   });
-
-  const selectedWeapon = (weapons.data ?? []).find((w) => w.uid === weaponUid);
-  const selectedUser = (users.data ?? []).find((u) => u.uid === userUid);
 
   // Pin data for the weapon picker AND the selected-weapon card badges:
   // preferred from the selected member, last-used from the member-only eval
@@ -126,7 +172,7 @@ export function CheckoutPage() {
     }
     if (ev.weaponAlreadyOut) {
       return t('banner_weapon_already_out', {
-        name: userLabel(ev.openHolderName, ev.openHolderDisplay, ev.openHolderActive, t),
+        name: userLabel(ev.openHolderName, ev.openHolderActive, t),
       });
     }
     return undefined;
@@ -148,6 +194,76 @@ export function CheckoutPage() {
     const p = preferrerMap.get(selectedWeapon.uid);
     return p && p.uid !== selectedUser?.uid ? p : undefined;
   })();
+
+  if (step === 'selector') {
+    return (
+      <Stack
+        align="center"
+        justify="center"
+        style={{ height: 'calc(100vh - 144px)' }}
+        onKeyDown={onNumpadKeyDown}
+      >
+        <Stack w={360} gap="md">
+          <Numpad value={tag} onChange={setTag} size="xl" placeholder={t('enter_weapon_id')} />
+          <Paper withBorder p="md" ta="center">
+            {matched ? (
+              <Stack gap={4}>
+                <Text fw={700} fz="lg" c="teal">
+                  {weaponLabel(
+                    matched.brand,
+                    matched.model,
+                    matched.caliber,
+                    matched.displayId,
+                    matched.active,
+                    t,
+                  )}
+                </Text>
+                {autoUserFor(matched) && (
+                  <Text c="dimmed">
+                    {userLabel(
+                      autoUserFor(matched)!.name,
+                      autoUserFor(matched)!.active,
+                      t,
+                      autoUserFor(matched)!.isGuest,
+                    )}
+                  </Text>
+                )}
+                {holder && (
+                  <Text c="orange" fw={600}>
+                    {t('banner_weapon_already_out', {
+                      name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
+                    })}
+                  </Text>
+                )}
+              </Stack>
+            ) : (
+              <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
+            )}
+          </Paper>
+          <Button
+            size="xl"
+            fullWidth
+            disabled={!matched}
+            onClick={() => matched && enterForm(matched, autoUserFor(matched)?.uid ?? null)}
+          >
+            {t('confirm')}
+          </Button>
+          <Button size="xl" variant="default" fullWidth onClick={() => enterForm(undefined, null)}>
+            {t('continue_without_weapon')}
+          </Button>
+          <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
+            {t('guest_button')}
+          </Button>
+        </Stack>
+
+        <GuestModal
+          opened={guestOpen}
+          onClose={() => setGuestOpen(false)}
+          onSelect={(uid) => enterForm(matched, uid)}
+        />
+      </Stack>
+    );
+  }
 
   return (
     // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
@@ -188,13 +304,7 @@ export function CheckoutPage() {
             {selectedUser ? (
               <Stack gap="sm" justify="center" h="100%">
                 <Text fz={32} fw={700}>
-                  {userLabel(
-                    selectedUser.name,
-                    selectedUser.displayId,
-                    selectedUser.active,
-                    t,
-                    selectedUser.isGuest,
-                  )}
+                  {userLabel(selectedUser.name, selectedUser.active, t, selectedUser.isGuest)}
                 </Text>
                 {lastMap.has(selectedUser.uid) && (
                   <Text size="lg" c="dimmed">
@@ -225,10 +335,9 @@ export function CheckoutPage() {
             padding="lg"
             mih={140}
             h="100%"
-            opacity={userUid == null ? 0.5 : 1}
-            onClick={userUid == null ? undefined : () => setPicker('weapon')}
+            onClick={() => setPicker('weapon')}
             style={{
-              cursor: userUid == null ? 'default' : 'pointer',
+              cursor: 'pointer',
               ...(selectedWeapon
                 ? {}
                 : { borderStyle: 'dashed' }),
@@ -239,11 +348,7 @@ export function CheckoutPage() {
                   : {}),
             }}
           >
-            {userUid == null ? (
-              <Stack align="center" justify="center" h="100%" gap="xs" c="dimmed">
-                <Text fz="lg">{t('choose_member_first')}</Text>
-              </Stack>
-            ) : selectedWeapon ? (
+            {selectedWeapon ? (
               <Stack gap="sm" justify="center" h="100%">
                 <Text fz={32} fw={700}>
                   {weaponLabel(
@@ -290,7 +395,6 @@ export function CheckoutPage() {
                     {t('picker_last_used', {
                       name: userLabel(
                         lastUseMap.get(selectedWeapon.uid)!.userName,
-                        lastUseMap.get(selectedWeapon.uid)!.userDisplayId,
                         lastUseMap.get(selectedWeapon.uid)!.userActive,
                         t,
                       ),
@@ -318,12 +422,23 @@ export function CheckoutPage() {
           </Card>
       </SimpleGrid>
 
-      <TextInput
-        size="lg"
-        label={t('field_checkout_notes')}
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-      />
+      {selectedUser && selectedWeapon && !selectedUser.isGuest && (
+        <Stack gap={4}>
+          <Checkbox
+            size="lg"
+            label={t('assign_weapon_checkbox')}
+            checked={alreadyAssigned || assign}
+            disabled={alreadyAssigned}
+            description={alreadyAssigned ? t('assign_already') : undefined}
+            onChange={(e) => setAssign(e.target.checked)}
+          />
+          {assign && !alreadyAssigned && otherFavorite && (
+            <Text c="orange" fz="lg">
+              {t('assign_transfer_warning', { name: otherFavorite.name })}
+            </Text>
+          )}
+        </Stack>
+      )}
 
       <Button
         size="xl"
@@ -356,6 +471,7 @@ export function CheckoutPage() {
         onClose={() => setPicker(null)}
         onSelect={(uid) => {
           setPicker(null);
+          setAssign(false);
           setWeaponUid(uid);
         }}
         availableOnly

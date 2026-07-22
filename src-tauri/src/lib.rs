@@ -267,7 +267,6 @@ pub fn run() {
             commands::list_users,
             commands::list_operators,
             commands::get_user,
-            commands::next_user_display_id,
             commands::create_user,
             commands::update_user,
             commands::set_user_active,

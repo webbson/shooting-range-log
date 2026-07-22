@@ -150,7 +150,7 @@ export function WeaponInfoModal({
                     <Table.Tr key={c.id}>
                       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
                       <Table.Td>
-                        {userLabel(c.userName, c.userDisplayId, c.userActive, t, c.userIsGuest)}
+                        {userLabel(c.userName, c.userActive, t, c.userIsGuest)}
                       </Table.Td>
                       <Table.Td>
                         {c.checkedInAt ? fmtDateTime(c.checkedInAt) : t('status_out')}
