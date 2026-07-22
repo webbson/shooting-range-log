@@ -240,53 +240,6 @@ export function CheckoutPage() {
         <Group align="stretch" gap="xl">
           <Stack w={360} gap="md">
             <Numpad value={tag} onChange={setTag} size="xl" placeholder={t('enter_weapon_id')} />
-            <Paper withBorder p="md" ta="center">
-              {matched ? (
-                <Stack gap={4}>
-                  <Text fw={700} fz="lg" c="teal">
-                    {weaponLabel(
-                      matched.brand,
-                      matched.model,
-                      matched.caliber,
-                      matched.displayId,
-                      matched.active,
-                      t,
-                    )}
-                  </Text>
-                  {autoUser && (
-                    <Stack gap={2} align="center">
-                      <Group gap={4} justify="center">
-                        <Text c="dimmed">
-                          {userLabel(autoUser.name, autoUser.active, t, autoUser.isGuest)}
-                        </Text>
-                        <Badge color={autoUserIsAssigned ? 'yellow' : 'gray'} variant="light" size="sm">
-                          {autoUserIsAssigned ? t('badge_preferred') : t('badge_last')}
-                        </Badge>
-                      </Group>
-                      {lastMap.has(autoUser.uid) && (
-                        <Text size="sm" c="dimmed">
-                          {t('field_last_shot')}: {fmtDate(lastMap.get(autoUser.uid)!)}
-                        </Text>
-                      )}
-                      {debtMap.has(autoUser.uid) && (
-                        <Badge color="red" variant="filled" size="sm">
-                          {t('debt_badge', { amount: debtMap.get(autoUser.uid) })}
-                        </Badge>
-                      )}
-                    </Stack>
-                  )}
-                  {holder && (
-                    <Text c="orange" fw={600}>
-                      {t('banner_weapon_already_out', {
-                        name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
-                      })}
-                    </Text>
-                  )}
-                </Stack>
-              ) : (
-                <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
-              )}
-            </Paper>
             <Button
               size="xl"
               fullWidth
@@ -301,23 +254,80 @@ export function CheckoutPage() {
               {t('confirm_checkout')}
             </Button>
           </Stack>
-          {/* Secondary paths on the right, bottom-aligned with the confirm button. */}
-          <Stack w={280} gap="md" justify="flex-end">
-            <Button
-              size="xl"
-              variant="default"
-              fullWidth
-              onClick={() =>
-                matched && !holder
-                  ? enterForm(matched, autoUser?.uid ?? null)
-                  : enterForm(undefined, null)
-              }
-            >
-              {matched && !holder ? t('change') : t('browse_weapons')}
-            </Button>
-            <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
-              {t('guest_button')}
-            </Button>
+          {/* Preview beside the pad; secondary paths bottom-aligned below it. */}
+          <Stack w={320} gap="md" justify="space-between">
+            <Paper withBorder p="md">
+              {matched ? (
+                <Stack gap={4}>
+                  <Text fw={700} fz="lg" c="teal">
+                    {weaponLabel(
+                      matched.brand,
+                      matched.model,
+                      matched.caliber,
+                      matched.displayId,
+                      matched.active,
+                      t,
+                    )}
+                  </Text>
+                  {holder ? (
+                    // Out weapon: the holder line is the only thing that matters.
+                    <Text c="orange" fw={600}>
+                      {t('banner_weapon_already_out', {
+                        name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
+                      })}
+                    </Text>
+                  ) : (
+                    autoUser && (
+                      <Stack gap={2}>
+                        <Group gap={6}>
+                          <Text c="dimmed">
+                            {userLabel(autoUser.name, autoUser.active, t, autoUser.isGuest)}
+                          </Text>
+                          <Badge
+                            color={autoUserIsAssigned ? 'yellow' : 'gray'}
+                            variant="light"
+                            size="sm"
+                          >
+                            {autoUserIsAssigned ? t('badge_preferred') : t('badge_last')}
+                          </Badge>
+                        </Group>
+                        <Group gap={6}>
+                          {lastMap.has(autoUser.uid) && (
+                            <Text size="sm" c="dimmed">
+                              {fmtDate(lastMap.get(autoUser.uid)!)}
+                            </Text>
+                          )}
+                          {debtMap.has(autoUser.uid) && (
+                            <Badge color="red" variant="filled" size="sm">
+                              {t('debt_badge', { amount: debtMap.get(autoUser.uid) })}
+                            </Badge>
+                          )}
+                        </Group>
+                      </Stack>
+                    )
+                  )}
+                </Stack>
+              ) : (
+                <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
+              )}
+            </Paper>
+            <Stack gap="md">
+              <Button
+                size="xl"
+                variant="default"
+                fullWidth
+                onClick={() =>
+                  matched && !holder
+                    ? enterForm(matched, autoUser?.uid ?? null)
+                    : enterForm(undefined, null)
+                }
+              >
+                {matched && !holder ? t('change') : t('browse_weapons')}
+              </Button>
+              <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
+                {t('guest_button')}
+              </Button>
+            </Stack>
           </Stack>
         </Group>
 
