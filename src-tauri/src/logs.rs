@@ -245,9 +245,9 @@ mod tests {
         let w1 = mk_weapon(&conn, "W1");
         let w2 = mk_weapon(&conn, "W2");
 
-        let c1 = do_checkout(&conn, w1, anna, op, None).unwrap();
+        let c1 = do_checkout(&conn, w1, anna, op, None, false).unwrap();
         do_checkin(&conn, c1.id, op).unwrap();
-        do_checkout(&conn, w2, bjorn, op, None).unwrap(); // still open
+        do_checkout(&conn, w2, bjorn, op, None, false).unwrap(); // still open
 
         // No filters → both.
         assert_eq!(query(&conn, None, None, None, None, None, false).unwrap().len(), 2);
@@ -273,9 +273,9 @@ mod tests {
         let w1 = mk_weapon(&conn, "W1");
         let w2 = mk_weapon(&conn, "W2");
 
-        let c1 = do_checkout(&conn, w1, anna, op, None).unwrap();
+        let c1 = do_checkout(&conn, w1, anna, op, None, false).unwrap();
         do_checkin(&conn, c1.id, op).unwrap();
-        let c2 = do_checkout(&conn, w2, anna, op, None).unwrap();
+        let c2 = do_checkout(&conn, w2, anna, op, None, false).unwrap();
         let expected_max = c1.checked_out_at.max(c2.checked_out_at);
 
         let rows = last_shot_dates_q(&conn).unwrap();
@@ -295,9 +295,9 @@ mod tests {
 
         // Anna then Björn on W1 — Björn is the latest (same timestamps possible;
         // id DESC tiebreak must pick the later row).
-        let c1 = do_checkout(&conn, w1, anna, op, None).unwrap();
+        let c1 = do_checkout(&conn, w1, anna, op, None, false).unwrap();
         do_checkin(&conn, c1.id, op).unwrap();
-        let c2 = do_checkout(&conn, w1, bjorn, op, None).unwrap();
+        let c2 = do_checkout(&conn, w1, bjorn, op, None, false).unwrap();
 
         let rows = last_weapon_users_q(&conn).unwrap();
         assert_eq!(rows.len(), 1); // only W1 has history

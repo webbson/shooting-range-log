@@ -79,7 +79,7 @@ export function MemberInfoModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={u ? userLabel(u.name, u.displayId, u.active, t, u.isGuest) : ''}
+      title={u ? userLabel(u.name, u.active, t, u.isGuest) : ''}
       size="xl"
       centered
     >

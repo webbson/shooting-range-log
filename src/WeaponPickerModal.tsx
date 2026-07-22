@@ -146,7 +146,6 @@ export function WeaponPickerModal({
                             {t('picker_out_held_by', {
                               name: userLabel(
                                 out.userName,
-                                out.userDisplayId,
                                 out.userActive,
                                 t,
                                 out.userIsGuest,
@@ -159,7 +158,6 @@ export function WeaponPickerModal({
                               {t('picker_last_used', {
                                 name: userLabel(
                                   lastUseMap.get(w.uid)!.userName,
-                                  lastUseMap.get(w.uid)!.userDisplayId,
                                   lastUseMap.get(w.uid)!.userActive,
                                   t,
                                 ),

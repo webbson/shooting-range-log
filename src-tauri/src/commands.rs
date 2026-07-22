@@ -308,10 +308,6 @@ pub(crate) fn next_free_weapon_display_id(conn: &Connection) -> Result<String, A
     next_free_display_id(conn, "weapons")
 }
 
-pub(crate) fn next_free_user_display_id(conn: &Connection) -> Result<String, AppError> {
-    next_free_display_id(conn, "users")
-}
-
 pub(crate) fn weapon_get(conn: &Connection, uid: i64) -> Result<Option<Weapon>, AppError> {
     let sql = format!("SELECT {WEAPON_COLS} FROM weapons WHERE uid = ?1");
     Ok(conn
@@ -488,12 +484,6 @@ pub fn set_preferred_weapon(
 }
 
 #[tauri::command]
-pub fn next_user_display_id(db: State<Db>) -> Result<String, AppError> {
-    let conn = lock(&db)?;
-    next_free_user_display_id(&conn)
-}
-
-#[tauri::command]
 pub fn upsert_guest(db: State<Db>, name: String, ssn: String) -> Result<User, AppError> {
     let conn = lock(&db)?;
     user_upsert_guest(&conn, name, ssn)
@@ -647,17 +637,6 @@ mod tests {
         let a3 = user_set_active(&conn, a.uid, true, false).unwrap();
         assert!(a3.active);
         assert_eq!(a3.display_id, None);
-    }
-
-    #[test]
-    fn next_free_user_display_id_skips_retained_tags() {
-        let conn = migrated_in_memory();
-        assert_eq!(next_free_user_display_id(&conn).unwrap(), "1");
-        user_create(&conn, new_user("Anna", Some("1"), false)).unwrap();
-        let b = user_create(&conn, new_user("Björn", Some("2"), false)).unwrap();
-        // Deactivate Björn without clearing → "2" still taken.
-        user_set_active(&conn, b.uid, false, false).unwrap();
-        assert_eq!(next_free_user_display_id(&conn).unwrap(), "3");
     }
 
     #[test]

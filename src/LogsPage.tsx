@@ -60,7 +60,7 @@ export function LogsPage() {
   }));
   const userData = (users.data ?? []).map((u) => ({
     value: String(u.uid),
-    label: [u.name, u.displayId ? `[${u.displayId}]` : ''].filter(Boolean).join(' '),
+    label: u.name,
   }));
   const operatorData = (operators.data ?? []).map((o) => ({
     value: String(o.uid),
@@ -83,7 +83,7 @@ export function LogsPage() {
         {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
       </Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoMember(c.userUid)}>
-        {userLabel(c.userName, c.userDisplayId, c.userActive, t, c.userIsGuest)}
+        {userLabel(c.userName, c.userActive, t, c.userIsGuest)}
       </Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>
@@ -96,7 +96,6 @@ export function LogsPage() {
         )}
       </Table.Td>
       <Table.Td>{c.operatorInName}</Table.Td>
-      <Table.Td>{c.notes}</Table.Td>
     </Table.Tr>
   ));
 
@@ -170,7 +169,6 @@ export function LogsPage() {
                 <Table.Th>{t('operator_out')}</Table.Th>
                 <Table.Th>{t('label_checked_in_at')}</Table.Th>
                 <Table.Th>{t('operator_in')}</Table.Th>
-                <Table.Th>{t('field_checkout_notes')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>{rows}</Table.Tbody>

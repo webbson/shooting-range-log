@@ -76,7 +76,6 @@ export interface UpdateWeapon extends NewWeapon {
 export const listUsers = () => invoke<User[]>('list_users');
 export const listOperators = () => invoke<User[]>('list_operators');
 export const getUser = (uid: number) => invoke<User | null>('get_user', { uid });
-export const nextUserDisplayId = () => invoke<string>('next_user_display_id');
 export const createUser = (input: NewUser) => invoke<User>('create_user', { input });
 export const updateUser = (input: UpdateUser) => invoke<User>('update_user', { input });
 export const setUserActive = (uid: number, active: boolean, clearDisplayId = false) =>
@@ -206,8 +205,8 @@ export const doCheckout = (
   weaponUid: number,
   userUid: number,
   operatorUid: number,
-  notes?: string,
-) => invoke<Checkout>('checkout', { weaponUid, userUid, operatorUid, notes });
+  assign?: boolean,
+) => invoke<Checkout>('checkout', { weaponUid, userUid, operatorUid, assign });
 
 export const doCheckin = (checkoutId: number, operatorUid: number) =>
   invoke<Checkout>('checkin', { checkoutId, operatorUid });
