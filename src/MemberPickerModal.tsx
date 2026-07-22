@@ -77,7 +77,7 @@ export function MemberPickerModal({
   });
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t('pick_member')} size="xl" centered>
+    <Modal opened={opened} onClose={onClose} title={t('pick_member')} size="90%" centered>
       <Grid gap="md">
         <Grid.Col span={7}>
           <ScrollArea h={420} type="auto">
