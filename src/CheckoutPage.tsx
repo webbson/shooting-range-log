@@ -105,7 +105,8 @@ export function CheckoutPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key >= '0' && e.key <= '9') setTag((v) => v + e.key);
       else if (e.key === 'Backspace') setTag((v) => v.slice(0, -1));
-      else if (e.key === 'Enter' && matched) enterForm(matched, autoUserFor(matched)?.uid ?? null);
+      else if (e.key === 'Enter' && matched && !holder)
+        enterForm(matched, autoUserFor(matched)?.uid ?? null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -254,7 +255,7 @@ export function CheckoutPage() {
             <Button
               size="xl"
               fullWidth
-              disabled={!matched}
+              disabled={!matched || !!holder}
               onClick={() => matched && enterForm(matched, autoUserFor(matched)?.uid ?? null)}
             >
               {t('confirm')}
