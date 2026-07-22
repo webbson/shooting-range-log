@@ -13,7 +13,7 @@ import { IconUser, IconTargetArrow } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   listUsers,
   listWeapons,
@@ -94,11 +94,20 @@ export function CheckoutPage() {
     setStep('form');
   };
 
-  const onNumpadKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key >= '0' && e.key <= '9') setTag((v) => v + e.key);
-    else if (e.key === 'Backspace') setTag((v) => v.slice(0, -1));
-    else if (e.key === 'Enter' && matched) enterForm(matched, autoUserFor(matched)?.uid ?? null);
-  };
+  // Physical-keyboard entry for the selector. The page Stack never holds
+  // focus, so a React onKeyDown would be dead — listen on window while the
+  // selector shows. Suspended while the guest modal is open so digits typed
+  // into the SSN field don't leak into the tag.
+  useEffect(() => {
+    if (step !== 'selector' || guestOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') setTag((v) => v + e.key);
+      else if (e.key === 'Backspace') setTag((v) => v.slice(0, -1));
+      else if (e.key === 'Enter' && matched) enterForm(matched, autoUserFor(matched)?.uid ?? null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   // Member drives the flow: picking a member autofills their suggested weapon
   // (assigned, else last-used) or clears the field when nothing is available.
@@ -201,7 +210,6 @@ export function CheckoutPage() {
         align="center"
         justify="center"
         style={{ height: 'calc(100vh - 144px)' }}
-        onKeyDown={onNumpadKeyDown}
       >
         <Stack w={360} gap="md">
           <Numpad value={tag} onChange={setTag} size="xl" placeholder={t('enter_weapon_id')} />
