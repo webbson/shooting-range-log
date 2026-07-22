@@ -93,7 +93,6 @@ export function CheckoutPage() {
   const autoUser = matched ? autoUserFor(matched) : undefined;
   const autoUserIsAssigned =
     autoUser != null && matched != null && preferrerMap.get(matched.uid)?.uid === autoUser.uid;
-  const canDirectCheckout = !!matched && !holder && autoUser != null && !!operator;
 
   const enterForm = (w: Weapon | undefined, uid: number | null) => {
     setWeaponUid(w?.uid ?? null);
@@ -175,6 +174,11 @@ export function CheckoutPage() {
     },
     onError,
   });
+
+  // isPending guard: the button shows loading, but a held Enter key would
+  // otherwise fire a second mutate before the first lands.
+  const canDirectCheckout =
+    !!matched && !holder && autoUser != null && !!operator && !checkoutMut.isPending;
 
   // Pin data for the weapon picker AND the selected-weapon card badges:
   // preferred from the selected member, last-used from the member-only eval
