@@ -211,58 +211,63 @@ export function CheckoutPage() {
         justify="center"
         style={{ height: 'calc(100vh - 144px)' }}
       >
-        <Stack w={360} gap="md">
-          <Numpad value={tag} onChange={setTag} size="xl" placeholder={t('enter_weapon_id')} />
-          <Paper withBorder p="md" ta="center">
-            {matched ? (
-              <Stack gap={4}>
-                <Text fw={700} fz="lg" c="teal">
-                  {weaponLabel(
-                    matched.brand,
-                    matched.model,
-                    matched.caliber,
-                    matched.displayId,
-                    matched.active,
-                    t,
-                  )}
-                </Text>
-                {autoUserFor(matched) && (
-                  <Text c="dimmed">
-                    {userLabel(
-                      autoUserFor(matched)!.name,
-                      autoUserFor(matched)!.active,
+        <Group align="stretch" gap="xl">
+          <Stack w={360} gap="md">
+            <Numpad value={tag} onChange={setTag} size="xl" placeholder={t('enter_weapon_id')} />
+            <Paper withBorder p="md" ta="center">
+              {matched ? (
+                <Stack gap={4}>
+                  <Text fw={700} fz="lg" c="teal">
+                    {weaponLabel(
+                      matched.brand,
+                      matched.model,
+                      matched.caliber,
+                      matched.displayId,
+                      matched.active,
                       t,
-                      autoUserFor(matched)!.isGuest,
                     )}
                   </Text>
-                )}
-                {holder && (
-                  <Text c="orange" fw={600}>
-                    {t('banner_weapon_already_out', {
-                      name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
-                    })}
-                  </Text>
-                )}
-              </Stack>
-            ) : (
-              <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
-            )}
-          </Paper>
-          <Button
-            size="xl"
-            fullWidth
-            disabled={!matched}
-            onClick={() => matched && enterForm(matched, autoUserFor(matched)?.uid ?? null)}
-          >
-            {t('confirm')}
-          </Button>
-          <Button size="xl" variant="default" fullWidth onClick={() => enterForm(undefined, null)}>
-            {t('continue_without_weapon')}
-          </Button>
-          <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
-            {t('guest_button')}
-          </Button>
-        </Stack>
+                  {autoUserFor(matched) && (
+                    <Text c="dimmed">
+                      {userLabel(
+                        autoUserFor(matched)!.name,
+                        autoUserFor(matched)!.active,
+                        t,
+                        autoUserFor(matched)!.isGuest,
+                      )}
+                    </Text>
+                  )}
+                  {holder && (
+                    <Text c="orange" fw={600}>
+                      {t('banner_weapon_already_out', {
+                        name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
+                      })}
+                    </Text>
+                  )}
+                </Stack>
+              ) : (
+                <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
+              )}
+            </Paper>
+            <Button
+              size="xl"
+              fullWidth
+              disabled={!matched}
+              onClick={() => matched && enterForm(matched, autoUserFor(matched)?.uid ?? null)}
+            >
+              {t('confirm')}
+            </Button>
+          </Stack>
+          {/* Secondary paths on the right, bottom-aligned with the confirm button. */}
+          <Stack w={280} gap="md" justify="flex-end">
+            <Button size="xl" variant="default" fullWidth onClick={() => enterForm(undefined, null)}>
+              {t('browse_weapons')}
+            </Button>
+            <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
+              {t('guest_button')}
+            </Button>
+          </Stack>
+        </Group>
 
         <GuestModal
           opened={guestOpen}
