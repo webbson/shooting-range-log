@@ -8,6 +8,7 @@ import {
   Badge,
   Checkbox,
   Paper,
+  Modal,
 } from '@mantine/core';
 import { IconUser, IconTargetArrow } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -45,6 +46,7 @@ export function CheckoutPage() {
   const [step, setStep] = useState<'selector' | 'form'>('selector');
   const [tag, setTag] = useState('');
   const [assign, setAssign] = useState(false);
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
   const [weaponUid, setWeaponUid] = useState<number | null>(null);
   const [userUid, setUserUid] = useState<number | null>(null);
   // Which picker modal is open (replaces the old per-field numpad entry).
@@ -436,21 +438,18 @@ export function CheckoutPage() {
       </SimpleGrid>
 
       {selectedUser && selectedWeapon && !selectedUser.isGuest && (
-        <Stack gap={4}>
-          <Checkbox
-            size="lg"
-            label={t('assign_weapon_checkbox')}
-            checked={alreadyAssigned || assign}
-            disabled={alreadyAssigned}
-            description={alreadyAssigned ? t('assign_already') : undefined}
-            onChange={(e) => setAssign(e.target.checked)}
-          />
-          {assign && !alreadyAssigned && otherFavorite && (
-            <Text c="orange" fz="lg">
-              {t('assign_transfer_warning', { name: otherFavorite.name })}
-            </Text>
-          )}
-        </Stack>
+        <Checkbox
+          size="lg"
+          label={t('assign_weapon_checkbox')}
+          checked={alreadyAssigned || assign}
+          disabled={alreadyAssigned}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            // Transferring another member's assignment needs explicit yes/no.
+            if (checked && otherFavorite) setConfirmTransfer(true);
+            else setAssign(checked);
+          }}
+        />
       )}
 
       <Button
@@ -493,6 +492,32 @@ export function CheckoutPage() {
           lastUid: pinEval.data?.lastWeaponUid,
         }}
       />
+
+      <Modal
+        opened={confirmTransfer}
+        onClose={() => setConfirmTransfer(false)}
+        title={t('assign_weapon_checkbox')}
+        centered
+      >
+        <Stack>
+          <Text fz="lg">{t('assign_transfer_confirm', { name: otherFavorite?.name })}</Text>
+          <Group grow>
+            <Button size="lg" variant="default" onClick={() => setConfirmTransfer(false)}>
+              {t('no')}
+            </Button>
+            <Button
+              size="lg"
+              color="orange"
+              onClick={() => {
+                setAssign(true);
+                setConfirmTransfer(false);
+              }}
+            >
+              {t('yes')}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
