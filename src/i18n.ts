@@ -258,6 +258,8 @@ const resources = {
       filter_name: 'Sök namn',
       filter_brand: 'Märke',
       filter_caliber: 'Kaliber',
+      filter_available_only: 'Endast tillgängliga',
+      filter_unassigned_only: 'Endast otilldelade',
       badge_preferred: 'Tilldelat',
       badge_last: 'Senast',
       picker_last_used: 'Senast: {{name}} · {{date}}',
@@ -265,6 +267,7 @@ const resources = {
       clear_selection: 'Rensa',
       field_preferred_weapon: 'Tilldelat vapen',
       none_set: 'Inget valt',
+      assigned_to: 'Tilldelat till',
 
       // Weapon tags
       tag_needs_service: 'Behöver service',
@@ -530,6 +533,8 @@ const resources = {
       filter_name: 'Search name',
       filter_brand: 'Brand',
       filter_caliber: 'Caliber',
+      filter_available_only: 'Available only',
+      filter_unassigned_only: 'Unassigned only',
       badge_preferred: 'Assigned',
       badge_last: 'Last used',
       picker_last_used: 'Last: {{name}} · {{date}}',
@@ -537,6 +542,7 @@ const resources = {
       clear_selection: 'Clear',
       field_preferred_weapon: 'Assigned weapon',
       none_set: 'None set',
+      assigned_to: 'Assigned to',
 
       // Weapon tags
       tag_needs_service: 'Needs service',

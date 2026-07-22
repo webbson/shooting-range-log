@@ -45,7 +45,7 @@ import { useIsAdmin } from './useIsAdmin';
 const SSN_RE = /^\d{8}-\d{4}$/;
 const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
 
-type SortKey = 'name' | 'lastShot';
+type SortKey = 'name' | 'lastShot' | 'assignedWeapon';
 
 interface MemberForm {
   name: string;
@@ -106,6 +106,11 @@ export function MembersPage() {
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
   const shots = useQuery({ queryKey: ['lastShotDates'], queryFn: lastShotDates });
   const lastShotMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
+  const weaponMap = new Map((weapons.data ?? []).map((w) => [w.uid, w] as const));
+  const assignedLabel = (u: User): string | undefined => {
+    const w = u.preferredWeaponUid != null ? weaponMap.get(u.preferredWeaponUid) : undefined;
+    return w ? weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) : undefined;
+  };
 
   const form = useForm<MemberForm>({
     initialValues: EMPTY,
@@ -248,6 +253,14 @@ export function MembersPage() {
       if (!bv) return -1;
       return av.localeCompare(bv) * dir;
     }
+    if (sort.key === 'assignedWeapon') {
+      const av = assignedLabel(a);
+      const bv = assignedLabel(b);
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av.localeCompare(bv, 'sv') * dir;
+    }
     return 0;
   });
 
@@ -283,6 +296,7 @@ export function MembersPage() {
         </Group>
       </Table.Td>
       <Table.Td>{lastShotMap.has(u.uid) ? fmtDate(lastShotMap.get(u.uid)!) : '—'}</Table.Td>
+      <Table.Td>{assignedLabel(u) ?? ''}</Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
           {u.isStaff && <Badge color="grape">{t('staff')}</Badge>}
@@ -366,6 +380,7 @@ export function MembersPage() {
               <Table.Tr>
                 <SortTh label={t('field_name')} k="name" />
                 <SortTh label={t('field_last_shot')} k="lastShot" />
+                <SortTh label={t('field_preferred_weapon')} k="assignedWeapon" />
                 <Table.Th />
                 <Table.Th />
               </Table.Tr>

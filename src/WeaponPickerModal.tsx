@@ -9,6 +9,7 @@ import {
   Badge,
   TextInput,
   Select,
+  Checkbox,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -47,6 +48,8 @@ export function WeaponPickerModal({
   const [text, setText] = useState('');
   const [brand, setBrand] = useState<string | null>(null);
   const [caliber, setCaliber] = useState<string | null>(null);
+  const [availOnlyFilter, setAvailOnlyFilter] = useState(false);
+  const [unassignedOnlyFilter, setUnassignedOnlyFilter] = useState(false);
 
   // Fresh filters each time the modal opens.
   useEffect(() => {
@@ -55,6 +58,8 @@ export function WeaponPickerModal({
       setText('');
       setBrand(null);
       setCaliber(null);
+      setAvailOnlyFilter(false);
+      setUnassignedOnlyFilter(false);
     }
   }, [opened]);
 
@@ -62,7 +67,7 @@ export function WeaponPickerModal({
   const open = useQuery({
     queryKey: ['openCheckouts'],
     queryFn: listOpenCheckouts,
-    enabled: opened && availableOnly,
+    enabled: opened,
   });
   // weapon uid → its open checkout (holder shown on the disabled row).
   const outMap = new Map((open.data ?? []).map((o) => [o.weaponUid, o] as const));
@@ -91,6 +96,8 @@ export function WeaponPickerModal({
     if (tag && !(w.displayId ?? '').startsWith(tag)) return false;
     if (brand && w.brand !== brand) return false;
     if (caliber && w.caliber !== caliber) return false;
+    if (availOnlyFilter && outMap.has(w.uid)) return false;
+    if (unassignedOnlyFilter && preferrerMap.has(w.uid)) return false;
     if (q && ![w.brand, w.model, w.serial].some((f) => f?.toLowerCase().includes(q)))
       return false;
     return true;
@@ -105,7 +112,11 @@ export function WeaponPickerModal({
         : w.uid === pinned?.lastUid
           ? 2
           : 3;
+  // Out weapons sink below every available one, regardless of rank.
+  const outBucket = (w: Weapon) => (availableOnly && outMap.has(w.uid) ? 1 : 0);
   const sorted = [...filtered].sort((a, b) => {
+    const ob = outBucket(a) - outBucket(b);
+    if (ob !== 0) return ob;
     const r = rank(a) - rank(b);
     if (r !== 0) return r;
     return label(a).localeCompare(label(b), 'sv');
@@ -213,6 +224,18 @@ export function WeaponPickerModal({
               onChange={setCaliber}
               clearable
               searchable
+            />
+            <Checkbox
+              size="lg"
+              label={t('filter_available_only')}
+              checked={availOnlyFilter}
+              onChange={(e) => setAvailOnlyFilter(e.target.checked)}
+            />
+            <Checkbox
+              size="lg"
+              label={t('filter_unassigned_only')}
+              checked={unassignedOnlyFilter}
+              onChange={(e) => setUnassignedOnlyFilter(e.target.checked)}
             />
           </Stack>
         </Grid.Col>
