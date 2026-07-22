@@ -1,5 +1,6 @@
 import {
   Modal,
+  Grid,
   Stack,
   Group,
   ScrollArea,
@@ -15,9 +16,10 @@ import { useTranslation } from 'react-i18next';
 import { lastShotDates, listUsers, outstandingDebts, type User } from './api';
 import { userLabel } from './labels';
 import { fmtDate } from './format';
+import { Keyboard } from './Keyboard';
 
-// Touch-first member selector: name search on top, full-width list below.
-// Active members only (same pool as the old dropdown).
+// Touch-first member selector: list left, name search + on-screen keyboard
+// right. Active members only (same pool as the old dropdown).
 export function MemberPickerModal({
   opened,
   onClose,
@@ -76,43 +78,51 @@ export function MemberPickerModal({
 
   return (
     <Modal opened={opened} onClose={onClose} title={t('pick_member')} size="xl" centered>
-      <Stack gap="md">
-        <TextInput
-          placeholder={t('filter_name')}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <ScrollArea h={420} type="auto">
-          <Stack gap="xs">
-            {sorted.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
-            {sorted.map((u) => (
-              <Card
-                key={u.uid}
-                withBorder
-                padding="sm"
-                style={{ cursor: 'pointer' }}
-                onClick={() => onSelect(u.uid)}
-              >
-                <Group justify="space-between" wrap="nowrap">
-                  <Stack gap={2}>
-                    <Text fw={600}>{userLabel(u.name, true, t)}</Text>
-                    {lastMap.has(u.uid) && (
-                      <Text size="xs" c="dimmed">
-                        {t('field_last_shot')}: {fmtDate(lastMap.get(u.uid)!)}
-                      </Text>
+      <Grid gap="md">
+        <Grid.Col span={7}>
+          <ScrollArea h={420} type="auto">
+            <Stack gap="xs">
+              {sorted.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
+              {sorted.map((u) => (
+                <Card
+                  key={u.uid}
+                  withBorder
+                  padding="sm"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelect(u.uid)}
+                >
+                  <Group justify="space-between" wrap="nowrap">
+                    <Stack gap={2}>
+                      <Text fw={600}>{userLabel(u.name, true, t)}</Text>
+                      {lastMap.has(u.uid) && (
+                        <Text size="xs" c="dimmed">
+                          {t('field_last_shot')}: {fmtDate(lastMap.get(u.uid)!)}
+                        </Text>
+                      )}
+                    </Stack>
+                    {debtMap.has(u.uid) && (
+                      <Badge color="red" variant="filled">
+                        {t('debt_badge', { amount: debtMap.get(u.uid) })}
+                      </Badge>
                     )}
-                  </Stack>
-                  {debtMap.has(u.uid) && (
-                    <Badge color="red" variant="filled">
-                      {t('debt_badge', { amount: debtMap.get(u.uid) })}
-                    </Badge>
-                  )}
-                </Group>
-              </Card>
-            ))}
+                  </Group>
+                </Card>
+              ))}
+            </Stack>
+          </ScrollArea>
+        </Grid.Col>
+        <Grid.Col span={5}>
+          <Stack gap="xs">
+            <TextInput
+              data-autofocus
+              placeholder={t('filter_name')}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <Keyboard value={text} onChange={setText} withDisplay={false} />
           </Stack>
-        </ScrollArea>
-      </Stack>
+        </Grid.Col>
+      </Grid>
     </Modal>
   );
 }
