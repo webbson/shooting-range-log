@@ -88,6 +88,12 @@ export function CheckoutPage() {
     return u && u.active && !u.isGuest ? u : undefined;
   };
   const holder = matched ? openMap.get(matched.uid) : undefined;
+  // Auto-resolved user for the selector preview + direct checkout, and
+  // whether they're the assigned (preferred) holder vs. last-used.
+  const autoUser = matched ? autoUserFor(matched) : undefined;
+  const autoUserIsAssigned =
+    autoUser != null && matched != null && preferrerMap.get(matched.uid)?.uid === autoUser.uid;
+  const canDirectCheckout = !!matched && !holder && autoUser != null && !!operator;
 
   const enterForm = (w: Weapon | undefined, uid: number | null) => {
     setWeaponUid(w?.uid ?? null);
@@ -105,8 +111,13 @@ export function CheckoutPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key >= '0' && e.key <= '9') setTag((v) => v + e.key);
       else if (e.key === 'Backspace') setTag((v) => v.slice(0, -1));
-      else if (e.key === 'Enter' && matched && !holder)
-        enterForm(matched, autoUserFor(matched)?.uid ?? null);
+      else if (e.key === 'Enter') {
+        if (canDirectCheckout && matched && autoUser) {
+          checkoutMut.mutate({ weaponUid: matched.uid, userUid: autoUser.uid, assign: false });
+        } else if (matched && !holder) {
+          enterForm(matched, autoUser?.uid ?? null);
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -151,8 +162,8 @@ export function CheckoutPage() {
   const alreadyAssigned = selectedWeapon != null && selectedWeapon.uid === selectedUser?.preferredWeaponUid;
 
   const checkoutMut = useMutation({
-    mutationFn: () =>
-      doCheckout(weaponUid!, userUid!, operator!.uid, alreadyAssigned ? false : assign),
+    mutationFn: (vars: { weaponUid: number; userUid: number; assign: boolean }) =>
+      doCheckout(vars.weaponUid, vars.userUid, operator!.uid, vars.assign),
     onSuccess: () => {
       notifications.show({ message: t('checked_out_ok') });
       reset();
@@ -230,15 +241,27 @@ export function CheckoutPage() {
                       t,
                     )}
                   </Text>
-                  {autoUserFor(matched) && (
-                    <Text c="dimmed">
-                      {userLabel(
-                        autoUserFor(matched)!.name,
-                        autoUserFor(matched)!.active,
-                        t,
-                        autoUserFor(matched)!.isGuest,
+                  {autoUser && (
+                    <Stack gap={2} align="center">
+                      <Group gap={4} justify="center">
+                        <Text c="dimmed">
+                          {userLabel(autoUser.name, autoUser.active, t, autoUser.isGuest)}
+                        </Text>
+                        <Badge color={autoUserIsAssigned ? 'yellow' : 'gray'} variant="light" size="sm">
+                          {autoUserIsAssigned ? t('badge_preferred') : t('badge_last')}
+                        </Badge>
+                      </Group>
+                      {lastMap.has(autoUser.uid) && (
+                        <Text size="sm" c="dimmed">
+                          {t('field_last_shot')}: {fmtDate(lastMap.get(autoUser.uid)!)}
+                        </Text>
                       )}
-                    </Text>
+                      {debtMap.has(autoUser.uid) && (
+                        <Badge color="red" variant="filled" size="sm">
+                          {t('debt_badge', { amount: debtMap.get(autoUser.uid) })}
+                        </Badge>
+                      )}
+                    </Stack>
                   )}
                   {holder && (
                     <Text c="orange" fw={600}>
@@ -255,16 +278,30 @@ export function CheckoutPage() {
             <Button
               size="xl"
               fullWidth
-              disabled={!matched || !!holder}
-              onClick={() => matched && enterForm(matched, autoUserFor(matched)?.uid ?? null)}
+              disabled={!canDirectCheckout}
+              loading={checkoutMut.isPending}
+              onClick={() =>
+                matched &&
+                autoUser &&
+                checkoutMut.mutate({ weaponUid: matched.uid, userUid: autoUser.uid, assign: false })
+              }
             >
-              {t('confirm')}
+              {t('confirm_checkout')}
             </Button>
           </Stack>
           {/* Secondary paths on the right, bottom-aligned with the confirm button. */}
           <Stack w={280} gap="md" justify="flex-end">
-            <Button size="xl" variant="default" fullWidth onClick={() => enterForm(undefined, null)}>
-              {t('browse_weapons')}
+            <Button
+              size="xl"
+              variant="default"
+              fullWidth
+              onClick={() =>
+                matched && !holder
+                  ? enterForm(matched, autoUser?.uid ?? null)
+                  : enterForm(undefined, null)
+              }
+            >
+              {matched && !holder ? t('change') : t('browse_weapons')}
             </Button>
             <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
               {t('guest_button')}
@@ -466,7 +503,13 @@ export function CheckoutPage() {
         fullWidth
         disabled={!ev?.canCheckout || !operator}
         loading={checkoutMut.isPending}
-        onClick={() => checkoutMut.mutate()}
+        onClick={() =>
+          checkoutMut.mutate({
+            weaponUid: weaponUid!,
+            userUid: userUid!,
+            assign: alreadyAssigned ? false : assign,
+          })
+        }
       >
         {t('confirm_checkout')}
       </Button>
