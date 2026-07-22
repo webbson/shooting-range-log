@@ -43,10 +43,10 @@ export function Keyboard({
             <Button
               key={k}
               variant="default"
-              size="md"
+              size="lg"
               px={0}
               onClick={() => press(k)}
-              styles={{ label: { fontSize: '0.9rem' } }}
+              styles={{ label: { fontSize: '1.1rem' } }}
             >
               {k}
             </Button>
@@ -54,10 +54,10 @@ export function Keyboard({
         </SimpleGrid>
       ))}
       <SimpleGrid cols={2} spacing={4}>
-        <Button variant="default" size="md" onClick={() => press(' ')}>
+        <Button variant="default" size="lg" onClick={() => press(' ')}>
           {' '}
         </Button>
-        <Button variant="default" size="md" onClick={() => press('⌫')}>
+        <Button variant="default" size="lg" onClick={() => press('⌫')}>
           ⌫
         </Button>
       </SimpleGrid>
