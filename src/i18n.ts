@@ -257,7 +257,6 @@ const resources = {
       // Picker modals (M7)
       pick_weapon: 'Välj vapen',
       pick_member: 'Välj medlem',
-      filter_text_weapon: 'Sök märke, modell, serienummer',
       filter_name: 'Sök namn',
       filter_brand: 'Märke',
       filter_caliber: 'Kaliber',
@@ -535,7 +534,6 @@ const resources = {
       // Picker modals (M7)
       pick_weapon: 'Select weapon',
       pick_member: 'Select member',
-      filter_text_weapon: 'Search brand, model, serial',
       filter_name: 'Search name',
       filter_brand: 'Brand',
       filter_caliber: 'Caliber',

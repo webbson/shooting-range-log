@@ -7,7 +7,6 @@ import {
   Card,
   Text,
   Badge,
-  TextInput,
   Select,
   Checkbox,
 } from '@mantine/core';
@@ -45,7 +44,6 @@ export function WeaponPickerModal({
 }) {
   const { t } = useTranslation();
   const [tag, setTag] = useState('');
-  const [text, setText] = useState('');
   const [brand, setBrand] = useState<string | null>(null);
   const [caliber, setCaliber] = useState<string | null>(null);
   const [availOnlyFilter, setAvailOnlyFilter] = useState(false);
@@ -55,7 +53,6 @@ export function WeaponPickerModal({
   useEffect(() => {
     if (opened) {
       setTag('');
-      setText('');
       setBrand(null);
       setCaliber(null);
       setAvailOnlyFilter(false);
@@ -91,15 +88,12 @@ export function WeaponPickerModal({
   const brands = [...new Set(pool.map((w) => w.brand).filter(Boolean) as string[])].sort();
   const calibers = [...new Set(pool.map((w) => w.caliber).filter(Boolean) as string[])].sort();
 
-  const q = text.trim().toLowerCase();
   const filtered = pool.filter((w) => {
     if (tag && !(w.displayId ?? '').startsWith(tag)) return false;
     if (brand && w.brand !== brand) return false;
     if (caliber && w.caliber !== caliber) return false;
     if (availOnlyFilter && outMap.has(w.uid)) return false;
     if (unassignedOnlyFilter && preferrerMap.has(w.uid)) return false;
-    if (q && ![w.brand, w.model, w.serial].some((f) => f?.toLowerCase().includes(q)))
-      return false;
     return true;
   });
 
@@ -204,11 +198,6 @@ export function WeaponPickerModal({
         <Grid.Col span={5}>
           <Stack gap="xs">
             <Numpad value={tag} onChange={setTag} size="md" />
-            <TextInput
-              placeholder={t('filter_text_weapon')}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
             <Select
               placeholder={t('filter_brand')}
               data={brands}
