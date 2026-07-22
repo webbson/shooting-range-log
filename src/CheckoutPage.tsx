@@ -274,7 +274,14 @@ export function CheckoutPage() {
         <GuestModal
           opened={guestOpen}
           onClose={() => setGuestOpen(false)}
-          onSelect={(uid) => enterForm(matched, uid)}
+          onSelect={(uid) => {
+            if (matched) {
+              enterForm(matched, uid);
+            } else {
+              setStep('form');
+              onMemberChange(uid);
+            }
+          }}
         />
       </Stack>
     );

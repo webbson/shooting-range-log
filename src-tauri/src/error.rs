@@ -174,6 +174,10 @@ impl AppError {
             json!({}),
         )
     }
+
+    pub fn ssn_invalid() -> Self {
+        AppError::new("err_ssn_invalid", "Invalid SSN — use YYYYMMDD-XXXX.", json!({}))
+    }
 }
 
 impl From<rusqlite::Error> for AppError {

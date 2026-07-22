@@ -223,6 +223,31 @@ pub(crate) fn user_set_preferred_weapon(
     user_require(conn, user_uid)
 }
 
+/// Normalize a personnummer to canonical `YYYYMMDD-XXXX`.
+/// Accepts 10 or 12 digits with any spacing/dashes; 10-digit century is
+/// inferred (20xx unless that lands in the future, then 19xx). Day 61–91 =
+/// samordningsnummer. Stored values are already canonical — all guest writes
+/// pass through here — so only the input needs normalizing.
+fn normalize_ssn(raw: &str) -> Result<String, AppError> {
+    use chrono::Datelike;
+    let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+    let full = match digits.len() {
+        12 => digits,
+        10 => {
+            let yy: i32 = digits[0..2].parse().unwrap();
+            let century = if 2000 + yy > chrono::Utc::now().year() { 1900 } else { 2000 };
+            format!("{}{}", century + yy, &digits[2..])
+        }
+        _ => return Err(AppError::ssn_invalid()),
+    };
+    let month: u32 = full[4..6].parse().unwrap();
+    let day: u32 = full[6..8].parse().unwrap();
+    if !(1..=12).contains(&month) || !((1..=31).contains(&day) || (61..=91).contains(&day)) {
+        return Err(AppError::ssn_invalid());
+    }
+    Ok(format!("{}-{}", &full[0..8], &full[8..12]))
+}
+
 /// Guest checkout entry: find an active user by SSN or create a guest.
 /// Active guest with this SSN → returned as-is (name is not overwritten).
 /// Active member with this SSN → error (use the normal member flow).
@@ -232,6 +257,7 @@ pub(crate) fn user_upsert_guest(
     ssn: String,
 ) -> Result<User, AppError> {
     let ssn = norm(Some(ssn)).ok_or_else(AppError::ssn_required)?;
+    let ssn = normalize_ssn(&ssn)?;
     let name = require_name(name)?;
     let sql = format!("SELECT {USER_COLS} FROM users WHERE ssn = ?1 AND active = 1");
     let existing = conn
@@ -871,6 +897,31 @@ mod tests {
         assert_eq!(err.code, "err_ssn_required");
         let err = user_upsert_guest(&conn, " ".into(), "19900101-1234".into()).unwrap_err();
         assert_eq!(err.code, "err_name_required");
+    }
+
+    #[test]
+    fn upsert_guest_normalizes_ssn_and_reuses_across_input_styles() {
+        let conn = migrated_in_memory();
+        // 10 digits, no dash: century inferred (87 → 1987).
+        let g = user_upsert_guest(&conn, "Tio Siffror".into(), "8707077777".into()).unwrap();
+        assert_eq!(g.ssn.as_deref(), Some("19870707-7777"));
+        // Canonical and spaced 12-digit forms hit the same row.
+        let g2 = user_upsert_guest(&conn, "Annat Namn".into(), "19870707-7777".into()).unwrap();
+        assert_eq!(g2.uid, g.uid);
+        let g3 = user_upsert_guest(&conn, "Annat Namn".into(), " 19870707 7777 ".into()).unwrap();
+        assert_eq!(g3.uid, g.uid);
+    }
+
+    #[test]
+    fn upsert_guest_ssn_century_inference_and_rejections() {
+        let conn = migrated_in_memory();
+        // YY after the current 2-digit year → 19xx.
+        let g = user_upsert_guest(&conn, "Nittiotal".into(), "990101-1234".into()).unwrap();
+        assert_eq!(g.ssn.as_deref(), Some("19990101-1234"));
+        for bad in ["123456789", "abcdefghij", "19871307-7777", "19870732-7777"] {
+            let err = user_upsert_guest(&conn, "Ogiltig".into(), bad.into()).unwrap_err();
+            assert_eq!(err.code, "err_ssn_invalid", "input: {bad}");
+        }
     }
 
     #[test]
