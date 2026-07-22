@@ -218,6 +218,14 @@ export function CheckoutPage() {
     return p && p.uid !== selectedUser?.uid ? p : undefined;
   })();
 
+  // The member's own current assignment, when checking the box would replace
+  // it with a different weapon (one assigned weapon per member).
+  const replacesOwnAssigned = (() => {
+    if (!selectedUser || alreadyAssigned || selectedUser.preferredWeaponUid == null)
+      return undefined;
+    return (weapons.data ?? []).find((w) => w.uid === selectedUser.preferredWeaponUid);
+  })();
+
   if (step === 'selector') {
     return (
       <Stack
@@ -490,8 +498,9 @@ export function CheckoutPage() {
           disabled={alreadyAssigned}
           onChange={(e) => {
             const checked = e.target.checked;
-            // Transferring another member's assignment needs explicit yes/no.
-            if (checked && otherFavorite) setConfirmTransfer(true);
+            // Taking another member's weapon, or replacing this member's own
+            // assignment, needs explicit yes/no before the box sticks.
+            if (checked && (otherFavorite || replacesOwnAssigned)) setConfirmTransfer(true);
             else setAssign(checked);
           }}
         />
@@ -551,7 +560,26 @@ export function CheckoutPage() {
         centered
       >
         <Stack>
-          <Text fz="lg">{t('assign_transfer_confirm', { name: otherFavorite?.name })}</Text>
+          {otherFavorite && (
+            <Text fz="lg">{t('assign_transfer_confirm', { name: otherFavorite.name })}</Text>
+          )}
+          {replacesOwnAssigned && (
+            <Text fz="lg">
+              {t('assign_replace_confirm', {
+                weapon: weaponLabel(
+                  replacesOwnAssigned.brand,
+                  replacesOwnAssigned.model,
+                  replacesOwnAssigned.caliber,
+                  replacesOwnAssigned.displayId,
+                  replacesOwnAssigned.active,
+                  t,
+                ),
+              })}
+            </Text>
+          )}
+          <Text fz="lg" fw={600}>
+            {t('are_you_sure')}
+          </Text>
           <Group grow>
             <Button size="lg" variant="default" onClick={() => setConfirmTransfer(false)}>
               {t('no')}
