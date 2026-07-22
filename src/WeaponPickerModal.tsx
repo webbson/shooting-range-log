@@ -13,7 +13,14 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listWeapons, listOpenCheckouts, listUsers, lastWeaponUsers, type Weapon } from './api';
+import {
+  listWeapons,
+  listOpenCheckouts,
+  listUsers,
+  lastWeaponUsers,
+  activeTagKeys,
+  type Weapon,
+} from './api';
 import { weaponLabel, userLabel } from './labels';
 import { fmtDate } from './format';
 import { Numpad } from './Numpad';
@@ -125,10 +132,25 @@ export function WeaponPickerModal({
                     <Group justify="space-between" wrap="nowrap">
                       <Stack gap={2}>
                         <Text fw={600}>{label(w)}</Text>
+                        {activeTagKeys(w).length > 0 && (
+                          <Group gap={4}>
+                            {activeTagKeys(w).map((k) => (
+                              <Badge key={k} color="orange" variant="light" size="xs">
+                                {t(`tag_${k}`)}
+                              </Badge>
+                            ))}
+                          </Group>
+                        )}
                         {out ? (
                           <Text size="xs" c="red.7">
                             {t('picker_out_held_by', {
-                              name: userLabel(out.userName, out.userDisplayId, out.userActive, t),
+                              name: userLabel(
+                                out.userName,
+                                out.userDisplayId,
+                                out.userActive,
+                                t,
+                                out.userIsGuest,
+                              ),
                             })}
                           </Text>
                         ) : (

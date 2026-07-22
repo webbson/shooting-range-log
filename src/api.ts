@@ -19,6 +19,8 @@ export interface User {
   preferredWeaponUid: number | null;
   createdAt: string;
   updatedAt: string;
+  isGuest: boolean;
+  isAdmin: boolean;
 }
 
 export interface NewUser {
@@ -30,6 +32,7 @@ export interface NewUser {
   ssn?: string | null;
   isStaff: boolean;
   notes?: string | null;
+  isAdmin?: boolean;
 }
 
 export interface UpdateUser extends NewUser {
@@ -48,6 +51,11 @@ export interface Weapon {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  tagNeedsService: boolean;
+  tagBroken: boolean;
+  tagMissingParts: boolean;
+  tagNeedsCleaning: boolean;
+  tagComment: string | null;
 }
 
 export interface NewWeapon {
@@ -76,6 +84,52 @@ export const setUserActive = (uid: number, active: boolean, clearDisplayId = fal
 
 export const setPreferredWeapon = (userUid: number, weaponUid: number | null) =>
   invoke<User>('set_preferred_weapon', { userUid, weaponUid });
+
+// ---- Guests ----
+
+export const upsertGuest = (name: string, ssn: string) =>
+  invoke<User>('upsert_guest', { name, ssn });
+export const promoteGuest = (uid: number) => invoke<User>('promote_guest', { uid });
+export const hasAdmin = () => invoke<boolean>('has_admin');
+
+// ---- Weapon tags ----
+
+/** Fixed tag set; i18n label key = `tag_${key}`, weapon field = camelCase `tag${Key}`. */
+export const WEAPON_TAG_KEYS = [
+  'needs_service',
+  'broken',
+  'missing_parts',
+  'needs_cleaning',
+] as const;
+export type WeaponTagKey = (typeof WEAPON_TAG_KEYS)[number];
+
+export interface WeaponTags {
+  needsService: boolean;
+  broken: boolean;
+  missingParts: boolean;
+  needsCleaning: boolean;
+  comment: string | null;
+}
+
+export const setWeaponTags = (weaponUid: number, tags: WeaponTags) =>
+  invoke<Weapon>('set_weapon_tags', {
+    weaponUid,
+    needsService: tags.needsService,
+    broken: tags.broken,
+    missingParts: tags.missingParts,
+    needsCleaning: tags.needsCleaning,
+    comment: tags.comment,
+  });
+
+/** Active tag keys for a weapon row (weapons list / pickers / info modal). */
+export const activeTagKeys = (w: Weapon): WeaponTagKey[] => {
+  const out: WeaponTagKey[] = [];
+  if (w.tagNeedsService) out.push('needs_service');
+  if (w.tagBroken) out.push('broken');
+  if (w.tagMissingParts) out.push('missing_parts');
+  if (w.tagNeedsCleaning) out.push('needs_cleaning');
+  return out;
+};
 
 // ---- Weapon commands ----
 
@@ -113,6 +167,8 @@ export interface CheckoutEval {
   userInactive: boolean;
   userOutstandingDebtKr: number;
   canCheckout: boolean;
+  weaponTags: string[];
+  weaponTagComment: string | null;
 }
 
 export interface Checkout {
@@ -140,6 +196,7 @@ export interface OpenCheckout {
   weaponCaliber: string | null;
   weaponActive: boolean;
   checkedOutAt: string;
+  userIsGuest: boolean;
 }
 
 export const evaluateCheckout = (weaponUid: number | null, userUid: number | null) =>
@@ -230,6 +287,7 @@ export interface CheckoutLog {
   operatorOutName: string | null;
   operatorInName: string | null;
   notes: string | null;
+  userIsGuest: boolean;
 }
 
 export interface CheckoutFilters {

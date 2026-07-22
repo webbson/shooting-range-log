@@ -115,8 +115,8 @@ pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, App
     let now = now_utc();
     conn.execute(
         "INSERT INTO users
-           (display_id, name, email, phone, address, ssn, is_staff, active, notes, created_at, updated_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,1,?8,?9,?9)",
+           (display_id, name, email, phone, address, ssn, is_staff, is_admin, active, notes, created_at, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,1,?9,?10,?10)",
         params![
             display_id,
             name,
@@ -125,6 +125,7 @@ pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, App
             norm(input.address),
             norm(input.ssn),
             input.is_staff,
+            input.is_admin,
             norm(input.notes),
             now,
         ],
@@ -141,7 +142,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
     conn.execute(
         "UPDATE users SET
            display_id = ?2, name = ?3, email = ?4, phone = ?5,
-           address = ?6, ssn = ?7, is_staff = ?8, notes = ?9, updated_at = ?10
+           address = ?6, ssn = ?7, is_staff = ?8, is_admin = ?9, notes = ?10, updated_at = ?11
          WHERE uid = ?1",
         params![
             input.uid,
@@ -152,6 +153,7 @@ fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
             norm(input.address),
             norm(input.ssn),
             input.is_staff,
+            input.is_admin,
             norm(input.notes),
             now_utc(),
         ],
@@ -219,6 +221,58 @@ pub(crate) fn user_set_preferred_weapon(
         params![user_uid, weapon_uid, now_utc()],
     )?;
     user_require(conn, user_uid)
+}
+
+/// Guest checkout entry: find an active user by SSN or create a guest.
+/// Active guest with this SSN → returned as-is (name is not overwritten).
+/// Active member with this SSN → error (use the normal member flow).
+pub(crate) fn user_upsert_guest(
+    conn: &Connection,
+    name: String,
+    ssn: String,
+) -> Result<User, AppError> {
+    let ssn = norm(Some(ssn)).ok_or_else(AppError::ssn_required)?;
+    let name = require_name(name)?;
+    let sql = format!("SELECT {USER_COLS} FROM users WHERE ssn = ?1 AND active = 1");
+    let existing = conn
+        .query_row(&sql, params![ssn], |r| User::from_row(r))
+        .optional()?;
+    if let Some(u) = existing {
+        if u.is_guest {
+            return Ok(u);
+        }
+        return Err(AppError::ssn_belongs_to_member(&u.name));
+    }
+    let now = now_utc();
+    conn.execute(
+        "INSERT INTO users (name, ssn, is_guest, active, created_at, updated_at)
+         VALUES (?1, ?2, 1, 1, ?3, ?3)",
+        params![name, ssn, now],
+    )?;
+    user_require(conn, conn.last_insert_rowid())
+}
+
+/// Admin-only in the UI: turn a guest into a normal member.
+pub(crate) fn user_promote_guest(conn: &Connection, uid: i64) -> Result<User, AppError> {
+    let u = user_require(conn, uid)?;
+    if !u.is_guest {
+        return Err(AppError::not_a_guest());
+    }
+    conn.execute(
+        "UPDATE users SET is_guest = 0, updated_at = ?2 WHERE uid = ?1",
+        params![uid, now_utc()],
+    )?;
+    user_require(conn, uid)
+}
+
+/// Bootstrap: when no active admin exists, the frontend disables admin gating.
+pub(crate) fn admin_exists(conn: &Connection) -> Result<bool, AppError> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND active = 1",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(n > 0)
 }
 
 // ---------- Weapons (inner) ----------
@@ -358,6 +412,28 @@ pub(crate) fn weapon_set_active(
     weapon_require(conn, uid)
 }
 
+/// Set the fixed condition tags + free comment (current state, not history —
+/// service history lives in weapon_service_log).
+pub(crate) fn weapon_set_tags(
+    conn: &Connection,
+    uid: i64,
+    needs_service: bool,
+    broken: bool,
+    missing_parts: bool,
+    needs_cleaning: bool,
+    comment: Option<String>,
+) -> Result<Weapon, AppError> {
+    weapon_require(conn, uid)?;
+    conn.execute(
+        "UPDATE weapons SET
+           tag_needs_service = ?2, tag_broken = ?3, tag_missing_parts = ?4,
+           tag_needs_cleaning = ?5, tag_comment = ?6, updated_at = ?7
+         WHERE uid = ?1",
+        params![uid, needs_service, broken, missing_parts, needs_cleaning, norm(comment), now_utc()],
+    )?;
+    weapon_require(conn, uid)
+}
+
 // ---------- Command wrappers ----------
 
 #[tauri::command]
@@ -418,6 +494,24 @@ pub fn next_user_display_id(db: State<Db>) -> Result<String, AppError> {
 }
 
 #[tauri::command]
+pub fn upsert_guest(db: State<Db>, name: String, ssn: String) -> Result<User, AppError> {
+    let conn = lock(&db)?;
+    user_upsert_guest(&conn, name, ssn)
+}
+
+#[tauri::command]
+pub fn promote_guest(db: State<Db>, uid: i64) -> Result<User, AppError> {
+    let conn = lock(&db)?;
+    user_promote_guest(&conn, uid)
+}
+
+#[tauri::command]
+pub fn has_admin(db: State<Db>) -> Result<bool, AppError> {
+    let conn = lock(&db)?;
+    admin_exists(&conn)
+}
+
+#[tauri::command]
 pub fn list_weapons(db: State<Db>) -> Result<Vec<Weapon>, AppError> {
     let conn = lock(&db)?;
     weapons_list(&conn)
@@ -459,6 +553,20 @@ pub fn set_weapon_active(
     weapon_set_active(&conn, uid, active, inactive_reason, clear_display_id)
 }
 
+#[tauri::command]
+pub fn set_weapon_tags(
+    db: State<Db>,
+    weapon_uid: i64,
+    needs_service: bool,
+    broken: bool,
+    missing_parts: bool,
+    needs_cleaning: bool,
+    comment: Option<String>,
+) -> Result<Weapon, AppError> {
+    let conn = lock(&db)?;
+    weapon_set_tags(&conn, weapon_uid, needs_service, broken, missing_parts, needs_cleaning, comment)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,6 +581,7 @@ mod tests {
             address: None,
             ssn: None,
             is_staff,
+            is_admin: false,
             notes: None,
         }
     }
@@ -740,5 +849,86 @@ mod tests {
         let conn = migrated_in_memory();
         let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
         assert_eq!(w.caliber.as_deref(), Some("9mm"));
+    }
+
+    #[test]
+    fn new_user_defaults_not_guest_not_admin() {
+        let conn = migrated_in_memory();
+        let u = user_create(&conn, new_user("Anna", Some("10"), false)).unwrap();
+        assert!(!u.is_guest);
+        assert!(!u.is_admin);
+    }
+
+    #[test]
+    fn new_weapon_defaults_no_tags() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        assert!(!w.tag_needs_service && !w.tag_broken && !w.tag_missing_parts && !w.tag_needs_cleaning);
+        assert_eq!(w.tag_comment, None);
+    }
+
+    #[test]
+    fn upsert_guest_creates_and_reuses_by_ssn() {
+        let conn = migrated_in_memory();
+        let g = user_upsert_guest(&conn, "Gunnar Gäst".into(), "19900101-1234".into()).unwrap();
+        assert!(g.is_guest);
+        assert!(g.active);
+        assert_eq!(g.display_id, None);
+        // Repeat visit: same SSN → same row, name NOT overwritten.
+        let g2 = user_upsert_guest(&conn, "Other Name".into(), "19900101-1234".into()).unwrap();
+        assert_eq!(g2.uid, g.uid);
+        assert_eq!(g2.name, "Gunnar Gäst");
+    }
+
+    #[test]
+    fn upsert_guest_rejects_member_ssn_and_requires_fields() {
+        let conn = migrated_in_memory();
+        let mut member = new_user("Anna", Some("10"), false);
+        member.ssn = Some("19850505-5555".into());
+        user_create(&conn, member).unwrap();
+        let err = user_upsert_guest(&conn, "Anna Igen".into(), "19850505-5555".into()).unwrap_err();
+        assert_eq!(err.code, "err_ssn_belongs_to_member");
+        let err = user_upsert_guest(&conn, "NoSsn".into(), "  ".into()).unwrap_err();
+        assert_eq!(err.code, "err_ssn_required");
+        let err = user_upsert_guest(&conn, " ".into(), "19900101-1234".into()).unwrap_err();
+        assert_eq!(err.code, "err_name_required");
+    }
+
+    #[test]
+    fn promote_guest_clears_flag_and_rejects_non_guests() {
+        let conn = migrated_in_memory();
+        let g = user_upsert_guest(&conn, "Gunnar".into(), "19900101-1234".into()).unwrap();
+        let m = user_promote_guest(&conn, g.uid).unwrap();
+        assert!(!m.is_guest);
+        let err = user_promote_guest(&conn, m.uid).unwrap_err();
+        assert_eq!(err.code, "err_not_a_guest");
+        let err = user_promote_guest(&conn, 9999).unwrap_err();
+        assert_eq!(err.code, "err_user_not_found");
+    }
+
+    #[test]
+    fn set_weapon_tags_round_trips_and_clears() {
+        let conn = migrated_in_memory();
+        let w = weapon_create(&conn, new_weapon(Some("W1"), Some("S-1"))).unwrap();
+        let w = weapon_set_tags(&conn, w.uid, true, false, true, false, Some("kolv lös".into())).unwrap();
+        assert!(w.tag_needs_service && w.tag_missing_parts);
+        assert!(!w.tag_broken && !w.tag_needs_cleaning);
+        assert_eq!(w.tag_comment.as_deref(), Some("kolv lös"));
+        let w = weapon_set_tags(&conn, w.uid, false, false, false, false, None).unwrap();
+        assert!(!w.tag_needs_service && !w.tag_missing_parts);
+        assert_eq!(w.tag_comment, None);
+        assert!(weapon_set_tags(&conn, 9999, false, false, false, false, None).is_err());
+    }
+
+    #[test]
+    fn admin_exists_reflects_active_admins() {
+        let conn = migrated_in_memory();
+        assert!(!admin_exists(&conn).unwrap());
+        let mut nu = new_user("Boss", Some("1"), true);
+        nu.is_admin = true;
+        let boss = user_create(&conn, nu).unwrap();
+        assert!(admin_exists(&conn).unwrap());
+        user_set_active(&conn, boss.uid, false, false).unwrap();
+        assert!(!admin_exists(&conn).unwrap());
     }
 }

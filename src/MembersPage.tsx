@@ -1,6 +1,5 @@
 import {
   Group,
-  Title,
   Button,
   Table,
   Badge,
@@ -8,6 +7,7 @@ import {
   TextInput,
   Textarea,
   Switch,
+  Select,
   Checkbox,
   Stack,
   Text,
@@ -32,6 +32,7 @@ import {
   outstandingDebts,
   lastShotDates,
   listWeapons,
+  promoteGuest,
   type User,
 } from './api';
 import { errorMessage } from './errors';
@@ -40,6 +41,7 @@ import { WeaponPickerModal } from './WeaponPickerModal';
 import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
 import { MemberInfoModal } from './MemberInfoModal';
+import { useIsAdmin } from './useIsAdmin';
 
 const SSN_RE = /^\d{8}-\d{4}$/;
 const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
@@ -54,6 +56,7 @@ interface MemberForm {
   address: string;
   ssn: string;
   isStaff: boolean;
+  isAdmin: boolean;
   notes: string;
 }
 
@@ -65,12 +68,14 @@ const EMPTY: MemberForm = {
   address: '',
   ssn: '',
   isStaff: false,
+  isAdmin: false,
   notes: '',
 };
 
 export function MembersPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const isAdmin = useIsAdmin();
   const [opened, { open, close }] = useDisclosure(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [debtUser, setDebtUser] = useState<User | null>(null);
@@ -89,7 +94,8 @@ export function MembersPage() {
 
   // List view: active-only by default, with a search box + show-inactive toggle.
   const [search, setSearch] = useState('');
-  const [showInactive, setShowInactive] = useState(false);
+  // One exclusive list view: active members (default) / inactive / guests (admin).
+  const [view, setView] = useState<'active' | 'inactive' | 'guests'>('active');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'name',
     dir: 'asc',
@@ -122,6 +128,7 @@ export function MembersPage() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['users'] });
     qc.invalidateQueries({ queryKey: ['operators'] });
+    qc.invalidateQueries({ queryKey: ['hasAdmin'] });
   };
 
   const savePreference = async (uid: number) => {
@@ -181,6 +188,15 @@ export function MembersPage() {
     onError,
   });
 
+  const promoteMut = useMutation({
+    mutationFn: (uid: number) => promoteGuest(uid),
+    onSuccess: () => {
+      notifications.show({ message: t('promoted_ok') });
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError,
+  });
+
   const openCreate = () => {
     setEditing(null);
     setPrefUid(null);
@@ -200,6 +216,7 @@ export function MembersPage() {
       address: u.address ?? '',
       ssn: u.ssn ?? '',
       isStaff: u.isStaff,
+      isAdmin: u.isAdmin,
       notes: u.notes ?? '',
     });
     open();
@@ -222,7 +239,9 @@ export function MembersPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = (users.data ?? []).filter((u) => {
-    if (!showInactive && !u.active) return false;
+    if (view === 'active' && (!u.active || u.isGuest)) return false;
+    if (view === 'inactive' && u.active) return false;
+    if (view === 'guests' && !u.isGuest) return false;
     if (!q) return true;
     return [u.displayId, u.name, u.email, u.phone].some((f) =>
       f?.toLowerCase().includes(q),
@@ -288,9 +307,26 @@ export function MembersPage() {
         </Group>
       </Table.Td>
       <Table.Td>{lastShotMap.has(u.uid) ? fmtDate(lastShotMap.get(u.uid)!) : '—'}</Table.Td>
-      <Table.Td>{u.isStaff && <Badge color="grape">{t('staff')}</Badge>}</Table.Td>
+      <Table.Td>
+        <Group gap="xs" wrap="nowrap">
+          {u.isStaff && <Badge color="grape">{t('staff')}</Badge>}
+          {u.isGuest && <Badge color="cyan">{t('label_guest')}</Badge>}
+        </Group>
+      </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="flex-end" wrap="nowrap">
+          {isAdmin && u.isGuest && (
+            <Button
+              size="xs"
+              variant="light"
+              onClick={(e) => {
+                e.stopPropagation();
+                promoteMut.mutate(u.uid);
+              }}
+            >
+              {t('promote_guest')}
+            </Button>
+          )}
           <Button
             size="xs"
             variant="subtle"
@@ -302,16 +338,18 @@ export function MembersPage() {
           >
             {t('debt')}
           </Button>
-          <Button
-            size="xs"
-            variant="default"
-            onClick={(e) => {
-              e.stopPropagation();
-              openEdit(u);
-            }}
-          >
-            {t('edit')}
-          </Button>
+          {isAdmin && (
+            <Button
+              size="xs"
+              variant="default"
+              onClick={(e) => {
+                e.stopPropagation();
+                openEdit(u);
+              }}
+            >
+              {t('edit')}
+            </Button>
+          )}
         </Group>
       </Table.Td>
     </Table.Tr>
@@ -319,48 +357,47 @@ export function MembersPage() {
 
   return (
     <Stack>
-      <Group justify="space-between">
-        <Title order={2}>{t('nav_members')}</Title>
-        <Button onClick={openCreate}>{t('new_member')}</Button>
+      <Group>
+        <TextInput
+          placeholder={t('search')}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          style={{ flex: 1 }}
+        />
+        <Select
+          data={[
+            { value: 'active', label: t('filter_active') },
+            { value: 'inactive', label: t('filter_inactive') },
+            ...(isAdmin ? [{ value: 'guests', label: t('filter_guests') }] : []),
+          ]}
+          value={view}
+          onChange={(v) => setView((v as 'active' | 'inactive' | 'guests') ?? 'active')}
+          allowDeselect={false}
+          w={160}
+        />
+        {isAdmin && <Button onClick={openCreate}>{t('new_member')}</Button>}
       </Group>
 
       {(users.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_members')}</Text>
+      ) : filtered.length === 0 ? (
+        <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        <>
-          <Group>
-            <TextInput
-              placeholder={t('search')}
-              value={search}
-              onChange={(e) => setSearch(e.currentTarget.value)}
-              style={{ flex: 1 }}
-            />
-            <Switch
-              label={t('show_inactive')}
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.currentTarget.checked)}
-            />
-          </Group>
-          {filtered.length === 0 ? (
-            <Text c="dimmed">{t('no_results')}</Text>
-          ) : (
-            // ponytail: offset ≈ shell header + title + filters — tune at live-smoke if clipped.
-            <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 300px)">
-              <Table striped highlightOnHover stickyHeader>
-                <Table.Thead>
-                  <Table.Tr>
-                    <SortTh label={t('field_display_id')} k="id" />
-                    <SortTh label={t('field_name')} k="name" />
-                    <SortTh label={t('field_last_shot')} k="lastShot" />
-                    <Table.Th />
-                    <Table.Th />
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>{rows}</Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          )}
-        </>
+        // ponytail: offset ≈ shell header + filters — tune at live-smoke if clipped.
+        <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 252px)">
+          <Table striped highlightOnHover stickyHeader>
+            <Table.Thead>
+              <Table.Tr>
+                <SortTh label={t('field_display_id')} k="id" />
+                <SortTh label={t('field_name')} k="name" />
+                <SortTh label={t('field_last_shot')} k="lastShot" />
+                <Table.Th />
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>{rows}</Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {/* Create / edit */}
@@ -433,6 +470,9 @@ export function MembersPage() {
               label={t('field_is_staff')}
               {...form.getInputProps('isStaff', { type: 'checkbox' })}
             />
+            {isAdmin && (
+              <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
+            )}
             <Textarea
               label={t('field_notes')}
               autosize
@@ -440,7 +480,7 @@ export function MembersPage() {
               {...form.getInputProps('notes')}
             />
             <Group justify="space-between">
-              {editing && !editing.active ? (
+              {isAdmin && editing && !editing.active ? (
                 <Button
                   variant="subtle"
                   color="teal"
@@ -449,7 +489,7 @@ export function MembersPage() {
                 >
                   {t('activate')}
                 </Button>
-              ) : editing ? (
+              ) : isAdmin && editing ? (
                 <Button
                   variant="subtle"
                   color="red"
@@ -512,7 +552,7 @@ export function MembersPage() {
       <DebtModal
         userUid={debtUser?.uid ?? null}
         userName={
-          debtUser ? userLabel(debtUser.name, debtUser.displayId, debtUser.active, t) : ''
+          debtUser ? userLabel(debtUser.name, debtUser.displayId, debtUser.active, t, debtUser.isGuest) : ''
         }
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}
