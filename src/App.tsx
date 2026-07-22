@@ -9,7 +9,7 @@ import { ColorSchemeScript, MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { DatesProvider } from '@mantine/dates';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import './i18n';
 import { theme } from './theme';
@@ -31,6 +31,13 @@ const queryClient = new QueryClient({
   },
 });
 
+// Remounts CheckoutPage on every navigation (react-router bumps the location
+// key on each nav), so clicking the header "Utlämning" button always resets
+// the flow to the selector step, even when already on /checkout.
+function CheckoutRoute() {
+  return <CheckoutPage key={useLocation().key} />;
+}
+
 export default function App() {
   return (
     <>
@@ -43,7 +50,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<Navigate to="/checkout" replace />} />
-                <Route path="checkout" element={<CheckoutPage />} />
+                <Route path="checkout" element={<CheckoutRoute />} />
                 <Route path="checkin" element={<CheckinPage />} />
                 <Route path="members" element={<MembersPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />

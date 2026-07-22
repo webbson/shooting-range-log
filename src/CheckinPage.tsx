@@ -115,7 +115,7 @@ export function CheckinPage() {
       <Stack>
         <Group justify="space-between" align="center">
           <Title order={3}>{t('open_checkouts')}</Title>
-          <Button variant="default" onClick={() => setFastCheckinOpen(true)}>
+          <Button size="lg" variant="default" onClick={() => setFastCheckinOpen(true)}>
             {t('fast_checkin')}
           </Button>
         </Group>
@@ -127,7 +127,7 @@ export function CheckinPage() {
           <ScrollArea.Autosize mah="calc(100vh - 240px)" type="auto">
             <Stack gap="sm">
               {(open.data ?? []).map((o) => (
-                <Card key={o.id} withBorder padding="sm">
+                <Card key={o.id} withBorder padding="md">
                   <Group justify="space-between" wrap="nowrap">
                     <Stack gap={2}>
                       <Text
@@ -148,7 +148,7 @@ export function CheckinPage() {
                         {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
                       </Text>
                     </Stack>
-                    <Group gap="xs" wrap="nowrap">
+                    <Group gap="md" wrap="nowrap">
                       {(() => {
                         const p = preferrerOf(o.weaponUid);
                         if (p && p.uid !== o.userUid) return null; // another member's favorite
@@ -158,7 +158,7 @@ export function CheckinPage() {
                             <ActionIcon
                               variant={mine ? 'light' : 'subtle'}
                               color="yellow"
-                              size="lg"
+                              size="xl"
                               aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
                               onClick={() =>
                                 favMut.mutate({
@@ -176,7 +176,7 @@ export function CheckinPage() {
                         <ActionIcon
                           variant="subtle"
                           color="orange"
-                          size="lg"
+                          size="xl"
                           aria-label={t('edit_tags')}
                           onClick={() => setTagWeapon(o.weaponUid)}
                         >
@@ -187,7 +187,7 @@ export function CheckinPage() {
                         <ActionIcon
                           variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
                           color="red"
-                          size="lg"
+                          size="xl"
                           aria-label={t('add_debt')}
                           onClick={() =>
                             setDebtUser({
@@ -203,7 +203,7 @@ export function CheckinPage() {
                         <ActionIcon
                           variant="light"
                           color="teal"
-                          size="lg"
+                          size="xl"
                           aria-label={t('return_weapon')}
                           loading={checkinMut.isPending}
                           onClick={() => checkinMut.mutate(o.id)}
