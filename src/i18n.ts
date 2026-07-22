@@ -102,6 +102,7 @@ const resources = {
       err_already_checked_in: 'Vapnet är redan återlämnat.',
       err_weapon_already_preferred: 'Vapnet är redan tilldelat {{name}}.',
       err_ssn_required: 'Personnummer krävs för gäst.',
+      err_ssn_invalid: 'Ogiltigt personnummer — ange ÅÅÅÅMMDD-XXXX',
       err_ssn_belongs_to_member:
         'Personnumret tillhör medlemmen {{name}} — använd vanlig utlåning.',
       err_not_a_guest: 'Användaren är inte en gäst.',
@@ -373,6 +374,7 @@ const resources = {
       err_already_checked_in: 'Weapon is already checked in.',
       err_weapon_already_preferred: 'Weapon is already assigned to {{name}}.',
       err_ssn_required: 'SSN is required for a guest.',
+      err_ssn_invalid: 'Invalid SSN — use YYYYMMDD-XXXX',
       err_ssn_belongs_to_member:
         'The SSN belongs to member {{name}} — use a normal member checkout.',
       err_not_a_guest: 'The user is not a guest.',
