@@ -346,7 +346,9 @@ export function MembersPage() {
   ));
 
   return (
-    <Stack>
+    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // table grows into the free space instead of leaving a void under it.
+    <Stack style={{ height: 'calc(100vh - 144px)' }}>
       <Group>
         <TextInput
           placeholder={t('search')}
@@ -373,8 +375,7 @@ export function MembersPage() {
       ) : filtered.length === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        // ponytail: offset ≈ shell header + filters — tune at live-smoke if clipped.
-        <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 252px)">
+        <Table.ScrollContainer minWidth={700} style={{ flex: 1, minHeight: 0 }}>
           <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>

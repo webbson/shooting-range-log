@@ -111,8 +111,10 @@ export function CheckinPage() {
   };
 
   return (
-    <Card withBorder padding="lg">
-      <Stack>
+    <>
+      {/* Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+          list grows into the free space instead of leaving a void under it. */}
+      <Stack gap="lg" style={{ height: 'calc(100vh - 144px)' }}>
         <Group justify="space-between" align="center">
           <Title order={3}>{t('open_checkouts')}</Title>
           <Button size="lg" variant="default" onClick={() => setFastCheckinOpen(true)}>
@@ -122,9 +124,8 @@ export function CheckinPage() {
         {(open.data?.length ?? 0) === 0 ? (
           <Text c="dimmed">{t('no_open_checkouts')}</Text>
         ) : (
-          // List scrolls inside the card; title + fast check-in stay put.
-          // ponytail: 240px ≈ shell header + card chrome — tune at live-smoke if clipped.
-          <ScrollArea.Autosize mah="calc(100vh - 240px)" type="auto">
+          // List scrolls in the remaining space; title + fast check-in stay put.
+          <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
             <Stack gap="sm">
               {(open.data ?? []).map((o) => (
                 <Card key={o.id} withBorder padding="md">
@@ -222,7 +223,7 @@ export function CheckinPage() {
                 </Card>
               ))}
             </Stack>
-          </ScrollArea.Autosize>
+          </ScrollArea>
         )}
       </Stack>
 
@@ -254,6 +255,6 @@ export function CheckinPage() {
         onClose={() => setFastCheckinOpen(false)}
         onSubmit={onFastCheckinSubmit}
       />
-    </Card>
+    </>
   );
 }

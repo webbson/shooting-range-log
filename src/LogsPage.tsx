@@ -100,7 +100,9 @@ export function LogsPage() {
   ));
 
   return (
-    <Stack>
+    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // table grows into the free space instead of leaving a void under it.
+    <Stack style={{ height: 'calc(100vh - 144px)' }}>
       <Group align="flex-end" wrap="wrap">
         <Select
           label={t('field_weapon')}
@@ -158,8 +160,7 @@ export function LogsPage() {
       {(logs.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        // ponytail: offset ≈ shell header + filter row — tune at live-smoke if clipped.
-        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 330px)">
+        <Table.ScrollContainer minWidth={900} style={{ flex: 1, minHeight: 0 }}>
           <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>
