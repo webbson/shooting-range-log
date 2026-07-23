@@ -1942,3 +1942,51 @@ User checklist:
 ```bash
 git checkout main && git merge --no-ff feat/stats-maintenance
 ```
+
+---
+
+### Task 10: Period navigation on StatsPage (user follow-up 2026-07-23)
+
+**Files:** Modify: `src/StatsPage.tsx`, `src/i18n.ts`
+
+User wants to select WHICH day/week/month/year, not only the current one.
+Frontend-only — backend from/to already arbitrary.
+
+- `offset: number` state (0 = current, negative = past). Reset to 0 on preset
+  change. `periodOf(preset, offset)`: start = `now.startOf(unit).add(offset, unit)`
+  (unit: day/isoWeek+week/month/year); `from = start.toISOString()`,
+  `to = start.add(1, unit).toISOString()` — a closed range now, not open-ended.
+  `all` unchanged (nulls, no arrows).
+- Header controls next to the SegmentedControl: `ActionIcon size="xl"` ‹ and ›
+  + period label between them. › disabled at offset 0 (no future). Hidden for
+  `all`.
+- Period label: today → date `YYYY-MM-DD`; week → i18n
+  `stats_week_label: 'v.{{week}} {{year}}'` (en `'w.{{week}} {{year}}'`) via
+  dayjs `.isoWeek()`; month → `toLocaleDateString('sv-SE', { month: 'long',
+  year: 'numeric' })`; year → `YYYY`. Two new i18n keys (sv+en).
+- `fillBuckets(preset, start, rows)`: fill the WHOLE selected period (24 h,
+  7 days, daysInMonth of that month, 12 months) from the period start — no
+  trim-to-now (also removes the today/year vs week/month inconsistency from
+  the final review).
+- Gate: `npm run build` green.
+
+### Task 11: Seed historical spread (user follow-up 2026-07-23)
+
+**Files:** Modify: `src-tauri/src/seed.rs`
+
+Deterministic historical loans so every stats view has data:
+
+- ~120 closed loans spread over the past 14 months: loop `i in 0..120`,
+  member = round-robin over active non-guest members, weapon = round-robin
+  over `weapon_uids[0..16]`, backdated `days_ago = 1 + (i * 4) % 420`,
+  checkout hour varies `9 + (i % 9)`, checkin same day +1 h. Same
+  do_checkout/do_checkin + UPDATE-backdate pattern already used.
+- A handful of same-day loans (the formula's collisions suffice — verify at
+  least one day gets ≥2).
+- 3 loans in the previous calendar year and 1 two years back (year buckets /
+  Allt navigation).
+- Guests: g1 and Greta each get 2 additional backdated loans (guest counts in
+  past periods).
+- Update seed test count assertions. Never touch weapon 21 (never-borrowed
+  fixture) or break existing fixtures (open loans, stale assignments).
+- Gate: `cargo test --manifest-path src-tauri/Cargo.toml` green.
