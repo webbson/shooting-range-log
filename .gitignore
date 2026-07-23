@@ -33,3 +33,7 @@ dist-ssr
 
 # Session continuity — never commit (per global CLAUDE.md)
 primer.md
+
+# local agent scratch
+.claude/worktrees/
+.foreman/
