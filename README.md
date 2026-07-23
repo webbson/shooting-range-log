@@ -47,8 +47,8 @@ pending migrations apply on launch.
 cargo test --manifest-path src-tauri/Cargo.toml   # backend logic
 npm run build                                      # frontend typecheck + bundle
 ```
-Windows installers (`.msi` / NSIS) are produced by CI on a Windows runner
-(`.github/workflows/build-windows.yml`) — Tauri cannot cross-build from macOS.
+The Windows installer (NSIS) is produced by CI on a Windows runner on `v*` tag push
+(`.github/workflows/release.yml`) — Tauri cannot cross-build from macOS.
 
 ## Project layout
 - `src-tauri/` — Rust core: commands, SQLite + migrations, domain logic.

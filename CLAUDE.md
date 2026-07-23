@@ -20,7 +20,8 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 - Frontend typecheck + bundle: `npm run build`  (must be green before done)
 - Backend tests: `cargo test --manifest-path src-tauri/Cargo.toml`  (must be green before done)
 - Seed dev DB with mock data (**wipes** then refills): `npm run seed`
-- Windows installer: CI only (`npm run tauri build` on `windows-latest`) — can't cross-build from Mac.
+- Windows installer: CI only (`release.yml` via tauri-action on `windows-latest`; needs the signing-key secrets) — can't cross-build from Mac.
+- Release: `/release patch|minor|major` → tag push → CI (`release.yml`) builds and publishes the installer.
 
 ## Architecture rules (do not violate)
 - **All DB access goes through Rust `#[tauri::command]`s.** Never add `tauri-plugin-sql`.
@@ -116,7 +117,8 @@ commit on a `feat/*` branch → merge to `main`.
   `s3.rs` (rust-s3: test_connection, upload, list_remote, download, delete, retention_remote),
   `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
 - `src/`: `App.tsx` (providers + routes; `/checkout` remounts on nav click via `location.key`
-  → full flow reset), `AppLayout.tsx` (shell, footer status bar, operator
+  → full flow reset), `UpdatePrompt.tsx` (prompt-on-launch updater modal, sv/en),
+  `AppLayout.tsx` (shell, footer status bar, operator
   badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (weapon-first flow: tag-numpad selector
   step with candidate-user radio boxes [assigned default, last-borrower alternative] and
   direct checkout, then a member/weapon form step with assign checkbox + transfer/replace
@@ -148,6 +150,9 @@ commit on a `feat/*` branch → merge to `main`.
   `api.ts` (invoke wrappers + types),
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`, `global.css` (app-wide
   user-select off).
+- `.github/workflows/`: `release.yml`
+  (on `v*` tag push: stamps the tag version into `tauri.conf.json`, `tauri-action` builds the
+  NSIS installer + updater artifacts/`latest.json`, RC tags marked prerelease).
 
 ## Status
 M0–M6 done on `main` (M6 backup/restore live-smoked). Picker modals + preferred-weapon
@@ -165,8 +170,13 @@ keyboards, teal tag chips/stripes, responsive check-in columns, 90% modals.
 (9 commands: summary/buckets/usage/activity, stale/never-borrowed/tagged/guests, CSV export),
 Statistik + Underhåll pages with period navigation, teal chip weapon rows, seed historical
 spread (~120 backdated loans, prior-year data) with property-pinning tests.
-M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
-Git is local-only (no remote yet → Windows installer not yet built).
++ Auto-update wave (`feat/auto-update`, 2026-07-23): repo now public at
+github.com/webbson/shooting-range-log; `tauri-plugin-updater`/`tauri-plugin-process`
+registered; `release.yml` builds and publishes the NSIS installer + updater artifacts
+(tag-stamped version, `latest.json`) on `v*` tag push, RC tags marked prerelease;
+`UpdatePrompt.tsx` prompts on launch when an update is available.
+M7 remaining: Windows code signing — see `BACKLOG.md`.
+Git is no longer local-only: `origin` is github.com/webbson/shooting-range-log (public).
 
 ## Backup architecture (M6)
 - **Snapshot:** `VACUUM INTO` every 10 min (timer thread) + on `ExitRequested`. Always local first.
