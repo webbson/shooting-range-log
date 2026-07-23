@@ -39,9 +39,11 @@ backup S3 bucket.
 - Add `tauri-plugin-updater` and `tauri-plugin-process` (Cargo + npm packages),
   register both in `lib.rs`, grant capabilities (`updater:default`,
   process relaunch permission).
-- **Version sync:** `/release` bumps the version in all three files —
-  `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` — in the same
-  commit the tag points at. `tauri.conf.json`'s version is what the updater compares.
+- **Version sync:** the git tag is the single version source. The release workflow
+  stamps the tag version into `src-tauri/tauri.conf.json` before building — that is
+  the version the updater compares. `package.json`/`Cargo.toml` versions stay at
+  0.1.0 and carry no meaning. (Changed from the original "/release bumps three
+  files" wording: the `/release` skill only tags, it never edits files.)
 
 ## App UX — prompt on launch
 
