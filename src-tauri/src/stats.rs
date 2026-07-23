@@ -201,6 +201,195 @@ pub fn stats_member_activity(
     member_activity(&conn, from.as_deref(), to.as_deref())
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaleAssignment {
+    pub user_uid: i64,
+    pub name: String,
+    pub weapon_uid: i64,
+    pub brand: Option<String>,
+    pub model: Option<String>,
+    pub caliber: Option<String>,
+    pub display_id: Option<String>,
+    pub weapon_active: bool,
+    pub last_used: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NeverBorrowedWeapon {
+    pub weapon_uid: i64,
+    pub brand: Option<String>,
+    pub model: Option<String>,
+    pub caliber: Option<String>,
+    pub display_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaggedWeapon {
+    pub weapon_uid: i64,
+    pub brand: Option<String>,
+    pub model: Option<String>,
+    pub caliber: Option<String>,
+    pub display_id: Option<String>,
+    pub tag_needs_service: bool,
+    pub tag_broken: bool,
+    pub tag_missing_parts: bool,
+    pub tag_needs_cleaning: bool,
+    pub tag_comment: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuestRow {
+    pub user_uid: i64,
+    pub name: String,
+    pub loan_count: i64,
+    pub last_visit: Option<String>,
+}
+
+fn stale_assignments(conn: &Connection, months: i64) -> Result<Vec<StaleAssignment>, AppError> {
+    let cutoff = chrono::Utc::now()
+        .checked_sub_months(chrono::Months::new(months.clamp(1, 120) as u32))
+        .ok_or_else(|| AppError::internal("cutoff overflow"))?
+        .to_rfc3339();
+    let mut stmt = conn.prepare(
+        "SELECT * FROM (
+           SELECT u.uid AS user_uid, u.name,
+                  w.uid AS weapon_uid, w.brand, w.model, w.caliber, w.display_id,
+                  w.active AS weapon_active,
+                  (SELECT MAX(c.checked_out_at) FROM checkouts c
+                    WHERE c.user_uid = u.uid AND c.weapon_uid = u.preferred_weapon_uid) AS last_used
+           FROM users u
+           JOIN weapons w ON w.uid = u.preferred_weapon_uid
+           WHERE u.active = 1 AND u.is_guest = 0
+         )
+         WHERE last_used IS NULL OR last_used < ?1
+         ORDER BY last_used IS NULL DESC, last_used",
+    )?;
+    let rows = stmt
+        .query_map(rusqlite::params![cutoff], |r| {
+            Ok(StaleAssignment {
+                user_uid: r.get(0)?,
+                name: r.get(1)?,
+                weapon_uid: r.get(2)?,
+                brand: r.get(3)?,
+                model: r.get(4)?,
+                caliber: r.get(5)?,
+                display_id: r.get(6)?,
+                weapon_active: r.get(7)?,
+                last_used: r.get(8)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn never_borrowed(conn: &Connection) -> Result<Vec<NeverBorrowedWeapon>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT w.uid, w.brand, w.model, w.caliber, w.display_id, w.created_at
+         FROM weapons w
+         WHERE w.active = 1
+           AND NOT EXISTS (SELECT 1 FROM checkouts c WHERE c.weapon_uid = w.uid)
+         ORDER BY CAST(w.display_id AS INTEGER)",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(NeverBorrowedWeapon {
+                weapon_uid: r.get(0)?,
+                brand: r.get(1)?,
+                model: r.get(2)?,
+                caliber: r.get(3)?,
+                display_id: r.get(4)?,
+                created_at: r.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn tagged_weapons(conn: &Connection) -> Result<Vec<TaggedWeapon>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT w.uid, w.brand, w.model, w.caliber, w.display_id,
+                w.tag_needs_service, w.tag_broken, w.tag_missing_parts,
+                w.tag_needs_cleaning, w.tag_comment
+         FROM weapons w
+         WHERE w.active = 1
+           AND (w.tag_needs_service = 1 OR w.tag_broken = 1 OR w.tag_missing_parts = 1
+                OR w.tag_needs_cleaning = 1
+                OR (w.tag_comment IS NOT NULL AND w.tag_comment != ''))
+         ORDER BY CAST(w.display_id AS INTEGER)",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(TaggedWeapon {
+                weapon_uid: r.get(0)?,
+                brand: r.get(1)?,
+                model: r.get(2)?,
+                caliber: r.get(3)?,
+                display_id: r.get(4)?,
+                tag_needs_service: r.get(5)?,
+                tag_broken: r.get(6)?,
+                tag_missing_parts: r.get(7)?,
+                tag_needs_cleaning: r.get(8)?,
+                tag_comment: r.get(9)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn guest_rows(conn: &Connection) -> Result<Vec<GuestRow>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT u.uid, u.name,
+                (SELECT COUNT(*) FROM checkouts c WHERE c.user_uid = u.uid) AS cnt,
+                (SELECT MAX(c.checked_out_at) FROM checkouts c WHERE c.user_uid = u.uid) AS last_visit
+         FROM users u
+         WHERE u.active = 1 AND u.is_guest = 1
+         ORDER BY cnt DESC, u.name",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(GuestRow {
+                user_uid: r.get(0)?,
+                name: r.get(1)?,
+                loan_count: r.get(2)?,
+                last_visit: r.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn maintenance_stale_assignments(
+    db: State<Db>,
+    months: i64,
+) -> Result<Vec<StaleAssignment>, AppError> {
+    let conn = lock(&db)?;
+    stale_assignments(&conn, months)
+}
+
+#[tauri::command]
+pub fn maintenance_never_borrowed(db: State<Db>) -> Result<Vec<NeverBorrowedWeapon>, AppError> {
+    let conn = lock(&db)?;
+    never_borrowed(&conn)
+}
+
+#[tauri::command]
+pub fn maintenance_tagged_weapons(db: State<Db>) -> Result<Vec<TaggedWeapon>, AppError> {
+    let conn = lock(&db)?;
+    tagged_weapons(&conn)
+}
+
+#[tauri::command]
+pub fn maintenance_guests(db: State<Db>) -> Result<Vec<GuestRow>, AppError> {
+    let conn = lock(&db)?;
+    guest_rows(&conn)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,5 +522,90 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!((rows[0].name.as_str(), rows[0].count, rows[0].is_guest), ("Anna", 2, false));
         assert_eq!((rows[1].name.as_str(), rows[1].count, rows[1].is_guest), ("Gäst", 1, true));
+    }
+
+    fn set_pref(conn: &Connection, user: i64, weapon: i64) {
+        conn.execute(
+            "UPDATE users SET preferred_weapon_uid = ?2 WHERE uid = ?1",
+            params![user, weapon],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn stale_assignments_never_and_old_only() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let anna = mk_user(&conn, "Anna", false);   // used assigned weapon recently
+        let bjorn = mk_user(&conn, "Björn", false); // used assigned weapon long ago
+        let cilla = mk_user(&conn, "Cilla", false); // never used assigned weapon
+        let w1 = mk_weapon(&conn, "1");
+        let w2 = mk_weapon(&conn, "2");
+        let w3 = mk_weapon(&conn, "3");
+        set_pref(&conn, anna, w1);
+        set_pref(&conn, bjorn, w2);
+        set_pref(&conn, cilla, w3);
+        let recent = chrono::Utc::now().to_rfc3339();
+        ins_checkout(&conn, w1, anna, op, &recent, None);
+        ins_checkout(&conn, w2, bjorn, op, "2020-01-10T12:00:00Z", None);
+        // Cilla borrowed ANOTHER weapon recently — still stale on her own
+        ins_checkout(&conn, w1, cilla, op, &recent, None);
+
+        let rows = stale_assignments(&conn, 3).unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, vec!["Cilla", "Björn"]); // never-used first, then oldest
+        assert!(rows[0].last_used.is_none());
+        assert!(rows[1].last_used.is_some());
+    }
+
+    #[test]
+    fn never_borrowed_excludes_borrowed_and_inactive() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let anna = mk_user(&conn, "Anna", false);
+        let used = mk_weapon(&conn, "1");
+        let fresh = mk_weapon(&conn, "2");
+        let retired = mk_weapon(&conn, "3");
+        conn.execute("UPDATE weapons SET active = 0 WHERE uid = ?1", params![retired]).unwrap();
+        ins_checkout(&conn, used, anna, op, "2026-06-10T12:00:00Z", None);
+
+        let rows = never_borrowed(&conn).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].weapon_uid, fresh);
+    }
+
+    #[test]
+    fn tagged_weapons_flags_or_comment() {
+        let conn = migrated_in_memory();
+        let clean = mk_weapon(&conn, "1");
+        let flagged = mk_weapon(&conn, "2");
+        let commented = mk_weapon(&conn, "3");
+        conn.execute("UPDATE weapons SET tag_broken = 1 WHERE uid = ?1", params![flagged]).unwrap();
+        conn.execute("UPDATE weapons SET tag_comment = 'Kolven glappar' WHERE uid = ?1", params![commented]).unwrap();
+
+        let rows = tagged_weapons(&conn).unwrap();
+        let uids: Vec<i64> = rows.iter().map(|r| r.weapon_uid).collect();
+        assert_eq!(uids, vec![flagged, commented]);
+        assert!(!uids.contains(&clean));
+    }
+
+    #[test]
+    fn guest_rows_counts_and_sorts() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let g1 = mk_user(&conn, "Gäst Ett", true);
+        let g2 = mk_user(&conn, "Gäst Två", true);
+        let inactive_guest = mk_user(&conn, "Borta", true);
+        conn.execute("UPDATE users SET active = 0 WHERE uid = ?1", params![inactive_guest]).unwrap();
+        let w = mk_weapon(&conn, "1");
+        ins_checkout(&conn, w, g2, op, "2026-06-10T12:00:00Z", Some("2026-06-10T13:00:00Z"));
+        ins_checkout(&conn, w, g2, op, "2026-06-20T12:00:00Z", Some("2026-06-20T13:00:00Z"));
+
+        let rows = guest_rows(&conn).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!((rows[0].name.as_str(), rows[0].loan_count), ("Gäst Två", 2));
+        assert_eq!(rows[0].last_visit.as_deref(), Some("2026-06-20T12:00:00Z"));
+        assert_eq!((rows[1].name.as_str(), rows[1].loan_count), ("Gäst Ett", 0));
+        assert!(rows[1].last_visit.is_none());
     }
 }
