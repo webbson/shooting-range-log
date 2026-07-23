@@ -80,7 +80,16 @@ export function LogsPage() {
     <Table.Tr key={c.id}>
       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoWeapon(c.weaponUid)}>
-        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
+        {/* Tag number leads as a chip; the label itself drops the [x] suffix.
+            Inactive rows keep the [disabled] marker instead of a chip. */}
+        <Group gap="xs" wrap="nowrap">
+          {c.weaponActive && c.weaponDisplayId && (
+            <Badge color="teal" variant="light" size="lg" radius="sm" style={{ flexShrink: 0 }}>
+              {c.weaponDisplayId}
+            </Badge>
+          )}
+          {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, null, c.weaponActive, t)}
+        </Group>
       </Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoMember(c.userUid)}>
         {userLabel(c.userName, c.userActive, t, c.userIsGuest)}
