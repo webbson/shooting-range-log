@@ -135,15 +135,37 @@ export function CheckinPage() {
               }}
             >
               {(open.data ?? []).map((o) => (
-                <Card key={o.id} withBorder padding="md">
-                  <Group justify="space-between" wrap="nowrap">
+                <Card key={o.id} withBorder padding={0}>
+                  <Group wrap="nowrap" gap={0} align="stretch">
+                    {/* Full-height tag stripe — the number the operator reads
+                        off the physical weapon, so it leads the card. */}
+                    <Stack
+                      justify="center"
+                      align="center"
+                      miw={72}
+                      px="sm"
+                      style={{
+                        background: 'var(--mantine-color-teal-light)',
+                        alignSelf: 'stretch',
+                      }}
+                    >
+                      <Text fz={40} fw={800} c="var(--mantine-color-teal-light-color)">
+                        {o.weaponDisplayId ?? '—'}
+                      </Text>
+                    </Stack>
+                    <Group
+                      justify="space-between"
+                      wrap="nowrap"
+                      p="md"
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
                     <Stack gap={2}>
                       <Text
                         fw={600}
                         style={{ cursor: 'pointer' }}
                         onClick={() => setInfoWeapon(o.weaponUid)}
                       >
-                        {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
+                        {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, null, o.weaponActive, t)}
                       </Text>
                       <Text
                         size="sm"
@@ -225,6 +247,7 @@ export function CheckinPage() {
                           </ActionIcon>
                         </Tooltip>
                       </Group>
+                    </Group>
                     </Group>
                   </Group>
                 </Card>
