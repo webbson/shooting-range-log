@@ -295,6 +295,8 @@ pub fn run() {
             logs::last_weapon_users,
             stats::stats_summary,
             stats::stats_loans_buckets,
+            stats::stats_weapon_usage,
+            stats::stats_member_activity,
             service::add_service,
             service::list_weapon_service,
             import::import_list_sheets,
