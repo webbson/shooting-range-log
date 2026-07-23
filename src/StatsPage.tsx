@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
-  Card, Group, ScrollArea, SegmentedControl, Stack, Table, Text, Title, ActionIcon, Button,
+  Badge, Card, Group, ScrollArea, SegmentedControl, Stack, Table, Text, Title, ActionIcon, Button,
 } from '@mantine/core';
 import { IconDownload, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -250,7 +250,14 @@ export function StatsPage() {
               {(usage.data ?? []).map((w) => (
                 <Table.Tr key={w.weaponUid}>
                   <Table.Td>
-                    {weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t)}
+                    <Group gap="xs" wrap="nowrap">
+                      {w.active && w.displayId && (
+                        <Badge color="teal" variant="light" size="lg" radius="sm" style={{ flexShrink: 0 }}>
+                          {w.displayId}
+                        </Badge>
+                      )}
+                      {weaponLabel(w.brand, w.model, w.caliber, null, w.active, t)}
+                    </Group>
                   </Table.Td>
                   <Table.Td ta="right" w={100}>{w.count}</Table.Td>
                 </Table.Tr>
