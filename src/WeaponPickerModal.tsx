@@ -135,8 +135,24 @@ export function WeaponPickerModal({
                     onClick={out ? undefined : () => onSelect(w.uid)}
                   >
                     <Group justify="space-between" wrap="nowrap">
+                      {/* Tag number leads as a chip (same pattern as logs/members
+                          tables); the name drops the [x] suffix. */}
+                      <Group gap="xs" wrap="nowrap">
+                        {w.displayId && (
+                          <Badge
+                            color="teal"
+                            variant="light"
+                            size="lg"
+                            radius="sm"
+                            style={{ flexShrink: 0 }}
+                          >
+                            {w.displayId}
+                          </Badge>
+                        )}
                       <Stack gap={2}>
-                        <Text fw={600}>{label(w)}</Text>
+                        <Text fw={600}>
+                          {weaponLabel(w.brand, w.model, w.caliber, null, true, t)}
+                        </Text>
                         {activeTagKeys(w).length > 0 && (
                           <Group gap={4}>
                             {activeTagKeys(w).map((k) => (
@@ -172,6 +188,7 @@ export function WeaponPickerModal({
                           )
                         )}
                       </Stack>
+                      </Group>
                       <Group gap={4} wrap="nowrap">
                         {w.uid === pinned?.preferredUid ? (
                           <Badge color="yellow" variant="light">
