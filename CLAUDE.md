@@ -150,7 +150,7 @@ commit on a `feat/*` branch → merge to `main`.
   `api.ts` (invoke wrappers + types),
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`, `global.css` (app-wide
   user-select off).
-- `.github/workflows/`: `build-windows.yml` (main-branch build-proof job) + `release.yml`
+- `.github/workflows/`: `release.yml`
   (on `v*` tag push: stamps the tag version into `tauri.conf.json`, `tauri-action` builds the
   NSIS installer + updater artifacts/`latest.json`, RC tags marked prerelease).
 
