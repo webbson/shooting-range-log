@@ -20,7 +20,7 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 - Frontend typecheck + bundle: `npm run build`  (must be green before done)
 - Backend tests: `cargo test --manifest-path src-tauri/Cargo.toml`  (must be green before done)
 - Seed dev DB with mock data (**wipes** then refills): `npm run seed`
-- Windows installer: CI only (`npm run tauri build` on `windows-latest`) — can't cross-build from Mac.
+- Windows installer: CI only (`release.yml` via tauri-action on `windows-latest`; needs the signing-key secrets) — can't cross-build from Mac.
 - Release: `/release patch|minor|major` → tag push → CI (`release.yml`) builds and publishes the installer.
 
 ## Architecture rules (do not violate)
@@ -175,7 +175,7 @@ github.com/webbson/shooting-range-log; `tauri-plugin-updater`/`tauri-plugin-proc
 registered; `release.yml` builds and publishes the NSIS installer + updater artifacts
 (tag-stamped version, `latest.json`) on `v*` tag push, RC tags marked prerelease;
 `UpdatePrompt.tsx` prompts on launch when an update is available.
-M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
+M7 remaining: Windows code signing — see `BACKLOG.md`.
 Git is no longer local-only: `origin` is github.com/webbson/shooting-range-log (public).
 
 ## Backup architecture (M6)
