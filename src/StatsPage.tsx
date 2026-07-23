@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   Card, Group, ScrollArea, SegmentedControl, Stack, Table, Text, Title, ActionIcon, Button,
 } from '@mantine/core';
-import { IconDownload } from '@tabler/icons-react';
-import dayjs from 'dayjs';
+import { IconDownload, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import dayjs, { type Dayjs } from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
   statsSummary, statsLoansBuckets, statsWeaponUsage, statsMemberActivity,
@@ -19,23 +20,49 @@ dayjs.extend(isoWeek);
 type Preset = 'today' | 'week' | 'month' | 'year' | 'all';
 const LOCALE = 'sv-SE';
 
-function periodOf(preset: Preset): { from: string | null; to: string | null; bucket: Bucket } {
+function periodOf(
+  preset: Preset,
+  offset: number,
+): { from: string | null; to: string | null; bucket: Bucket; start: Dayjs } {
   const now = dayjs();
   switch (preset) {
-    case 'today':
-      return { from: now.startOf('day').toISOString(), to: null, bucket: 'hour' };
-    case 'week':
-      return { from: now.startOf('isoWeek').toISOString(), to: null, bucket: 'day' };
-    case 'month':
-      return { from: now.startOf('month').toISOString(), to: null, bucket: 'day' };
-    case 'year':
-      return { from: now.startOf('year').toISOString(), to: null, bucket: 'month' };
+    case 'today': {
+      const start = now.startOf('day').add(offset, 'day');
+      return { from: start.toISOString(), to: start.add(1, 'day').toISOString(), bucket: 'hour', start };
+    }
+    case 'week': {
+      const start = now.startOf('isoWeek').add(offset, 'week');
+      return { from: start.toISOString(), to: start.add(1, 'week').toISOString(), bucket: 'day', start };
+    }
+    case 'month': {
+      const start = now.startOf('month').add(offset, 'month');
+      return { from: start.toISOString(), to: start.add(1, 'month').toISOString(), bucket: 'day', start };
+    }
+    case 'year': {
+      const start = now.startOf('year').add(offset, 'year');
+      return { from: start.toISOString(), to: start.add(1, 'year').toISOString(), bucket: 'month', start };
+    }
     case 'all':
-      return { from: null, to: null, bucket: 'year' };
+      return { from: null, to: null, bucket: 'year', start: now };
   }
 }
 
-function fillBuckets(preset: Preset, rows: LoanBucket[]): { label: string; count: number }[] {
+function periodLabel(preset: Preset, start: Dayjs, t: TFunction): string {
+  switch (preset) {
+    case 'today':
+      return start.format('YYYY-MM-DD');
+    case 'week':
+      return t('stats_week_label', { week: start.isoWeek(), year: start.isoWeekYear() });
+    case 'month':
+      return start.toDate().toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' });
+    case 'year':
+      return start.format('YYYY');
+    case 'all':
+      return '';
+  }
+}
+
+function fillBuckets(preset: Preset, start: Dayjs, rows: LoanBucket[]): { label: string; count: number }[] {
   const m = new Map(rows.map((r) => [r.bucket, r.count]));
   const now = dayjs();
   const out: { label: string; count: number }[] = [];
@@ -44,21 +71,22 @@ function fillBuckets(preset: Preset, rows: LoanBucket[]): { label: string; count
       const key = String(h).padStart(2, '0');
       out.push({ label: key, count: m.get(key) ?? 0 });
     }
-  } else if (preset === 'week' || preset === 'month') {
-    let d = preset === 'week' ? now.startOf('isoWeek') : now.startOf('month');
-    while (d.isBefore(now, 'day') || d.isSame(now, 'day')) {
+  } else if (preset === 'week') {
+    for (let i = 0; i < 7; i++) {
+      const d = start.add(i, 'day');
       out.push({
-        label:
-          preset === 'week'
-            ? d.toDate().toLocaleDateString(LOCALE, { weekday: 'short' })
-            : String(d.date()),
+        label: d.toDate().toLocaleDateString(LOCALE, { weekday: 'short' }),
         count: m.get(d.format('YYYY-MM-DD')) ?? 0,
       });
-      d = d.add(1, 'day');
+    }
+  } else if (preset === 'month') {
+    for (let i = 0; i < start.daysInMonth(); i++) {
+      const d = start.add(i, 'day');
+      out.push({ label: String(d.date()), count: m.get(d.format('YYYY-MM-DD')) ?? 0 });
     }
   } else if (preset === 'year') {
     for (let mo = 0; mo < 12; mo++) {
-      const d = now.startOf('year').add(mo, 'month');
+      const d = start.add(mo, 'month');
       out.push({
         label: d.toDate().toLocaleDateString(LOCALE, { month: 'short' }),
         count: m.get(d.format('YYYY-MM')) ?? 0,
@@ -66,8 +94,8 @@ function fillBuckets(preset: Preset, rows: LoanBucket[]): { label: string; count
     }
   } else {
     const years = rows.map((r) => Number(r.bucket)).filter((y) => !Number.isNaN(y));
-    const start = years.length ? Math.min(...years) : now.year();
-    for (let y = start; y <= now.year(); y++) {
+    const startY = years.length ? Math.min(...years) : now.year();
+    for (let y = startY; y <= now.year(); y++) {
       out.push({ label: String(y), count: m.get(String(y)) ?? 0 });
     }
   }
@@ -114,7 +142,8 @@ function Bars({ data }: { data: { label: string; count: number }[] }) {
 export function StatsPage() {
   const { t } = useTranslation();
   const [preset, setPreset] = useState<Preset>('month');
-  const { from, to, bucket } = periodOf(preset);
+  const [offset, setOffset] = useState(0);
+  const { from, to, bucket, start } = periodOf(preset, offset);
   const doExport = useExportCsv();
 
   const summary = useQuery({
@@ -149,18 +178,39 @@ export function StatsPage() {
     <ScrollArea h="calc(100vh - 144px)">
       <Stack gap="lg" pb="lg">
         <Group justify="space-between">
-          <SegmentedControl
-            size="lg"
-            value={preset}
-            onChange={(v) => setPreset(v as Preset)}
-            data={[
-              { value: 'today', label: t('stats_period_today') },
-              { value: 'week', label: t('stats_period_week') },
-              { value: 'month', label: t('stats_period_month') },
-              { value: 'year', label: t('stats_period_year') },
-              { value: 'all', label: t('stats_period_all') },
-            ]}
-          />
+          <Group>
+            <SegmentedControl
+              size="lg"
+              value={preset}
+              onChange={(v) => {
+                setPreset(v as Preset);
+                setOffset(0);
+              }}
+              data={[
+                { value: 'today', label: t('stats_period_today') },
+                { value: 'week', label: t('stats_period_week') },
+                { value: 'month', label: t('stats_period_month') },
+                { value: 'year', label: t('stats_period_year') },
+                { value: 'all', label: t('stats_period_all') },
+              ]}
+            />
+            {preset !== 'all' && (
+              <Group gap="xs">
+                <ActionIcon size="xl" variant="light" onClick={() => setOffset((o) => o - 1)}>
+                  <IconChevronLeft size={18} />
+                </ActionIcon>
+                <Text fw={500}>{periodLabel(preset, start, t)}</Text>
+                <ActionIcon
+                  size="xl"
+                  variant="light"
+                  disabled={offset === 0}
+                  onClick={() => setOffset((o) => o + 1)}
+                >
+                  <IconChevronRight size={18} />
+                </ActionIcon>
+              </Group>
+            )}
+          </Group>
           <Button
             leftSection={<IconDownload size={18} />}
             variant="light"
@@ -180,7 +230,7 @@ export function StatsPage() {
         </Group>
 
         <Card withBorder>
-          <Bars data={fillBuckets(preset, buckets.data ?? [])} />
+          <Bars data={fillBuckets(preset, start, buckets.data ?? [])} />
         </Card>
 
         <Card withBorder>
