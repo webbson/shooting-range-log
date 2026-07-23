@@ -301,6 +301,7 @@ pub fn run() {
             stats::maintenance_never_borrowed,
             stats::maintenance_tagged_weapons,
             stats::maintenance_guests,
+            stats::export_csv,
             service::add_service,
             service::list_weapon_service,
             import::import_list_sheets,
