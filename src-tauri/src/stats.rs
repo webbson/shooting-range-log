@@ -593,7 +593,7 @@ mod tests {
     fn guest_rows_counts_and_sorts() {
         let conn = migrated_in_memory();
         let op = mk_user(&conn, "Op", false);
-        let g1 = mk_user(&conn, "Gäst Ett", true);
+        let _g1 = mk_user(&conn, "Gäst Ett", true);
         let g2 = mk_user(&conn, "Gäst Två", true);
         let inactive_guest = mk_user(&conn, "Borta", true);
         conn.execute("UPDATE users SET active = 0 WHERE uid = ?1", params![inactive_guest]).unwrap();
