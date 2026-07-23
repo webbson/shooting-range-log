@@ -163,6 +163,20 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
         weapon_uids.push(w.uid);
     }
 
+    // --- Fixture: a 21st weapon that is created but never checked out, so
+    // stats/maintenance pages have an active, idle weapon to render. ---
+    weapon_create(
+        conn,
+        NewWeapon {
+            display_id: Some("21".to_string()),
+            brand: Some("Sako".to_string()),
+            model: Some("Quad".to_string()),
+            serial: Some("SN-0021".to_string()),
+            caliber: Some(".22 LR".to_string()),
+            notes: None,
+        },
+    )?;
+
     // --- Preferred weapons: a few members favor a specific weapon (exclusive,
     // one member per weapon — mirrors the partial unique index). ---
     for (ui, wi) in [(2usize, 0usize), (5, 3), (9, 7)] {
@@ -212,6 +226,15 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
     // weapon_uids[0] was checked out+in above (returned round-robin) so it's free.
     let c = do_checkout(conn, weapon_uids[0], g1, op(0), None, false)?;
     checkout_ids.push(c.id);
+    // g1's second visit: a closed loan on a different weapon/day, so stats pages
+    // have a repeat-guest fixture (not just a single open loan).
+    let c2 = do_checkout(conn, weapon_uids[1], g1, op(0), None, false)?;
+    do_checkin(conn, c2.id, op(1))?;
+    conn.execute(
+        "UPDATE checkouts SET checked_out_at = ?2, checked_in_at = ?3 WHERE id = ?1",
+        params![c2.id, days_ago(10), days_ago(9)],
+    )?;
+    checkout_ids.push(c2.id);
 
     // --- Weapon condition tags: current-state flags, independent of checkout status. ---
     weapon_set_tags(conn, weapon_uids[1], true, false, false, false, Some("Kolven glappar".into()))?;
@@ -292,7 +315,7 @@ mod tests {
         seed_dev_database(&conn).unwrap();
 
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22); // 20 members + 2 guests
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 21); // 20 + never-checked-out fixture
         assert!(count(&conn, "SELECT COUNT(*) FROM checkouts") > 0);
         assert!(count(&conn, "SELECT COUNT(*) FROM debts") > 0);
         assert!(count(&conn, "SELECT COUNT(*) FROM weapon_service_log") > 0);
@@ -300,11 +323,31 @@ mod tests {
         assert!(count(&conn, "SELECT COUNT(*) FROM debts WHERE settled_at IS NOT NULL") >= 1);
         assert!(count(&conn, "SELECT COUNT(*) FROM users WHERE active = 0") >= 1);
         assert!(count(&conn, "SELECT COUNT(*) FROM weapons WHERE active = 0") >= 1);
+        // Stats/maintenance fixtures: an active weapon with zero checkouts, and a
+        // guest with 2+ checkouts.
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM weapons w WHERE w.active = 1
+                   AND NOT EXISTS (SELECT 1 FROM checkouts c WHERE c.weapon_uid = w.uid)"
+            ),
+            1
+        );
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM (
+                   SELECT c.user_uid FROM checkouts c
+                   JOIN users u ON u.uid = c.user_uid AND u.is_guest = 1
+                   GROUP BY c.user_uid HAVING COUNT(*) >= 2
+                 )"
+            ) >= 1
+        );
 
         // Re-seed wipes first → counts stay the same, not doubled.
         seed_dev_database(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22);
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 21);
     }
 
     #[test]
