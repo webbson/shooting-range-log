@@ -36,10 +36,15 @@ _Collect tweaks here as they come up._
 - Verify: snapshot → mutate → restore → data matches.
 
 ## M7 — Packaging / auto-update (deferred)
-- Set up a git **remote** + Windows CI (workflow already at `.github/workflows/build-windows.yml`)
-  to produce the `.msi`/NSIS installer. **This is the M0 exit criterion still outstanding**
-  (no remote yet → installer never built).
-- Tauri updater pointed at the bucket; code signing; release flow.
+- Set up a git **remote** + Windows CI to produce the installer. — resolved 2026-07-23: repo
+  is now public at github.com/webbson/shooting-range-log; `.github/workflows/release.yml`
+  builds the NSIS installer + updater artifacts on `v*` tag push (tag-stamped version, RC
+  tags marked prerelease). **M0 exit criterion met.**
+- Tauri updater pointed at the bucket; code signing; release flow. — updater + release flow
+  resolved 2026-07-23: `tauri-plugin-updater`/`tauri-plugin-process` registered, prompt-on-launch
+  update modal (`UpdatePrompt.tsx`), GitHub releases (not the backup bucket) as the update
+  channel, `/release patch|minor|major` → tag push → CI. Still deferred: **Windows
+  Authenticode code signing** (SmartScreen warning on first manual install).
 
 ## Notes
 - Identity/decisions: see `~/.claude/plans/read-project-md-and-make-agile-spark.md`
