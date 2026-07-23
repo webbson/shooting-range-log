@@ -166,6 +166,18 @@ impl AppError {
     pub fn not_a_guest() -> Self {
         AppError::new("err_not_a_guest", "User is not a guest.", json!({}))
     }
+
+    pub fn guest_cannot_be_assigned() -> Self {
+        AppError::new(
+            "err_guest_cannot_assign",
+            "A weapon cannot be assigned to a guest.",
+            json!({}),
+        )
+    }
+
+    pub fn ssn_invalid() -> Self {
+        AppError::new("err_ssn_invalid", "Invalid SSN — use YYYYMMDD-XXXX.", json!({}))
+    }
 }
 
 impl From<rusqlite::Error> for AppError {

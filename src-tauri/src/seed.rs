@@ -55,7 +55,6 @@ const SERVICE_DESCS: &[&str] = &[
     "Justering av riktmedel",
     "Byte av slagstift",
 ];
-const CHECKOUT_NOTES: &[&str] = &["", "Provskjutning", "Tävling", "Träning", ""];
 
 // ---- Counts — tweak to taste ----
 const N_USERS: usize = 20;
@@ -67,14 +66,6 @@ const N_SERVICE: usize = 15;
 
 fn days_ago(n: i64) -> String {
     (Utc::now() - Duration::days(n.max(0))).to_rfc3339()
-}
-
-fn opt(s: &str) -> Option<String> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s.to_string())
-    }
 }
 
 fn delete_tables(conn: &Connection, tables: &[&str]) -> Result<(), AppError> {
@@ -118,7 +109,8 @@ pub fn wipe_logs(conn: &Connection) -> Result<(), AppError> {
 pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
     wipe_all(conn)?;
 
-    // --- Users (display_id "1".."20"); first N_STAFF are operators. ---
+    // --- Users (no display_id — member tags are dead, ID removed from the UI);
+    // first N_STAFF are operators. ---
     let mut user_uids = Vec::with_capacity(N_USERS);
     for i in 0..N_USERS {
         let first = FIRST_NAMES[i % FIRST_NAMES.len()];
@@ -127,7 +119,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
         let u = user_create(
             conn,
             NewUser {
-                display_id: Some(n.to_string()),
+                display_id: None,
                 name: format!("{first} {last}"),
                 email: Some(format!(
                     "{}.{}@example.com",
@@ -187,7 +179,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
         for wi in 0..returned {
             let weapon = weapon_uids[wi];
             let user = user_uids[(wi + round * 7) % N_USERS];
-            let c = do_checkout(conn, weapon, user, op(k), opt(CHECKOUT_NOTES[k % CHECKOUT_NOTES.len()]))?;
+            let c = do_checkout(conn, weapon, user, op(k), None, false)?;
             do_checkin(conn, c.id, op(k + 1))?;
             // Backdate both timestamps (create fns stamp "now"): out older, in newer.
             let out_day = 5 + ((k as i64 * 13) % 55);
@@ -203,7 +195,10 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
     for j in 0..N_OPEN {
         let weapon = weapon_uids[returned + j];
         let user = user_uids[(N_STAFF + 2 + j) % N_USERS]; // active, not retired below
-        let c = do_checkout(conn, weapon, user, op(j), opt("Pågående"))?;
+        // Exercise assign=true on one open checkout (weapon outside the preferred
+        // triples above); transfer-from-other-member is covered by a cargo test.
+        let assign = j == 0;
+        let c = do_checkout(conn, weapon, user, op(j), None, assign)?;
         conn.execute(
             "UPDATE checkouts SET checked_out_at = ?2 WHERE id = ?1",
             params![c.id, days_ago(j as i64)],
@@ -215,7 +210,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
     let g1 = user_upsert_guest(conn, "Gustav Gästsson".into(), "19870707-7777".into())?.uid;
     user_upsert_guest(conn, "Greta Gästberg".into(), "19920202-2222".into())?;
     // weapon_uids[0] was checked out+in above (returned round-robin) so it's free.
-    let c = do_checkout(conn, weapon_uids[0], g1, op(0), opt("Gästlån"))?;
+    let c = do_checkout(conn, weapon_uids[0], g1, op(0), None, false)?;
     checkout_ids.push(c.id);
 
     // --- Weapon condition tags: current-state flags, independent of checkout status. ---
