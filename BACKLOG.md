@@ -45,6 +45,11 @@ _Collect tweaks here as they come up._
   update modal (`UpdatePrompt.tsx`), GitHub releases (not the backup bucket) as the update
   channel, `/release patch|minor|major` → tag push → CI. Still deferred: **Windows
   Authenticode code signing** (SmartScreen warning on first manual install).
+- Auto-update follow-ups (from final branch review 2026-07-23, all low priority):
+  `check({ timeout: 30_000 })` so a flaky network can't pop the modal minutes after launch;
+  a minimal `cargo check` + `npm run build` workflow on `main` (catch Windows breakage before
+  a release, seed warm caches); SHA-pin `tauri-apps/tauri-action` (floating `@v0` runs with
+  the signing key in env); scope `process:default` down to restart-only.
 
 ## Notes
 - Identity/decisions: see `~/.claude/plans/read-project-md-and-make-agile-spark.md`
