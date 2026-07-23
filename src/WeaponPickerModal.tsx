@@ -117,10 +117,10 @@ export function WeaponPickerModal({
   });
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t('pick_weapon')} size="xl" centered>
+    <Modal opened={opened} onClose={onClose} title={t('pick_weapon')} size="90%" centered>
       <Grid gap="md">
         <Grid.Col span={7}>
-          <ScrollArea h={420} type="auto">
+          <ScrollArea h={520} type="auto">
             <Stack gap="xs">
               {sorted.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
               {sorted.map((w) => {
