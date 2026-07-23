@@ -45,4 +45,4 @@ There will be a database backup/restore functionality. Backups will be taken aut
 
 Interface will be built for simple handling on a touch screen windows laptop, and optimized for running in 2560x1440, 1920x1200, 1920x1080. 
 
-Interface will be built with Rust and Tauri and binaries built for windows, and published to the same bucket as the backup for update functionality. Though development can happen on Mac. 
+Interface will be built with Rust and Tauri and binaries built for windows, and published as public GitHub releases which the app's updater checks on launch. Though development can happen on Mac. 
