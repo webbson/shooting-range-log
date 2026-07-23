@@ -52,6 +52,8 @@ export function CheckoutPage() {
   // Which picker modal is open (replaces the old per-field numpad entry).
   const [picker, setPicker] = useState<'weapon' | 'member' | null>(null);
   const [guestOpen, setGuestOpen] = useState(false);
+  // Selector radio pick between the weapon's candidate users (uid); null = default.
+  const [chosenUserUid, setChosenUserUid] = useState<number | null>(null);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -77,22 +79,28 @@ export function CheckoutPage() {
   });
   const ev = evalQ.data;
 
-  // Selector step: tag → matched active weapon, and its auto-resolved member
-  // (assigned member first, else last borrower — never a guest).
+  // Selector step: tag → matched active weapon, plus its candidate borrowers —
+  // assigned member and last borrower (never a guest) — rendered as tappable
+  // radio boxes. Assigned is the default pick.
   const matched = tag ? (weapons.data ?? []).find((w) => w.active && w.displayId === tag) : undefined;
-  const autoUserFor = (w: Weapon): User | undefined => {
-    const p = preferrerMap.get(w.uid);
-    if (p?.active) return p;
-    const last = lastUseMap.get(w.uid);
-    const u = last && (users.data ?? []).find((x) => x.uid === last.userUid);
-    return u && u.active && !u.isGuest ? u : undefined;
-  };
   const holder = matched ? openMap.get(matched.uid) : undefined;
-  // Auto-resolved user for the selector preview + direct checkout, and
-  // whether they're the assigned (preferred) holder vs. last-used.
-  const autoUser = matched ? autoUserFor(matched) : undefined;
-  const autoUserIsAssigned =
-    autoUser != null && matched != null && preferrerMap.get(matched.uid)?.uid === autoUser.uid;
+  const assignedUser: User | undefined = (() => {
+    if (!matched) return undefined;
+    const p = preferrerMap.get(matched.uid);
+    return p?.active ? p : undefined;
+  })();
+  const lastUser: User | undefined = (() => {
+    if (!matched) return undefined;
+    const last = lastUseMap.get(matched.uid);
+    const u = last && (users.data ?? []).find((x) => x.uid === last.userUid);
+    return u && u.active && !u.isGuest && u.uid !== assignedUser?.uid ? u : undefined;
+  })();
+  // An explicit tap wins only while it still names a current candidate;
+  // otherwise fall back to assigned, then last.
+  const chosenUser =
+    [assignedUser, lastUser].find((u) => u != null && u.uid === chosenUserUid) ??
+    assignedUser ??
+    lastUser;
 
   const enterForm = (w: Weapon | undefined, uid: number | null) => {
     setWeaponUid(w?.uid ?? null);
@@ -101,20 +109,24 @@ export function CheckoutPage() {
     setStep('form');
   };
 
+  // A new tag keys a new weapon — drop any explicit radio pick so the
+  // assigned-first default applies (a stale pick could otherwise hijack the
+  // next weapon when the same member is one of its candidates too).
+  useEffect(() => setChosenUserUid(null), [tag]);
+
   // Physical-keyboard entry for the selector. The page Stack never holds
   // focus, so a React onKeyDown would be dead — listen on window while the
-  // selector shows. Suspended while the guest modal is open so digits typed
-  // into the SSN field don't leak into the tag.
+  // selector shows.
   useEffect(() => {
-    if (step !== 'selector' || guestOpen) return;
+    if (step !== 'selector') return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key >= '0' && e.key <= '9') setTag((v) => v + e.key);
       else if (e.key === 'Backspace') setTag((v) => v.slice(0, -1));
       else if (e.key === 'Enter') {
-        if (canDirectCheckout && matched && autoUser) {
-          checkoutMut.mutate({ weaponUid: matched.uid, userUid: autoUser.uid, assign: false });
+        if (canDirectCheckout && matched && chosenUser) {
+          checkoutMut.mutate({ weaponUid: matched.uid, userUid: chosenUser.uid, assign: false });
         } else if (matched && !holder) {
-          enterForm(matched, autoUser?.uid ?? null);
+          enterForm(matched, chosenUser?.uid ?? null);
         }
       }
     };
@@ -178,7 +190,7 @@ export function CheckoutPage() {
   // isPending guard: the button shows loading, but a held Enter key would
   // otherwise fire a second mutate before the first lands.
   const canDirectCheckout =
-    !!matched && !holder && autoUser != null && !!operator && !checkoutMut.isPending;
+    !!matched && !holder && chosenUser != null && !!operator && !checkoutMut.isPending;
 
   // Pin data for the weapon picker AND the selected-weapon card badges:
   // preferred from the selected member, last-used from the member-only eval
@@ -247,102 +259,108 @@ export function CheckoutPage() {
               loading={checkoutMut.isPending}
               onClick={() =>
                 matched &&
-                autoUser &&
-                checkoutMut.mutate({ weaponUid: matched.uid, userUid: autoUser.uid, assign: false })
+                chosenUser &&
+                checkoutMut.mutate({ weaponUid: matched.uid, userUid: chosenUser.uid, assign: false })
               }
             >
               {t('confirm_checkout')}
             </Button>
           </Stack>
-          {/* Preview beside the pad; secondary paths bottom-aligned below it. */}
+          {/* Preview beside the pad: weapon box, then candidate-user radio
+              boxes; manual path bottom-aligned below. */}
           <Stack w={320} gap="md" justify="space-between">
-            <Paper withBorder p="md">
-              {matched ? (
-                <Stack gap={4}>
-                  <Text fw={700} fz="lg" c="teal">
-                    {weaponLabel(
-                      matched.brand,
-                      matched.model,
-                      matched.caliber,
-                      matched.displayId,
-                      matched.active,
-                      t,
-                    )}
-                  </Text>
-                  {holder ? (
-                    // Out weapon: the holder line is the only thing that matters.
-                    <Text c="orange" fw={600}>
-                      {t('banner_weapon_already_out', {
-                        name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
-                      })}
+            <Stack gap="sm">
+              <Paper withBorder p="md">
+                {matched ? (
+                  <Stack gap={4}>
+                    <Text fw={700} fz="lg" c="teal">
+                      {weaponLabel(
+                        matched.brand,
+                        matched.model,
+                        matched.caliber,
+                        matched.displayId,
+                        matched.active,
+                        t,
+                      )}
                     </Text>
-                  ) : (
-                    autoUser && (
-                      <Stack gap={2}>
-                        <Group gap={6}>
-                          <Text c="dimmed">
-                            {userLabel(autoUser.name, autoUser.active, t, autoUser.isGuest)}
-                          </Text>
-                          <Badge
-                            color={autoUserIsAssigned ? 'yellow' : 'gray'}
-                            variant="light"
-                            size="sm"
-                          >
-                            {autoUserIsAssigned ? t('badge_preferred') : t('badge_last')}
-                          </Badge>
-                        </Group>
-                        <Group gap={6}>
-                          {lastMap.has(autoUser.uid) && (
-                            <Text size="sm" c="dimmed">
-                              {fmtDate(lastMap.get(autoUser.uid)!)}
+                    {holder && (
+                      // Out weapon: the holder line is the only thing that matters.
+                      <Text c="orange" fw={600}>
+                        {t('banner_weapon_already_out', {
+                          name: userLabel(holder.userName, holder.userActive, t, holder.userIsGuest),
+                        })}
+                      </Text>
+                    )}
+                  </Stack>
+                ) : (
+                  <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
+                )}
+              </Paper>
+              {matched &&
+                !holder &&
+                [assignedUser, lastUser]
+                  .filter((u): u is User => u != null)
+                  .map((u) => {
+                    const isChosen = chosenUser?.uid === u.uid;
+                    const isAssigned = u.uid === assignedUser?.uid;
+                    return (
+                      <Paper
+                        key={u.uid}
+                        withBorder
+                        p="md"
+                        onClick={() => setChosenUserUid(u.uid)}
+                        style={{
+                          cursor: 'pointer',
+                          ...(isChosen
+                            ? { borderColor: 'var(--mantine-color-teal-6)', borderWidth: 2 }
+                            : {}),
+                        }}
+                      >
+                        <Stack gap={2}>
+                          <Group gap={6} justify="space-between" wrap="nowrap">
+                            <Text fw={600} c={isChosen ? undefined : 'dimmed'}>
+                              {userLabel(u.name, u.active, t, u.isGuest)}
                             </Text>
-                          )}
-                          {debtMap.has(autoUser.uid) && (
-                            <Badge color="red" variant="filled" size="sm">
-                              {t('debt_badge', { amount: debtMap.get(autoUser.uid) })}
+                            <Badge
+                              color={isAssigned ? 'yellow' : 'gray'}
+                              variant="light"
+                              size="sm"
+                              style={{ flexShrink: 0 }}
+                            >
+                              {isAssigned ? t('badge_preferred') : t('badge_last')}
                             </Badge>
-                          )}
-                        </Group>
-                      </Stack>
-                    )
-                  )}
-                </Stack>
-              ) : (
-                <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
-              )}
-            </Paper>
-            <Stack gap="md">
-              <Button
-                size="xl"
-                variant="default"
-                fullWidth
-                onClick={() =>
-                  matched && !holder
-                    ? enterForm(matched, autoUser?.uid ?? null)
-                    : enterForm(undefined, null)
-                }
-              >
-                {matched && !holder ? t('change') : t('browse_weapons')}
-              </Button>
-              <Button size="xl" variant="default" fullWidth onClick={() => setGuestOpen(true)}>
-                {t('guest_button')}
-              </Button>
+                          </Group>
+                          <Group gap={6}>
+                            {lastMap.has(u.uid) && (
+                              <Text size="sm" c="dimmed">
+                                {fmtDate(lastMap.get(u.uid)!)}
+                              </Text>
+                            )}
+                            {debtMap.has(u.uid) && (
+                              <Badge color="red" variant="filled" size="sm">
+                                {t('debt_badge', { amount: debtMap.get(u.uid) })}
+                              </Badge>
+                            )}
+                          </Group>
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
             </Stack>
+            <Button
+              size="xl"
+              variant="default"
+              fullWidth
+              onClick={() =>
+                matched && !holder
+                  ? enterForm(matched, chosenUser?.uid ?? null)
+                  : enterForm(undefined, null)
+              }
+            >
+              {t('manual_selection')}
+            </Button>
           </Stack>
         </Group>
-
-        <GuestModal
-          opened={guestOpen}
-          onClose={() => setGuestOpen(false)}
-          onSelect={(uid) => {
-            if (matched) {
-              enterForm(matched, uid);
-            } else {
-              setStep('form');
-              onMemberChange(uid);
-            }
-          }}
-        />
       </Stack>
     );
   }
