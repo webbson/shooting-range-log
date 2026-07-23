@@ -310,6 +310,14 @@ const resources = {
       maint_tagged: 'Vapen med åtgärdsmarkering',
       maint_last_visit: 'Senaste besök',
       promote_confirm: 'Gör {{name}} till medlem?',
+
+      // Updater
+      update_title: 'Ny version {{version}}',
+      update_question: 'Vill du uppdatera nu?',
+      update_now: 'Uppdatera nu',
+      update_later: 'Senare',
+      update_downloading: 'Laddar ner uppdatering…',
+      update_failed: 'Uppdateringen misslyckades',
     },
   },
   en: {
@@ -617,6 +625,14 @@ const resources = {
       maint_tagged: 'Weapons with condition tags',
       maint_last_visit: 'Last visit',
       promote_confirm: 'Promote {{name}} to member?',
+
+      // Updater
+      update_title: 'New version {{version}}',
+      update_question: 'Update now?',
+      update_now: 'Update now',
+      update_later: 'Later',
+      update_downloading: 'Downloading update…',
+      update_failed: 'Update failed',
     },
   },
 };

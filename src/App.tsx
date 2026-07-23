@@ -22,6 +22,7 @@ import { LogsPage } from './LogsPage';
 import { SettingsPage } from './SettingsPage';
 import { StatsPage } from './StatsPage';
 import { MaintenancePage } from './MaintenancePage';
+import { UpdatePrompt } from './UpdatePrompt';
 
 // Tauri invoke is IPC, not HTTP — never pause queries/mutations on
 // navigator.onLine (default networkMode 'online' froze refetches when the
@@ -46,6 +47,7 @@ export default function App() {
       <ColorSchemeScript defaultColorScheme="light" />
       <MantineProvider theme={theme} defaultColorScheme="light">
         <Notifications position="top-right" />
+        <UpdatePrompt />
         <DatesProvider settings={{ locale: 'sv', firstDayOfWeek: 1 }}>
           <QueryClientProvider client={queryClient}>
             <BrowserRouter>
