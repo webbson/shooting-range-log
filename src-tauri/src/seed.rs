@@ -13,7 +13,7 @@
 //! KEEP IN SYNC: when you add a new entity, field, or log type, extend the seed
 //! here so it's exercised too. See CLAUDE.md "Dev data".
 
-use chrono::{Duration, Utc};
+use chrono::{Duration, Timelike, Utc};
 use rusqlite::{params, Connection};
 
 use crate::checkout::{do_checkin, do_checkout};
@@ -66,6 +66,36 @@ const N_SERVICE: usize = 15;
 
 fn days_ago(n: i64) -> String {
     (Utc::now() - Duration::days(n.max(0))).to_rfc3339()
+}
+
+/// Checks a weapon out to `user` and immediately back in, backdated `days` days
+/// ago with checkout pinned to `hour` (checkin one hour later, same day). Same
+/// do_checkout/do_checkin + UPDATE-backdate pattern as the loops below, factored
+/// out because the historical spread calls it a hundred-odd times.
+fn seed_historical_loan(
+    conn: &Connection,
+    weapon: i64,
+    user: i64,
+    op_out: i64,
+    op_in: i64,
+    days: i64,
+    hour: u32,
+) -> Result<i64, AppError> {
+    let at = |h: u32| {
+        (Utc::now() - Duration::days(days.max(0)))
+            .with_hour(h)
+            .and_then(|d| d.with_minute(0))
+            .and_then(|d| d.with_second(0))
+            .unwrap()
+            .to_rfc3339()
+    };
+    let c = do_checkout(conn, weapon, user, op_out, None, false)?;
+    do_checkin(conn, c.id, op_in)?;
+    conn.execute(
+        "UPDATE checkouts SET checked_out_at = ?2, checked_in_at = ?3 WHERE id = ?1",
+        params![c.id, at(hour), at(hour + 1)],
+    )?;
+    Ok(c.id)
 }
 
 fn delete_tables(conn: &Connection, tables: &[&str]) -> Result<(), AppError> {
@@ -206,6 +236,28 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
             k += 1;
         }
     }
+
+    // --- Historical spread: ~14 months of closed loans over the closed-weapon
+    // pool so every Statistik period (day/week/month/year/Allt) has data.
+    // Round-robins members × weapons; days_ago wraps past i=105 (i*4 > 420),
+    // which lands those tail days on top of the earliest days from i=0..14 —
+    // free same-day multi-loan coverage for the "day" bucket. Hour cycles
+    // 9..17 for the "hour" bucket. Verified (see task report) this pairing
+    // never lands a stale-assignment member on their own assigned weapon. ---
+    for i in 0..120i64 {
+        let weapon = weapon_uids[(i as usize) % returned];
+        let user = user_uids[(i as usize) % N_USERS];
+        let days = 1 + (i * 4) % 420;
+        let hour = 9u32 + (i % 9) as u32;
+        let id =
+            seed_historical_loan(conn, weapon, user, op(i as usize), op(i as usize + 1), days, hour)?;
+        checkout_ids.push(id);
+    }
+    // The spread above only reaches ~14 months back; add one loan further out
+    // so the "Allt" per-year bars have a second year to show beyond last year.
+    let id = seed_historical_loan(conn, weapon_uids[3], user_uids[11], op(120), op(121), 730, 13)?;
+    checkout_ids.push(id);
+
     for j in 0..N_OPEN {
         let weapon = weapon_uids[returned + j];
         let user = user_uids[(N_STAFF + 2 + j) % N_USERS]; // active, not retired below
@@ -222,7 +274,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
 
     // --- Guests: one repeat visitor with an open loan, one without history. ---
     let g1 = user_upsert_guest(conn, "Gustav Gästsson".into(), "19870707-7777".into())?.uid;
-    user_upsert_guest(conn, "Greta Gästberg".into(), "19920202-2222".into())?;
+    let greta = user_upsert_guest(conn, "Greta Gästberg".into(), "19920202-2222".into())?.uid;
     // weapon_uids[0] was checked out+in above (returned round-robin) so it's free.
     let c = do_checkout(conn, weapon_uids[0], g1, op(0), None, false)?;
     checkout_ids.push(c.id);
@@ -235,6 +287,17 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
         params![c2.id, days_ago(10), days_ago(9)],
     )?;
     checkout_ids.push(c2.id);
+    // g1 + Greta each get 2 more backdated closed loans spread across earlier
+    // months, so both guests show up across multiple Statistik periods (Greta
+    // had zero checkouts before this).
+    for id in [
+        seed_historical_loan(conn, weapon_uids[2], g1, op(2), op(3), 150, 11)?,
+        seed_historical_loan(conn, weapon_uids[4], g1, op(4), op(5), 250, 14)?,
+        seed_historical_loan(conn, weapon_uids[5], greta, op(6), op(7), 100, 10)?,
+        seed_historical_loan(conn, weapon_uids[6], greta, op(8), op(9), 300, 15)?,
+    ] {
+        checkout_ids.push(id);
+    }
 
     // --- Weapon condition tags: current-state flags, independent of checkout status. ---
     weapon_set_tags(conn, weapon_uids[1], true, false, false, false, Some("Kolven glappar".into()))?;
@@ -333,7 +396,7 @@ mod tests {
             ),
             1
         );
-        assert!(
+        assert_eq!(
             count(
                 &conn,
                 "SELECT COUNT(*) FROM (
@@ -341,6 +404,34 @@ mod tests {
                    JOIN users u ON u.uid = c.user_uid AND u.is_guest = 1
                    GROUP BY c.user_uid HAVING COUNT(*) >= 2
                  )"
+            ),
+            2 // both seeded guests (g1, Greta) now have repeat visits
+        );
+
+        // Historical spread (Task 11): the Statistik period nav needs data across
+        // many months, at least one same-day collision, and a bucket beyond the
+        // ~14-month spread for the "Allt" per-year view.
+        assert!(count(&conn, "SELECT COUNT(*) FROM checkouts") >= 150);
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(DISTINCT strftime('%Y-%m', checked_out_at)) FROM checkouts"
+            ) >= 12
+        );
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM (
+                   SELECT strftime('%Y-%m-%d', checked_out_at) AS d, COUNT(*) AS c
+                   FROM checkouts GROUP BY d HAVING c >= 2
+                 )"
+            ) >= 1
+        );
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM checkouts
+                 WHERE julianday('now') - julianday(checked_out_at) > 600"
             ) >= 1
         );
 
