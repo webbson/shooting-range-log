@@ -402,3 +402,62 @@ export const backupNow = () => invoke<string>('backup_now');
 export const listBackups = () => invoke<BackupInfo[]>('list_backups');
 export const restoreBackup = (filename: string, source: BackupSource) =>
   invoke<void>('restore_backup', { filename, source });
+
+// ---- Stats & maintenance ----
+
+export interface StatsSummary { loanCount: number; memberCount: number; guestCount: number }
+export interface LoanBucket { bucket: string; count: number }
+export interface WeaponUsage {
+  weaponUid: number; brand: string | null; model: string | null; caliber: string | null;
+  displayId: string | null; active: boolean; count: number;
+}
+export interface MemberActivity {
+  userUid: number; name: string; isGuest: boolean; active: boolean; count: number;
+}
+export interface StaleAssignment {
+  userUid: number; name: string; weaponUid: number; brand: string | null; model: string | null;
+  caliber: string | null; displayId: string | null; weaponActive: boolean; lastUsed: string | null;
+}
+export interface NeverBorrowedWeapon {
+  weaponUid: number; brand: string | null; model: string | null; caliber: string | null;
+  displayId: string | null; createdAt: string;
+}
+export interface TaggedWeapon {
+  weaponUid: number; brand: string | null; model: string | null; caliber: string | null;
+  displayId: string | null; tagNeedsService: boolean; tagBroken: boolean;
+  tagMissingParts: boolean; tagNeedsCleaning: boolean; tagComment: string | null;
+}
+export interface GuestRow { userUid: number; name: string; loanCount: number; lastVisit: string | null }
+export type ExportKind =
+  | 'loans_raw' | 'weapon_usage' | 'member_activity' | 'debts' | 'stale_assignments' | 'guests';
+export type Bucket = 'hour' | 'day' | 'month' | 'year';
+
+export const statsSummary = (from: string | null, to: string | null) =>
+  invoke<StatsSummary>('stats_summary', { from, to });
+export const statsLoansBuckets = (from: string | null, to: string | null, bucket: Bucket) =>
+  invoke<LoanBucket[]>('stats_loans_buckets', { from, to, bucket });
+export const statsWeaponUsage = (from: string | null, to: string | null) =>
+  invoke<WeaponUsage[]>('stats_weapon_usage', { from, to });
+export const statsMemberActivity = (from: string | null, to: string | null) =>
+  invoke<MemberActivity[]>('stats_member_activity', { from, to });
+export const maintenanceStaleAssignments = (months: number) =>
+  invoke<StaleAssignment[]>('maintenance_stale_assignments', { months });
+export const maintenanceNeverBorrowed = () =>
+  invoke<NeverBorrowedWeapon[]>('maintenance_never_borrowed');
+export const maintenanceTaggedWeapons = () =>
+  invoke<TaggedWeapon[]>('maintenance_tagged_weapons');
+export const maintenanceGuests = () => invoke<GuestRow[]>('maintenance_guests');
+export const exportCsvCmd = (
+  kind: ExportKind,
+  path: string,
+  from?: string | null,
+  to?: string | null,
+  months?: number | null,
+) =>
+  invoke<number>('export_csv', {
+    kind,
+    path,
+    from: from ?? null,
+    to: to ?? null,
+    months: months ?? null,
+  });
