@@ -1,4 +1,4 @@
-import { Modal, Stack, Group, Grid, TextInput, Button, Text, Card, ScrollArea } from '@mantine/core';
+import { Modal, Stack, Grid, TextInput, Button, Text, Card, ScrollArea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -6,12 +6,14 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listUsers, lastShotDates, upsertGuest, type User } from './api';
 import { errorMessage } from './errors';
-import { userLabel } from './labels';
 import { fmtDate } from './format';
+import { Keyboard } from './Keyboard';
 
 // Guest checkout entry: pick a previous guest (name/SSN search) or create a
 // new one. SSN identifies the guest (unique); a repeat SSN reuses the
 // existing guest row (name shown then comes from the DB, not this form).
+// One shared on-screen keyboard types into whichever field was last focused
+// (tracked in state — DOM focus dies when a keyboard button is tapped).
 export function GuestModal({
   opened,
   onClose,
@@ -26,12 +28,14 @@ export function GuestModal({
   const [search, setSearch] = useState('');
   const [name, setName] = useState('');
   const [ssn, setSsn] = useState('');
+  const [target, setTarget] = useState<'search' | 'ssn' | 'name'>('search');
 
   useEffect(() => {
     if (opened) {
       setSearch('');
       setName('');
       setSsn('');
+      setTarget('search');
     }
   }, [opened]);
 
@@ -77,8 +81,18 @@ export function GuestModal({
     onError: (e) => notifications.show({ color: 'red', message: errorMessage(e, t) }),
   });
 
+  // Shared keyboard routes into the last-focused field.
+  const kbValue = target === 'search' ? search : target === 'ssn' ? ssn : name;
+  const kbSet = target === 'search' ? setSearch : target === 'ssn' ? setSsn : setName;
+  // Persistent highlight on the routed field (state-driven — CSS :focus is
+  // gone the moment a keyboard button steals DOM focus).
+  const hl = (f: 'search' | 'ssn' | 'name') =>
+    target === f
+      ? { input: { borderColor: 'var(--mantine-color-blue-6)', borderWidth: 2 } }
+      : undefined;
+
   return (
-    <Modal opened={opened} onClose={onClose} centered title={t('guest_checkout')} size="xl">
+    <Modal opened={opened} onClose={onClose} centered title={t('guest_checkout')} size="90%">
       <Grid gap="lg">
         <Grid.Col span={6}>
           <Stack>
@@ -87,30 +101,37 @@ export function GuestModal({
               placeholder={t('search')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setTarget('search')}
+              styles={hl('search')}
+              size="lg"
               data-autofocus
             />
-            <ScrollArea h={360} type="auto">
+            <ScrollArea h={480} type="auto">
               <Stack gap="xs">
                 {sorted.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
                 {sorted.map((u) => (
                   <Card
                     key={u.uid}
                     withBorder
-                    padding="sm"
+                    padding="md"
                     style={{ cursor: 'pointer' }}
                     onClick={() => {
                       onSelect(u.uid);
                       onClose();
                     }}
                   >
-                    <Group justify="space-between" wrap="nowrap">
-                      <Text fw={600}>{userLabel(u.name, u.active, t, u.isGuest)}</Text>
-                      {lastMap.has(u.uid) && (
-                        <Text size="xs" c="dimmed">
-                          {t('field_last_shot')}: {fmtDate(lastMap.get(u.uid)!)}
+                    <Stack gap={2}>
+                      <Text fz="lg" fw={700}>
+                        {u.name}
+                      </Text>
+                      {(u.ssn || lastMap.has(u.uid)) && (
+                        <Text size="sm" c="dimmed">
+                          {[u.ssn, lastMap.has(u.uid) ? fmtDate(lastMap.get(u.uid)!) : undefined]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </Text>
                       )}
-                    </Group>
+                    </Stack>
                   </Card>
                 ))}
               </Stack>
@@ -125,6 +146,8 @@ export function GuestModal({
               label={t('field_ssn')}
               value={ssn}
               onChange={(e) => setSsn(e.target.value)}
+              onFocus={() => setTarget('ssn')}
+              styles={hl('ssn')}
               placeholder="ÅÅÅÅMMDD-XXXX"
               size="lg"
             />
@@ -132,6 +155,8 @@ export function GuestModal({
               label={t('field_name')}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onFocus={() => setTarget('name')}
+              styles={hl('name')}
               size="lg"
             />
             <Button
@@ -142,6 +167,7 @@ export function GuestModal({
             >
               {t('guest_continue')}
             </Button>
+            <Keyboard value={kbValue} onChange={kbSet} withDisplay={false} withDigits />
           </Stack>
         </Grid.Col>
       </Grid>
