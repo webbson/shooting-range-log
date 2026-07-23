@@ -296,7 +296,24 @@ export function MembersPage() {
         </Group>
       </Table.Td>
       <Table.Td>{lastShotMap.has(u.uid) ? fmtDate(lastShotMap.get(u.uid)!) : '—'}</Table.Td>
-      <Table.Td>{assignedLabel(u) ?? ''}</Table.Td>
+      <Table.Td>
+        {/* Tag number leads as a chip (same pattern as the logs table); the
+            label drops the [x] suffix, inactive keeps its [disabled] marker. */}
+        {(() => {
+          const w = u.preferredWeaponUid != null ? weaponMap.get(u.preferredWeaponUid) : undefined;
+          if (!w) return '';
+          return (
+            <Group gap="xs" wrap="nowrap">
+              {w.active && w.displayId && (
+                <Badge color="teal" variant="light" size="lg" radius="sm" style={{ flexShrink: 0 }}>
+                  {w.displayId}
+                </Badge>
+              )}
+              {weaponLabel(w.brand, w.model, w.caliber, null, w.active, t)}
+            </Group>
+          );
+        })()}
+      </Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
           {u.isStaff && <Badge color="grape">{t('staff')}</Badge>}
