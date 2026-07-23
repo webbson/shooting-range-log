@@ -293,7 +293,7 @@ export function CheckoutPage() {
                     )}
                   </Stack>
                 ) : (
-                  <Text c="dimmed">{tag ? t('no_match') : ' '}</Text>
+                  <Text c="dimmed">{tag ? t('no_match') : t('enter_weapon_id')}</Text>
                 )}
               </Paper>
               {matched &&
