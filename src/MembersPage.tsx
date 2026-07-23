@@ -1,5 +1,6 @@
 import {
   Group,
+  Grid,
   Button,
   Table,
   Badge,
@@ -413,64 +414,75 @@ export function MembersPage() {
         opened={opened}
         onClose={close}
         title={editing ? t('edit_member') : t('new_member')}
+        size="xl"
         centered
       >
         <form onSubmit={form.onSubmit(onSave)}>
           <Stack>
-            <TextInput
-              label={t('field_name')}
-              withAsterisk
-              {...form.getInputProps('name')}
-            />
-            <Group grow>
-              <TextInput label={t('field_email')} {...form.getInputProps('email')} />
-              <TextInput label={t('field_phone')} {...form.getInputProps('phone')} />
-            </Group>
-            <TextInput label={t('field_address')} {...form.getInputProps('address')} />
-            <TextInput label={t('field_ssn')} {...form.getInputProps('ssn')} />
-            <Group align="flex-end" gap="xs" wrap="nowrap">
-              <Input.Wrapper label={t('field_preferred_weapon')} style={{ flex: 1 }}>
-                <Button
-                  fullWidth
-                  variant="default"
-                  justify="space-between"
-                  rightSection="▾"
-                  onClick={() => setPrefPickerOpen(true)}
-                  c={prefWeapon ? undefined : 'dimmed'}
-                >
-                  {prefWeapon
-                    ? weaponLabel(
-                        prefWeapon.brand,
-                        prefWeapon.model,
-                        prefWeapon.caliber,
-                        prefWeapon.displayId,
-                        prefWeapon.active,
-                        t,
-                      )
-                    : t('none_set')}
-                </Button>
-              </Input.Wrapper>
-              {prefUid != null && (
-                <CloseButton
-                  size="lg"
-                  aria-label={t('clear_selection')}
-                  onClick={() => setPrefUid(null)}
-                />
-              )}
-            </Group>
-            <Switch
-              label={t('field_is_staff')}
-              {...form.getInputProps('isStaff', { type: 'checkbox' })}
-            />
-            {isAdmin && (
-              <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
-            )}
-            <Textarea
-              label={t('field_notes')}
-              autosize
-              minRows={2}
-              {...form.getInputProps('notes')}
-            />
+            <Grid gap="lg">
+              <Grid.Col span={6}>
+                <Stack>
+                  <TextInput
+                    label={t('field_name')}
+                    withAsterisk
+                    {...form.getInputProps('name')}
+                  />
+                  <Group grow>
+                    <TextInput label={t('field_email')} {...form.getInputProps('email')} />
+                    <TextInput label={t('field_phone')} {...form.getInputProps('phone')} />
+                  </Group>
+                  <TextInput label={t('field_address')} {...form.getInputProps('address')} />
+                  <TextInput label={t('field_ssn')} {...form.getInputProps('ssn')} />
+                </Stack>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Stack>
+                  <Group align="flex-end" gap="xs" wrap="nowrap">
+                    <Input.Wrapper label={t('field_preferred_weapon')} style={{ flex: 1 }}>
+                      <Button
+                        fullWidth
+                        variant="default"
+                        justify="space-between"
+                        rightSection="▾"
+                        onClick={() => setPrefPickerOpen(true)}
+                        c={prefWeapon ? undefined : 'dimmed'}
+                      >
+                        {prefWeapon
+                          ? weaponLabel(
+                              prefWeapon.brand,
+                              prefWeapon.model,
+                              prefWeapon.caliber,
+                              prefWeapon.displayId,
+                              prefWeapon.active,
+                              t,
+                            )
+                          : t('none_set')}
+                      </Button>
+                    </Input.Wrapper>
+                    {prefUid != null && (
+                      <CloseButton
+                        size="lg"
+                        aria-label={t('clear_selection')}
+                        onClick={() => setPrefUid(null)}
+                      />
+                    )}
+                  </Group>
+                  <Switch
+                    label={t('field_is_staff')}
+                    {...form.getInputProps('isStaff', { type: 'checkbox' })}
+                  />
+                  {isAdmin && (
+                    <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
+                  )}
+                  <Textarea
+                    label={t('field_notes')}
+                    autosize
+                    minRows={2}
+                    {...form.getInputProps('notes')}
+                  />
+                </Stack>
+              </Grid.Col>
+            </Grid>
             <Group justify="space-between">
               {isAdmin && editing && !editing.active ? (
                 <Button
