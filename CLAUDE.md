@@ -29,9 +29,9 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   movable `display_id` (the physical tag). `display_id` is unique only among **active**
   rows (partial unique index) so a tag is reusable once its holder is retired; it may be
   cleared on deactivation to free the tag. **Weapons** require a tag while active
-  (create/update/reactivate enforce it). **Members/users** treat the tag as optional
-  (quick-access only) — uniqueness is still enforced when one is given, but a member may
-  be active without one (renders as bare name, no `[]`). `serial` (weapons) is globally
+  (create/update/reactivate enforce it). **Members/users** no longer use the tag at all in
+  the UI (removed 2026-07-23, Excel-era leftover) — the DB column and uniqueness rule remain,
+  members always render as bare name. `serial` (weapons) is globally
   unique. Durable legal identity = serial via uid. (Members no longer carry a
   `member_number` — column remains in the shipped migration but is unused.) **Guests** are
   ordinary `users` rows flagged `is_guest`, SSN-unique among active users (app-enforced,
@@ -113,21 +113,27 @@ commit on a `feat/*` branch → merge to `main`.
   `crypto.rs` (age passphrase encrypt/decrypt),
   `s3.rs` (rust-s3: test_connection, upload, list_remote, download, delete, retention_remote),
   `seed.rs` (dev mock-data seeding), `bin/seed.rs` (the `npm run seed` CLI entry).
-- `src/`: `App.tsx` (providers + routes), `AppLayout.tsx` (shell, footer status bar, operator
-  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (member-first flow: weapon picker disabled
-  until member chosen; picker-modal selection, eval warnings — no longer hosts the open-loans
-  list, see `CheckinPage.tsx`),
-  `CheckinPage.tsx` (the open-loans list: check-in/debt/service actions, tag button),
-  `GuestModal.tsx` (walk-in checkout entry: SSN identifies/creates a guest via `upsert_guest`),
+- `src/`: `App.tsx` (providers + routes; `/checkout` remounts on nav click via `location.key`
+  → full flow reset), `AppLayout.tsx` (shell, footer status bar, operator
+  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (weapon-first flow: tag-numpad selector
+  step with candidate-user radio boxes [assigned default, last-borrower alternative] and
+  direct checkout, then a member/weapon form step with assign checkbox + transfer/replace
+  confirm popups — no longer hosts the open-loans list, see `CheckinPage.tsx`),
+  `CheckinPage.tsx` (the open-loans list: responsive auto-fill columns, teal tag stripe per
+  card, check-in/debt/assign/tag actions),
+  `GuestModal.tsx` (reusable guests: two-panel 90% touch modal — pick existing / create new,
+  shared on-screen keyboard with digit row, focus-routed; SSN identifies via `upsert_guest`),
+  `Keyboard.tsx` (on-screen Swedish QWERTY, optional digit row via `withDigits`),
   `TagModal.tsx` (per-weapon condition tags + free comment, no admin gate — technician workflow),
   `useIsAdmin.ts` (UI-only admin gate hook; bootstrap rule disables gating while no active
   admin exists in the DB),
   `Numpad.tsx` (shared keypad) + `IdNumpadModal.tsx` (fast check-in),
-  `WeaponPickerModal.tsx` / `MemberPickerModal.tsx` (touch pickers: tag numpad + filters,
-  favorite/last badges, exact-tag-match-first sort),
+  `WeaponPickerModal.tsx` (90% touch picker: tag numpad, brand/caliber + available/unassigned
+  filters, teal tag chips, out-weapons sink) / `MemberPickerModal.tsx` (90% touch picker:
+  name search + on-screen keyboard, last-shot sort),
   `MemberInfoModal.tsx` / `WeaponInfoModal.tsx` (read-only info + history modals, launched from
-  lists/logs/open-loans), `MembersPage.tsx` (list: sortable, last-shot
-  column, row → info modal; edit modal incl. preferred weapon),
+  lists/logs/open-loans), `MembersPage.tsx` (list: sortable, last-shot + assigned-weapon
+  columns, row → info modal; xl two-column edit modal incl. preferred weapon),
   `WeaponsPage.tsx` (list + create/edit; brand/model/caliber Autocomplete + "base on existing weapon"),
   `weaponPresets.ts` (curated brand/caliber lists + DB-merge suggestion helper),
   `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),
@@ -140,7 +146,12 @@ feature (3 waves, 2026-07-14) merged to `main` after live-smoke
 + UX refinements wave (2026-07-14): member-first checkout, info modals, inner-scroll lists.
 + Guest checkout / weapon condition tags / admin gating wave (`feat/checkin-guest-tags-admin`,
 2026-07-21): `SCHEMA_V4`, `upsert_guest`/`promote_guest`, `set_weapon_tags`, `useIsAdmin`
-bootstrap gate, `CheckinPage` split out of `CheckoutPage` — pending live-smoke.
+bootstrap gate, `CheckinPage` split out of `CheckoutPage` — merged 2026-07-22 (a665cfd).
++ Checkout redesign wave (`feat/checkout-redesign`, 2026-07-22/23, merged b7fb032):
+weapon-first selector with direct checkout + candidate-user radio boxes, member display_id
+removed from all UI (DB column remains), assign-at-checkout with confirm popups, checkout
+notes removed, SSN normalization (`normalize_ssn`), reusable-guest touch modal, on-screen
+keyboards, teal tag chips/stripes, responsive check-in columns, 90% modals.
 M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
 Git is local-only (no remote yet → Windows installer not yet built).
 
