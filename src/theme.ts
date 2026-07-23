@@ -13,5 +13,7 @@ export const theme = createTheme({
     Button: { defaultProps: { size: 'md' } },
     TextInput: { defaultProps: { size: 'md' } },
     Select: { defaultProps: { size: 'md' } },
+    DateInput: { defaultProps: { size: 'md' } },
+    Switch: { defaultProps: { size: 'md' } },
   },
 });
