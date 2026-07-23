@@ -60,7 +60,7 @@ export function LogsPage() {
   }));
   const userData = (users.data ?? []).map((u) => ({
     value: String(u.uid),
-    label: [u.name, u.displayId ? `[${u.displayId}]` : ''].filter(Boolean).join(' '),
+    label: u.name,
   }));
   const operatorData = (operators.data ?? []).map((o) => ({
     value: String(o.uid),
@@ -80,10 +80,19 @@ export function LogsPage() {
     <Table.Tr key={c.id}>
       <Table.Td>{fmtDateTime(c.checkedOutAt)}</Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoWeapon(c.weaponUid)}>
-        {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, c.weaponDisplayId, c.weaponActive, t)}
+        {/* Tag number leads as a chip; the label itself drops the [x] suffix.
+            Inactive rows keep the [disabled] marker instead of a chip. */}
+        <Group gap="xs" wrap="nowrap">
+          {c.weaponActive && c.weaponDisplayId && (
+            <Badge color="teal" variant="light" size="lg" radius="sm" style={{ flexShrink: 0 }}>
+              {c.weaponDisplayId}
+            </Badge>
+          )}
+          {weaponLabel(c.weaponBrand, c.weaponModel, c.weaponCaliber, null, c.weaponActive, t)}
+        </Group>
       </Table.Td>
       <Table.Td style={{ cursor: 'pointer' }} onClick={() => setInfoMember(c.userUid)}>
-        {userLabel(c.userName, c.userDisplayId, c.userActive, t, c.userIsGuest)}
+        {userLabel(c.userName, c.userActive, t, c.userIsGuest)}
       </Table.Td>
       <Table.Td>{c.operatorOutName}</Table.Td>
       <Table.Td>
@@ -96,12 +105,13 @@ export function LogsPage() {
         )}
       </Table.Td>
       <Table.Td>{c.operatorInName}</Table.Td>
-      <Table.Td>{c.notes}</Table.Td>
     </Table.Tr>
   ));
 
   return (
-    <Stack>
+    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // table grows into the free space instead of leaving a void under it.
+    <Stack style={{ height: 'calc(100vh - 144px)' }}>
       <Group align="flex-end" wrap="wrap">
         <Select
           label={t('field_weapon')}
@@ -159,8 +169,7 @@ export function LogsPage() {
       {(logs.data?.length ?? 0) === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        // ponytail: offset ≈ shell header + filter row — tune at live-smoke if clipped.
-        <Table.ScrollContainer minWidth={900} maxHeight="calc(100vh - 330px)">
+        <Table.ScrollContainer minWidth={900} style={{ flex: 1, minHeight: 0 }}>
           <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>
@@ -170,7 +179,6 @@ export function LogsPage() {
                 <Table.Th>{t('operator_out')}</Table.Th>
                 <Table.Th>{t('label_checked_in_at')}</Table.Th>
                 <Table.Th>{t('operator_in')}</Table.Th>
-                <Table.Th>{t('field_checkout_notes')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>{rows}</Table.Tbody>

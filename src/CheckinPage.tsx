@@ -93,7 +93,7 @@ export function CheckinPage() {
           {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
         </Text>
         <Text size="sm">
-          {userLabel(o.userName, o.userDisplayId, o.userActive, t, o.userIsGuest)}
+          {userLabel(o.userName, o.userActive, t, o.userIsGuest)}
         </Text>
         <Text size="xs" c="dimmed">
           {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
@@ -111,112 +111,149 @@ export function CheckinPage() {
   };
 
   return (
-    <Card withBorder padding="lg">
-      <Stack>
+    <>
+      {/* Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+          list grows into the free space instead of leaving a void under it. */}
+      <Stack gap="lg" style={{ height: 'calc(100vh - 144px)' }}>
         <Group justify="space-between" align="center">
           <Title order={3}>{t('open_checkouts')}</Title>
-          <Button variant="default" onClick={() => setFastCheckinOpen(true)}>
+          <Button size="lg" variant="default" onClick={() => setFastCheckinOpen(true)}>
             {t('fast_checkin')}
           </Button>
         </Group>
         {(open.data?.length ?? 0) === 0 ? (
           <Text c="dimmed">{t('no_open_checkouts')}</Text>
         ) : (
-          // List scrolls inside the card; title + fast check-in stay put.
-          // ponytail: 240px ≈ shell header + card chrome — tune at live-smoke if clipped.
-          <ScrollArea.Autosize mah="calc(100vh - 240px)" type="auto">
-            <Stack gap="sm">
+          // List scrolls in the remaining space; title + fast check-in stay put.
+          <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
+            {/* Responsive columns: as many 480px-min cards as the width fits. */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))',
+                gap: 'var(--mantine-spacing-sm)',
+              }}
+            >
               {(open.data ?? []).map((o) => (
-                <Card key={o.id} withBorder padding="sm">
-                  <Group justify="space-between" wrap="nowrap">
+                <Card key={o.id} withBorder padding={0}>
+                  <Group wrap="nowrap" gap={0} align="stretch">
+                    {/* Full-height tag stripe — the number the operator reads
+                        off the physical weapon, so it leads the card. */}
+                    <Stack
+                      justify="center"
+                      align="center"
+                      miw={72}
+                      px="sm"
+                      style={{
+                        background: 'var(--mantine-color-teal-light)',
+                        alignSelf: 'stretch',
+                      }}
+                    >
+                      <Text fz={40} fw={800} c="var(--mantine-color-teal-light-color)">
+                        {o.weaponDisplayId ?? '—'}
+                      </Text>
+                    </Stack>
+                    <Group
+                      justify="space-between"
+                      wrap="nowrap"
+                      p="md"
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
                     <Stack gap={2}>
                       <Text
                         fw={600}
                         style={{ cursor: 'pointer' }}
                         onClick={() => setInfoWeapon(o.weaponUid)}
                       >
-                        {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
+                        {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, null, o.weaponActive, t)}
                       </Text>
                       <Text
                         size="sm"
                         style={{ cursor: 'pointer' }}
                         onClick={() => setInfoMember(o.userUid)}
                       >
-                        {userLabel(o.userName, o.userDisplayId, o.userActive, t, o.userIsGuest)}
+                        {userLabel(o.userName, o.userActive, t, o.userIsGuest)}
                       </Text>
                       <Text size="xs" c="dimmed">
                         {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
                       </Text>
                     </Stack>
-                    <Group gap="xs" wrap="nowrap">
-                      {(() => {
-                        const p = preferrerOf(o.weaponUid);
-                        if (p && p.uid !== o.userUid) return null; // another member's favorite
-                        const mine = p != null;
-                        return (
-                          <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
-                            <ActionIcon
-                              variant={mine ? 'light' : 'subtle'}
-                              color="yellow"
-                              size="lg"
-                              aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
-                              onClick={() =>
-                                favMut.mutate({
-                                  userUid: o.userUid,
-                                  weaponUid: mine ? null : o.weaponUid,
-                                })
-                              }
-                            >
-                              {mine ? '★' : '☆'}
-                            </ActionIcon>
-                          </Tooltip>
-                        );
-                      })()}
-                      <Tooltip label={t('edit_tags')}>
-                        <ActionIcon
-                          variant="subtle"
-                          color="orange"
-                          size="lg"
-                          aria-label={t('edit_tags')}
-                          onClick={() => setTagWeapon(o.weaponUid)}
-                        >
-                          <IconTag />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={t('add_debt')}>
-                        <ActionIcon
-                          variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
-                          color="red"
-                          size="lg"
-                          aria-label={t('add_debt')}
-                          onClick={() =>
-                            setDebtUser({
-                              uid: o.userUid,
-                              name: userLabel(o.userName, o.userDisplayId, o.userActive, t, o.userIsGuest),
-                            })
-                          }
-                        >
-                          <IconCoins />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={t('return_weapon')}>
-                        <ActionIcon
-                          variant="light"
-                          color="teal"
-                          size="lg"
-                          aria-label={t('return_weapon')}
-                          loading={checkinMut.isPending}
-                          onClick={() => checkinMut.mutate(o.id)}
-                        >
-                          <IconArrowBackUp />
-                        </ActionIcon>
-                      </Tooltip>
+                    {/* Two clusters: member actions (assign, debt) apart from
+                        weapon actions (tag, return) — return stays rightmost. */}
+                    <Group gap="xl" wrap="nowrap">
+                      <Group gap="sm" wrap="nowrap">
+                        {(() => {
+                          const p = preferrerOf(o.weaponUid);
+                          if (p && p.uid !== o.userUid) return null; // another member's favorite
+                          const mine = p != null;
+                          return (
+                            <Tooltip label={mine ? t('unmark_favorite') : t('mark_favorite')}>
+                              <ActionIcon
+                                variant={mine ? 'light' : 'subtle'}
+                                color="yellow"
+                                size="xl"
+                                aria-label={mine ? t('unmark_favorite') : t('mark_favorite')}
+                                onClick={() =>
+                                  favMut.mutate({
+                                    userUid: o.userUid,
+                                    weaponUid: mine ? null : o.weaponUid,
+                                  })
+                                }
+                              >
+                                {mine ? '★' : '☆'}
+                              </ActionIcon>
+                            </Tooltip>
+                          );
+                        })()}
+                        <Tooltip label={t('add_debt')}>
+                          <ActionIcon
+                            variant={debtMap.has(o.userUid) ? 'filled' : 'subtle'}
+                            color="red"
+                            size="xl"
+                            aria-label={t('add_debt')}
+                            onClick={() =>
+                              setDebtUser({
+                                uid: o.userUid,
+                                name: userLabel(o.userName, o.userActive, t, o.userIsGuest),
+                              })
+                            }
+                          >
+                            <IconCoins />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                      <Group gap="sm" wrap="nowrap">
+                        <Tooltip label={t('edit_tags')}>
+                          <ActionIcon
+                            variant="subtle"
+                            color="orange"
+                            size="xl"
+                            aria-label={t('edit_tags')}
+                            onClick={() => setTagWeapon(o.weaponUid)}
+                          >
+                            <IconTag />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label={t('return_weapon')}>
+                          <ActionIcon
+                            variant="light"
+                            color="teal"
+                            size="xl"
+                            aria-label={t('return_weapon')}
+                            loading={checkinMut.isPending}
+                            onClick={() => checkinMut.mutate(o.id)}
+                          >
+                            <IconArrowBackUp />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Group>
                     </Group>
                   </Group>
                 </Card>
               ))}
-            </Stack>
-          </ScrollArea.Autosize>
+            </div>
+          </ScrollArea>
         )}
       </Stack>
 
@@ -248,6 +285,6 @@ export function CheckinPage() {
         onClose={() => setFastCheckinOpen(false)}
         onSubmit={onFastCheckinSubmit}
       />
-    </Card>
+    </>
   );
 }

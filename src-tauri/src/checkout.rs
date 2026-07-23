@@ -242,6 +242,7 @@ pub(crate) fn do_checkout(
     user_uid: i64,
     operator_uid: i64,
     notes: Option<String>,
+    assign: bool,
 ) -> Result<Checkout, AppError> {
     let w = weapon_get(conn, weapon_uid)?.ok_or_else(|| AppError::weapon_not_found(weapon_uid))?;
     if !w.active {
@@ -251,8 +252,32 @@ pub(crate) fn do_checkout(
     if !u.active {
         return Err(AppError::user_inactive());
     }
+    if assign && u.is_guest {
+        return Err(AppError::guest_cannot_be_assigned());
+    }
     if open_checkout_for(conn, weapon_uid)?.is_some() {
         return Err(AppError::weapon_already_out());
+    }
+
+    if assign {
+        let tx = conn.unchecked_transaction()?;
+        // Clear any competing holder BEFORE setting the new one — respects
+        // idx_users_preferred_weapon (at most one member per weapon).
+        tx.execute(
+            "UPDATE users SET preferred_weapon_uid = NULL, updated_at = ?2
+             WHERE preferred_weapon_uid = ?1 AND uid <> ?3",
+            params![weapon_uid, now_utc(), user_uid],
+        )?;
+        crate::commands::user_set_preferred_weapon(&tx, user_uid, Some(weapon_uid))?;
+        tx.execute(
+            "INSERT INTO checkouts
+               (weapon_uid, user_uid, operator_out_uid, checked_out_at, notes)
+             VALUES (?1,?2,?3,?4,?5)",
+            params![weapon_uid, user_uid, operator_uid, now_utc(), norm(notes)],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        return checkout_get(conn, id)?.ok_or_else(|| AppError::internal("inserted checkout not found"));
     }
 
     conn.execute(
@@ -334,9 +359,10 @@ pub fn checkout(
     user_uid: i64,
     operator_uid: i64,
     notes: Option<String>,
+    assign: Option<bool>,
 ) -> Result<Checkout, AppError> {
     let conn = lock(&db)?;
-    do_checkout(&conn, weapon_uid, user_uid, operator_uid, notes)
+    do_checkout(&conn, weapon_uid, user_uid, operator_uid, notes, assign.unwrap_or(false))
 }
 
 #[tauri::command]
@@ -402,7 +428,7 @@ mod tests {
         let anna = mk_user(&conn, "Anna", "10", false);
         let w = mk_weapon(&conn, "W1");
 
-        let c = do_checkout(&conn, w, anna, op, None).unwrap();
+        let c = do_checkout(&conn, w, anna, op, None, false).unwrap();
         assert_eq!(c.weapon_uid, w);
         assert_eq!(c.user_uid, anna);
         assert_eq!(c.operator_out_uid, op);
@@ -417,14 +443,14 @@ mod tests {
         let bjorn = mk_user(&conn, "Björn", "11", false);
         let w = mk_weapon(&conn, "W1");
 
-        let c = do_checkout(&conn, w, anna, op, None).unwrap();
+        let c = do_checkout(&conn, w, anna, op, None, false).unwrap();
 
         let e = evaluate(&conn, Some(w), Some(bjorn)).unwrap();
         assert!(e.weapon_already_out);
         assert_eq!(e.open_holder_name.as_deref(), Some("Anna"));
         assert!(!e.can_checkout);
 
-        assert!(do_checkout(&conn, w, bjorn, op, None).is_err());
+        assert!(do_checkout(&conn, w, bjorn, op, None, false).is_err());
 
         do_checkin(&conn, c.id, op).unwrap();
         let e = evaluate(&conn, Some(w), Some(bjorn)).unwrap();
@@ -446,7 +472,7 @@ mod tests {
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert!(e.suggested_weapon_uid.is_none());
 
-        let c = do_checkout(&conn, w, anna, op, None).unwrap();
+        let c = do_checkout(&conn, w, anna, op, None, false).unwrap();
         do_checkin(&conn, c.id, op).unwrap();
 
         // Member picked, no weapon → suggest the member's last weapon (available).
@@ -463,7 +489,7 @@ mod tests {
         assert!(e.suggested_weapon_uid.is_none());
 
         // Member's last weapon now out → suggested but flagged, not to be autofilled.
-        do_checkout(&conn, w, anna, op, None).unwrap();
+        do_checkout(&conn, w, anna, op, None, false).unwrap();
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.suggested_weapon_uid, Some(w));
         assert!(e.suggested_weapon_out);
@@ -481,14 +507,14 @@ mod tests {
         assert!(e.weapon_inactive);
         assert_eq!(e.weapon_inactive_reason.as_deref(), Some("repair"));
         assert!(!e.can_checkout);
-        assert!(do_checkout(&conn, w, anna, op, None).is_err());
+        assert!(do_checkout(&conn, w, anna, op, None, false).is_err());
 
         weapon_set_active(&conn, w, true, None, false).unwrap();
         user_set_active(&conn, anna, false, false).unwrap();
         let e = evaluate(&conn, Some(w), Some(anna)).unwrap();
         assert!(e.user_inactive);
         assert!(!e.can_checkout);
-        assert!(do_checkout(&conn, w, anna, op, None).is_err());
+        assert!(do_checkout(&conn, w, anna, op, None, false).is_err());
     }
 
     #[test]
@@ -499,7 +525,7 @@ mod tests {
         let w_last = mk_weapon(&conn, "W1");
         let w_pref = mk_weapon(&conn, "W2");
 
-        let c = do_checkout(&conn, w_last, anna, op, None).unwrap();
+        let c = do_checkout(&conn, w_last, anna, op, None, false).unwrap();
         do_checkin(&conn, c.id, op).unwrap();
         user_set_preferred_weapon(&conn, anna, Some(w_pref)).unwrap();
 
@@ -519,13 +545,13 @@ mod tests {
         let w_last = mk_weapon(&conn, "W1");
         let w_pref = mk_weapon(&conn, "W2");
 
-        let c = do_checkout(&conn, w_last, anna, op, None).unwrap();
+        let c = do_checkout(&conn, w_last, anna, op, None, false).unwrap();
         do_checkin(&conn, c.id, op).unwrap();
         user_set_preferred_weapon(&conn, anna, Some(w_pref)).unwrap();
 
         // Assigned weapon out (held by Björn) → STILL suggested, flagged out,
         // so the UI selects it and shows who holds it (no silent fallback).
-        do_checkout(&conn, w_pref, bjorn, op, None).unwrap();
+        do_checkout(&conn, w_pref, bjorn, op, None, false).unwrap();
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.suggested_weapon_uid, Some(w_pref));
         assert!(e.suggested_weapon_out);
@@ -547,7 +573,7 @@ mod tests {
         let op = mk_user(&conn, "Op", "1", true);
         let anna = mk_user(&conn, "Anna", "10", false);
         let w = mk_weapon(&conn, "W1");
-        let c = do_checkout(&conn, w, anna, op, None).unwrap();
+        let c = do_checkout(&conn, w, anna, op, None, false).unwrap();
         do_checkin(&conn, c.id, op).unwrap();
 
         let e = evaluate(&conn, None, Some(anna)).unwrap();
@@ -591,5 +617,52 @@ mod tests {
 
         let e = evaluate(&conn, None, Some(anna)).unwrap();
         assert_eq!(e.user_outstanding_debt_kr, 150);
+    }
+
+    #[test]
+    fn checkout_with_assign_sets_preferred() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let w = mk_weapon(&conn, "W1");
+
+        do_checkout(&conn, w, anna, op, None, true).unwrap();
+        let u = user_get(&conn, anna).unwrap().unwrap();
+        assert_eq!(u.preferred_weapon_uid, Some(w));
+    }
+
+    #[test]
+    fn checkout_with_assign_transfers_from_other_member() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let anna = mk_user(&conn, "Anna", "10", false);
+        let bjorn = mk_user(&conn, "Björn", "11", false);
+        let w = mk_weapon(&conn, "W1");
+
+        user_set_preferred_weapon(&conn, anna, Some(w)).unwrap();
+
+        do_checkout(&conn, w, bjorn, op, None, true).unwrap();
+        let anna_after = user_get(&conn, anna).unwrap().unwrap();
+        let bjorn_after = user_get(&conn, bjorn).unwrap().unwrap();
+        assert_eq!(anna_after.preferred_weapon_uid, None);
+        assert_eq!(bjorn_after.preferred_weapon_uid, Some(w));
+    }
+
+    #[test]
+    fn checkout_assign_rejected_for_guest() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", "1", true);
+        let w = mk_weapon(&conn, "W1");
+        let guest = crate::commands::user_upsert_guest(&conn, "Gäst".into(), "19900101-1234".into())
+            .unwrap()
+            .uid;
+
+        let err = do_checkout(&conn, w, guest, op, None, true).unwrap_err();
+        assert_eq!(err.code, "err_guest_cannot_assign");
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM checkouts", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
     }
 }

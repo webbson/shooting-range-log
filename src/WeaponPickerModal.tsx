@@ -7,8 +7,8 @@ import {
   Card,
   Text,
   Badge,
-  TextInput,
   Select,
+  Checkbox,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -44,17 +44,19 @@ export function WeaponPickerModal({
 }) {
   const { t } = useTranslation();
   const [tag, setTag] = useState('');
-  const [text, setText] = useState('');
   const [brand, setBrand] = useState<string | null>(null);
   const [caliber, setCaliber] = useState<string | null>(null);
+  const [availOnlyFilter, setAvailOnlyFilter] = useState(false);
+  const [unassignedOnlyFilter, setUnassignedOnlyFilter] = useState(false);
 
   // Fresh filters each time the modal opens.
   useEffect(() => {
     if (opened) {
       setTag('');
-      setText('');
       setBrand(null);
       setCaliber(null);
+      setAvailOnlyFilter(false);
+      setUnassignedOnlyFilter(false);
     }
   }, [opened]);
 
@@ -62,7 +64,7 @@ export function WeaponPickerModal({
   const open = useQuery({
     queryKey: ['openCheckouts'],
     queryFn: listOpenCheckouts,
-    enabled: opened && availableOnly,
+    enabled: opened,
   });
   // weapon uid → its open checkout (holder shown on the disabled row).
   const outMap = new Map((open.data ?? []).map((o) => [o.weaponUid, o] as const));
@@ -86,13 +88,12 @@ export function WeaponPickerModal({
   const brands = [...new Set(pool.map((w) => w.brand).filter(Boolean) as string[])].sort();
   const calibers = [...new Set(pool.map((w) => w.caliber).filter(Boolean) as string[])].sort();
 
-  const q = text.trim().toLowerCase();
   const filtered = pool.filter((w) => {
     if (tag && !(w.displayId ?? '').startsWith(tag)) return false;
     if (brand && w.brand !== brand) return false;
     if (caliber && w.caliber !== caliber) return false;
-    if (q && ![w.brand, w.model, w.serial].some((f) => f?.toLowerCase().includes(q)))
-      return false;
+    if (availOnlyFilter && outMap.has(w.uid)) return false;
+    if (unassignedOnlyFilter && preferrerMap.has(w.uid)) return false;
     return true;
   });
 
@@ -105,17 +106,21 @@ export function WeaponPickerModal({
         : w.uid === pinned?.lastUid
           ? 2
           : 3;
+  // Out weapons sink below every available one, regardless of rank.
+  const outBucket = (w: Weapon) => (availableOnly && outMap.has(w.uid) ? 1 : 0);
   const sorted = [...filtered].sort((a, b) => {
+    const ob = outBucket(a) - outBucket(b);
+    if (ob !== 0) return ob;
     const r = rank(a) - rank(b);
     if (r !== 0) return r;
     return label(a).localeCompare(label(b), 'sv');
   });
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t('pick_weapon')} size="xl" centered>
+    <Modal opened={opened} onClose={onClose} title={t('pick_weapon')} size="90%" centered>
       <Grid gap="md">
         <Grid.Col span={7}>
-          <ScrollArea h={420} type="auto">
+          <ScrollArea h={520} type="auto">
             <Stack gap="xs">
               {sorted.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
               {sorted.map((w) => {
@@ -130,8 +135,24 @@ export function WeaponPickerModal({
                     onClick={out ? undefined : () => onSelect(w.uid)}
                   >
                     <Group justify="space-between" wrap="nowrap">
+                      {/* Tag number leads as a chip (same pattern as logs/members
+                          tables); the name drops the [x] suffix. */}
+                      <Group gap="xs" wrap="nowrap">
+                        {w.displayId && (
+                          <Badge
+                            color="teal"
+                            variant="light"
+                            size="lg"
+                            radius="sm"
+                            style={{ flexShrink: 0 }}
+                          >
+                            {w.displayId}
+                          </Badge>
+                        )}
                       <Stack gap={2}>
-                        <Text fw={600}>{label(w)}</Text>
+                        <Text fw={600}>
+                          {weaponLabel(w.brand, w.model, w.caliber, null, true, t)}
+                        </Text>
                         {activeTagKeys(w).length > 0 && (
                           <Group gap={4}>
                             {activeTagKeys(w).map((k) => (
@@ -146,7 +167,6 @@ export function WeaponPickerModal({
                             {t('picker_out_held_by', {
                               name: userLabel(
                                 out.userName,
-                                out.userDisplayId,
                                 out.userActive,
                                 t,
                                 out.userIsGuest,
@@ -159,7 +179,6 @@ export function WeaponPickerModal({
                               {t('picker_last_used', {
                                 name: userLabel(
                                   lastUseMap.get(w.uid)!.userName,
-                                  lastUseMap.get(w.uid)!.userDisplayId,
                                   lastUseMap.get(w.uid)!.userActive,
                                   t,
                                 ),
@@ -169,6 +188,7 @@ export function WeaponPickerModal({
                           )
                         )}
                       </Stack>
+                      </Group>
                       <Group gap={4} wrap="nowrap">
                         {w.uid === pinned?.preferredUid ? (
                           <Badge color="yellow" variant="light">
@@ -195,11 +215,6 @@ export function WeaponPickerModal({
         <Grid.Col span={5}>
           <Stack gap="xs">
             <Numpad value={tag} onChange={setTag} size="md" />
-            <TextInput
-              placeholder={t('filter_text_weapon')}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
             <Select
               placeholder={t('filter_brand')}
               data={brands}
@@ -215,6 +230,18 @@ export function WeaponPickerModal({
               onChange={setCaliber}
               clearable
               searchable
+            />
+            <Checkbox
+              size="lg"
+              label={t('filter_available_only')}
+              checked={availOnlyFilter}
+              onChange={(e) => setAvailOnlyFilter(e.target.checked)}
+            />
+            <Checkbox
+              size="lg"
+              label={t('filter_unassigned_only')}
+              checked={unassignedOnlyFilter}
+              onChange={(e) => setUnassignedOnlyFilter(e.target.checked)}
             />
           </Stack>
         </Grid.Col>

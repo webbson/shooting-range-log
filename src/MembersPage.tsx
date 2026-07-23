@@ -1,5 +1,6 @@
 import {
   Group,
+  Grid,
   Button,
   Table,
   Badge,
@@ -28,7 +29,6 @@ import {
   updateUser,
   setUserActive,
   setPreferredWeapon,
-  nextUserDisplayId,
   outstandingDebts,
   lastShotDates,
   listWeapons,
@@ -46,10 +46,9 @@ import { useIsAdmin } from './useIsAdmin';
 const SSN_RE = /^\d{8}-\d{4}$/;
 const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
 
-type SortKey = 'id' | 'name' | 'lastShot';
+type SortKey = 'name' | 'lastShot' | 'assignedWeapon';
 
 interface MemberForm {
-  displayId: string;
   name: string;
   email: string;
   phone: string;
@@ -61,7 +60,6 @@ interface MemberForm {
 }
 
 const EMPTY: MemberForm = {
-  displayId: '',
   name: '',
   email: '',
   phone: '',
@@ -88,9 +86,8 @@ export function MembersPage() {
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const prefWeapon = (weapons.data ?? []).find((w) => w.uid === prefUid);
 
-  // Deactivation flow (optional tag release).
+  // Deactivation flow.
   const [deactivating, setDeactivating] = useState<User | null>(null);
-  const [clearId, setClearId] = useState(false);
 
   // List view: active-only by default, with a search box + show-inactive toggle.
   const [search, setSearch] = useState('');
@@ -110,6 +107,11 @@ export function MembersPage() {
   const debtMap = new Map((debts.data ?? []).map((o) => [o.userUid, o.amountKr] as const));
   const shots = useQuery({ queryKey: ['lastShotDates'], queryFn: lastShotDates });
   const lastShotMap = new Map((shots.data ?? []).map((s) => [s.userUid, s.lastShotAt] as const));
+  const weaponMap = new Map((weapons.data ?? []).map((w) => [w.uid, w] as const));
+  const assignedLabel = (u: User): string | undefined => {
+    const w = u.preferredWeaponUid != null ? weaponMap.get(u.preferredWeaponUid) : undefined;
+    return w ? weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) : undefined;
+  };
 
   const form = useForm<MemberForm>({
     initialValues: EMPTY,
@@ -177,14 +179,7 @@ export function MembersPage() {
     onSuccess: () => {
       invalidate();
       setDeactivating(null);
-      setClearId(false);
     },
-    onError,
-  });
-
-  const suggestId = useMutation({
-    mutationFn: nextUserDisplayId,
-    onSuccess: (id) => form.setFieldValue('displayId', id),
     onError,
   });
 
@@ -209,7 +204,6 @@ export function MembersPage() {
     setEditing(u);
     setPrefUid(u.preferredWeaponUid ?? null);
     form.setValues({
-      displayId: u.displayId ?? '',
       name: u.name,
       email: u.email ?? '',
       phone: u.phone ?? '',
@@ -232,7 +226,6 @@ export function MembersPage() {
   };
 
   const openDeactivate = (u: User) => {
-    setClearId(false);
     setDeactivating(u);
     close();
   };
@@ -243,7 +236,7 @@ export function MembersPage() {
     if (view === 'inactive' && u.active) return false;
     if (view === 'guests' && !u.isGuest) return false;
     if (!q) return true;
-    return [u.displayId, u.name, u.email, u.phone].some((f) =>
+    return [u.name, u.email, u.phone].some((f) =>
       f?.toLowerCase().includes(q),
     );
   });
@@ -261,17 +254,15 @@ export function MembersPage() {
       if (!bv) return -1;
       return av.localeCompare(bv) * dir;
     }
-    // id: numeric-aware on the display tag, falling back to locale compare.
-    const a0 = a.displayId;
-    const b0 = b.displayId;
-    if (!a0 && !b0) return 0;
-    if (!a0) return 1;
-    if (!b0) return -1;
-    const an = Number(a0);
-    const bn = Number(b0);
-    const cmp =
-      !Number.isNaN(an) && !Number.isNaN(bn) ? an - bn : a0.localeCompare(b0, 'sv');
-    return cmp * dir;
+    if (sort.key === 'assignedWeapon') {
+      const av = assignedLabel(a);
+      const bv = assignedLabel(b);
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av.localeCompare(bv, 'sv') * dir;
+    }
+    return 0;
   });
 
   const SortTh = ({ label, k }: { label: string; k: SortKey }) => (
@@ -290,7 +281,6 @@ export function MembersPage() {
       style={{ cursor: 'pointer' }}
       onClick={() => setInfoUid(u.uid)}
     >
-      <Table.Td>{u.displayId}</Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
           {u.name}
@@ -307,6 +297,24 @@ export function MembersPage() {
         </Group>
       </Table.Td>
       <Table.Td>{lastShotMap.has(u.uid) ? fmtDate(lastShotMap.get(u.uid)!) : '—'}</Table.Td>
+      <Table.Td>
+        {/* Tag number leads as a chip (same pattern as the logs table); the
+            label drops the [x] suffix, inactive keeps its [disabled] marker. */}
+        {(() => {
+          const w = u.preferredWeaponUid != null ? weaponMap.get(u.preferredWeaponUid) : undefined;
+          if (!w) return '';
+          return (
+            <Group gap="xs" wrap="nowrap">
+              {w.active && w.displayId && (
+                <Badge color="teal" variant="light" size="lg" radius="sm" style={{ flexShrink: 0 }}>
+                  {w.displayId}
+                </Badge>
+              )}
+              {weaponLabel(w.brand, w.model, w.caliber, null, w.active, t)}
+            </Group>
+          );
+        })()}
+      </Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
           {u.isStaff && <Badge color="grape">{t('staff')}</Badge>}
@@ -356,7 +364,9 @@ export function MembersPage() {
   ));
 
   return (
-    <Stack>
+    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // table grows into the free space instead of leaving a void under it.
+    <Stack style={{ height: 'calc(100vh - 144px)' }}>
       <Group>
         <TextInput
           placeholder={t('search')}
@@ -383,14 +393,13 @@ export function MembersPage() {
       ) : filtered.length === 0 ? (
         <Text c="dimmed">{t('no_results')}</Text>
       ) : (
-        // ponytail: offset ≈ shell header + filters — tune at live-smoke if clipped.
-        <Table.ScrollContainer minWidth={700} maxHeight="calc(100vh - 252px)">
+        <Table.ScrollContainer minWidth={700} style={{ flex: 1, minHeight: 0 }}>
           <Table striped highlightOnHover stickyHeader>
             <Table.Thead>
               <Table.Tr>
-                <SortTh label={t('field_display_id')} k="id" />
                 <SortTh label={t('field_name')} k="name" />
                 <SortTh label={t('field_last_shot')} k="lastShot" />
+                <SortTh label={t('field_preferred_weapon')} k="assignedWeapon" />
                 <Table.Th />
                 <Table.Th />
               </Table.Tr>
@@ -405,80 +414,75 @@ export function MembersPage() {
         opened={opened}
         onClose={close}
         title={editing ? t('edit_member') : t('new_member')}
+        size="xl"
         centered
       >
         <form onSubmit={form.onSubmit(onSave)}>
           <Stack>
-            <Group align="flex-end" gap="xs" wrap="nowrap">
-              <TextInput
-                style={{ flex: 1 }}
-                label={t('field_display_id')}
-                {...form.getInputProps('displayId')}
-              />
-              {!form.values.displayId.trim() && (
-                <Button
-                  variant="default"
-                  loading={suggestId.isPending}
-                  onClick={() => suggestId.mutate()}
-                >
-                  {t('next_free_id')}
-                </Button>
-              )}
-            </Group>
-            <TextInput
-              label={t('field_name')}
-              withAsterisk
-              {...form.getInputProps('name')}
-            />
-            <Group grow>
-              <TextInput label={t('field_email')} {...form.getInputProps('email')} />
-              <TextInput label={t('field_phone')} {...form.getInputProps('phone')} />
-            </Group>
-            <TextInput label={t('field_address')} {...form.getInputProps('address')} />
-            <TextInput label={t('field_ssn')} {...form.getInputProps('ssn')} />
-            <Group align="flex-end" gap="xs" wrap="nowrap">
-              <Input.Wrapper label={t('field_preferred_weapon')} style={{ flex: 1 }}>
-                <Button
-                  fullWidth
-                  variant="default"
-                  justify="space-between"
-                  rightSection="▾"
-                  onClick={() => setPrefPickerOpen(true)}
-                  c={prefWeapon ? undefined : 'dimmed'}
-                >
-                  {prefWeapon
-                    ? weaponLabel(
-                        prefWeapon.brand,
-                        prefWeapon.model,
-                        prefWeapon.caliber,
-                        prefWeapon.displayId,
-                        prefWeapon.active,
-                        t,
-                      )
-                    : t('none_set')}
-                </Button>
-              </Input.Wrapper>
-              {prefUid != null && (
-                <CloseButton
-                  size="lg"
-                  aria-label={t('clear_selection')}
-                  onClick={() => setPrefUid(null)}
-                />
-              )}
-            </Group>
-            <Switch
-              label={t('field_is_staff')}
-              {...form.getInputProps('isStaff', { type: 'checkbox' })}
-            />
-            {isAdmin && (
-              <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
-            )}
-            <Textarea
-              label={t('field_notes')}
-              autosize
-              minRows={2}
-              {...form.getInputProps('notes')}
-            />
+            <Grid gap="lg">
+              <Grid.Col span={6}>
+                <Stack>
+                  <TextInput
+                    label={t('field_name')}
+                    withAsterisk
+                    {...form.getInputProps('name')}
+                  />
+                  <Group grow>
+                    <TextInput label={t('field_email')} {...form.getInputProps('email')} />
+                    <TextInput label={t('field_phone')} {...form.getInputProps('phone')} />
+                  </Group>
+                  <TextInput label={t('field_address')} {...form.getInputProps('address')} />
+                  <TextInput label={t('field_ssn')} {...form.getInputProps('ssn')} />
+                </Stack>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Stack>
+                  <Group align="flex-end" gap="xs" wrap="nowrap">
+                    <Input.Wrapper label={t('field_preferred_weapon')} style={{ flex: 1 }}>
+                      <Button
+                        fullWidth
+                        variant="default"
+                        justify="space-between"
+                        rightSection="▾"
+                        onClick={() => setPrefPickerOpen(true)}
+                        c={prefWeapon ? undefined : 'dimmed'}
+                      >
+                        {prefWeapon
+                          ? weaponLabel(
+                              prefWeapon.brand,
+                              prefWeapon.model,
+                              prefWeapon.caliber,
+                              prefWeapon.displayId,
+                              prefWeapon.active,
+                              t,
+                            )
+                          : t('none_set')}
+                      </Button>
+                    </Input.Wrapper>
+                    {prefUid != null && (
+                      <CloseButton
+                        size="lg"
+                        aria-label={t('clear_selection')}
+                        onClick={() => setPrefUid(null)}
+                      />
+                    )}
+                  </Group>
+                  <Switch
+                    label={t('field_is_staff')}
+                    {...form.getInputProps('isStaff', { type: 'checkbox' })}
+                  />
+                  {isAdmin && (
+                    <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
+                  )}
+                  <Textarea
+                    label={t('field_notes')}
+                    autosize
+                    minRows={2}
+                    {...form.getInputProps('notes')}
+                  />
+                </Stack>
+              </Grid.Col>
+            </Grid>
             <Group justify="space-between">
               {isAdmin && editing && !editing.active ? (
                 <Button
@@ -513,7 +517,7 @@ export function MembersPage() {
         </form>
       </Modal>
 
-      {/* Deactivate + optional tag release */}
+      {/* Deactivate */}
       <Modal
         opened={deactivating !== null}
         onClose={() => setDeactivating(null)}
@@ -521,12 +525,6 @@ export function MembersPage() {
         centered
       >
         <Stack>
-          <Checkbox
-            label={t('clear_display_id_member')}
-            checked={clearId}
-            onChange={(e) => setClearId(e.currentTarget.checked)}
-            data-autofocus
-          />
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setDeactivating(null)}>
               {t('cancel')}
@@ -539,7 +537,7 @@ export function MembersPage() {
                 setActive.mutate({
                   uid: deactivating.uid,
                   active: false,
-                  clearDisplayId: clearId,
+                  clearDisplayId: true,
                 })
               }
             >
@@ -552,7 +550,7 @@ export function MembersPage() {
       <DebtModal
         userUid={debtUser?.uid ?? null}
         userName={
-          debtUser ? userLabel(debtUser.name, debtUser.displayId, debtUser.active, t, debtUser.isGuest) : ''
+          debtUser ? userLabel(debtUser.name, debtUser.active, t, debtUser.isGuest) : ''
         }
         opened={debtUser != null}
         onClose={() => setDebtUser(null)}

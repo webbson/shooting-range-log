@@ -1,4 +1,110 @@
-import { Modal, Stack, Grid, TextInput, Button, Text, Card, ScrollArea } from '@mantine/core';
+# Guest Modal Touch Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Make the guest checkout modal touch friendly: 90% modal, shared on-screen keyboard with digit row, focus-routed typing, roomier guest cards.
+
+**Architecture:** Two-panel modal (pick existing left / create new right) with one `Keyboard` instance bottom-right that types into whichever of the three fields (search, SSN, name) was last focused, tracked in component state. `Keyboard.tsx` grows an optional always-visible digit row.
+
+**Tech Stack:** React + TypeScript, Mantine v9, TanStack Query, react-i18next. No new dependencies.
+
+## Global Constraints
+
+- Spec: `docs/superpowers/specs/2026-07-23-guest-modal-touch-design.md` (user-approved).
+- All user-facing strings via i18n keys — this plan adds **no new keys** and must not hardcode copy.
+- `onChange` handlers use `e.target`, never `e.currentTarget` (repo rule; has crashed the app twice).
+- No JS unit-test harness in this repo — the deterministic gate is `npm run build` (tsc + vite), run from repo root `/Users/tom.stevens/git/shooting-range-log`. Final gate is user live-smoke in `npm run tauri dev`.
+- Branch: `feat/checkout-redesign`. Commit per task.
+- Do not touch `MemberPickerModal.tsx` — it keeps the letters-only keyboard.
+
+---
+
+### Task 1: `Keyboard` digit row (`withDigits` prop)
+
+**Files:**
+- Modify: `src/Keyboard.tsx`
+
+**Interfaces:**
+- Produces: `Keyboard` accepts new optional prop `withDigits?: boolean` (default `false`). When true, renders a row of 11 keys `1 2 3 4 5 6 7 8 9 0 -` above the letter rows. Digits and `-` append verbatim (the existing `press` lowercasing is a no-op on them). Task 2 consumes `<Keyboard value={...} onChange={...} withDisplay={false} withDigits />`.
+
+- [ ] **Step 1: Add the digit row**
+
+In `src/Keyboard.tsx`, add a `DIGITS` constant under the existing `ROWS` constant:
+
+```tsx
+const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
+```
+
+Add the prop to the signature (after `withDisplay = true`):
+
+```tsx
+export function Keyboard({
+  value,
+  onChange,
+  placeholder,
+  withDisplay = true,
+  withDigits = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  // false when the parent already renders an input bound to the same value.
+  withDisplay?: boolean;
+  // extra 1–0 + '-' row for fields that mix digits and letters (e.g. SSN).
+  withDigits?: boolean;
+}) {
+```
+
+Render the row between the `withDisplay` block and the `ROWS.map(...)` block:
+
+```tsx
+      {withDigits && (
+        <SimpleGrid cols={11} spacing={4}>
+          {DIGITS.map((k) => (
+            <Button
+              key={k}
+              variant="default"
+              size="lg"
+              px={0}
+              onClick={() => press(k)}
+              styles={{ label: { fontSize: '1.1rem' } }}
+            >
+              {k}
+            </Button>
+          ))}
+        </SimpleGrid>
+      )}
+```
+
+Leave `press` unchanged (`toLowerCase()` is a no-op for digits and `-`).
+
+- [ ] **Step 2: Build gate**
+
+Run: `npm run build`
+Expected: exits 0, ends with `✓ built in …s` (chunk-size warning is pre-existing noise).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/Keyboard.tsx
+git commit -m "feat(keyboard): optional always-visible digit row (withDigits)"
+```
+
+### Task 2: GuestModal layout, focus routing, cards
+
+**Files:**
+- Modify: `src/GuestModal.tsx`
+
+**Interfaces:**
+- Consumes: `Keyboard` with `withDigits` from Task 1.
+- Produces: no interface changes — `GuestModal` props stay `{ opened, onClose, onSelect }`; both call sites (`CheckoutPage` form step) are untouched.
+
+- [ ] **Step 1: Rewrite the modal body**
+
+Replace `src/GuestModal.tsx` content as follows. Changes vs current: modal `size="90%"`; `target` focus-routing state (reset to `'search'` on open); highlight border on the target input; keyboard bottom-right; cards `padding="md"` with big name + dimmed `SSN · date` line; `userLabel` import dropped (plain `u.name` — list is active-only).
+
+```tsx
+import { Modal, Stack, Group, Grid, TextInput, Button, Text, Card, ScrollArea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -174,3 +280,28 @@ export function GuestModal({
     </Modal>
   );
 }
+```
+
+- [ ] **Step 2: Build gate**
+
+Run: `npm run build`
+Expected: exits 0, `✓ built in …s`. A leftover `userLabel` import would fail tsc (`noUnusedLocals`) — the rewrite above already drops it.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/GuestModal.tsx
+git commit -m "feat(guest): 90% modal, shared digit keyboard with focus routing, roomier cards"
+```
+
+### Task 3: Live-smoke (user gate)
+
+- [ ] **Step 1: User runs `npm run tauri dev` and checks:**
+  - Open guest modal from checkout form → search field highlighted, keyboard types into it (letters + digits).
+  - Tap SSN field → highlight moves, keyboard (incl. digit row + `-`) types SSN.
+  - Tap Name field → highlight moves, letters type.
+  - Physical keyboard still works in all three fields.
+  - Guest cards: big name, dimmed `SSN · date` line, no "(guest)" suffix, comfortable tap.
+  - Pick existing guest → modal closes, guest lands in checkout form. Create new guest → same.
+
+No commit — findings feed a fix round if any.

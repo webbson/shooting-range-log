@@ -6,7 +6,6 @@ import type { TFunction } from 'i18next';
 
 export function userLabel(
   name: string | null,
-  displayId: string | null,
   active: boolean,
   t: TFunction,
   isGuest = false,
@@ -14,7 +13,7 @@ export function userLabel(
   const n = name ?? '';
   const guest = isGuest ? ` (${t('label_guest')})` : '';
   if (!active) return `${n}${guest} [${t('label_disabled')}]`;
-  return displayId ? `${n}${guest} [${displayId}]` : `${n}${guest}`;
+  return `${n}${guest}`;
 }
 
 export function weaponLabel(
