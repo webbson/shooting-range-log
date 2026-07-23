@@ -187,6 +187,7 @@ export function StatsPage() {
           <Group justify="space-between" mb="sm">
             <Title order={4}>{t('stats_weapon_usage')}</Title>
             <ActionIcon
+              size="xl"
               variant="light"
               aria-label={t('export_csv')}
               onClick={() => doExport('weapon_usage', `vapenanvandning-${stamp}.csv`, { from, to })}
@@ -212,6 +213,7 @@ export function StatsPage() {
           <Group justify="space-between" mb="sm">
             <Title order={4}>{t('stats_member_activity')}</Title>
             <ActionIcon
+              size="xl"
               variant="light"
               aria-label={t('export_csv')}
               onClick={() => doExport('member_activity', `medlemsaktivitet-${stamp}.csv`, { from, to })}
@@ -235,6 +237,7 @@ export function StatsPage() {
           <Group justify="space-between" mb="sm">
             <Title order={4}>{t('stats_active_debts')}</Title>
             <ActionIcon
+              size="xl"
               variant="light"
               aria-label={t('export_csv')}
               onClick={() => doExport('debts', `skulder-${stamp}.csv`)}
