@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   Badge, Button, Card, Group, Modal, ScrollArea, Select, Stack, Table, Text, Title, ActionIcon,
 } from '@mantine/core';
@@ -18,6 +19,24 @@ import { TagModal } from './TagModal';
 import { weaponLabel } from './labels';
 import { fmtDate } from './format';
 import { errorMessage } from './errors';
+
+// Tag number leads as a teal chip; the label itself drops the [x] suffix (chip replaces it).
+function WeaponCell(props: {
+  brand: string | null; model: string | null; caliber: string | null;
+  displayId: string | null; active: boolean; t: TFunction;
+}) {
+  const { brand, model, caliber, displayId, active, t } = props;
+  return (
+    <Group gap="xs" wrap="nowrap">
+      {active && displayId && (
+        <Badge color="teal" variant="light" size="lg" radius="sm" style={{ flexShrink: 0 }}>
+          {displayId}
+        </Badge>
+      )}
+      {weaponLabel(brand, model, caliber, null, active, t)}
+    </Group>
+  );
+}
 
 export function MaintenancePage() {
   const { t } = useTranslation();
@@ -91,7 +110,10 @@ export function MaintenancePage() {
                 <Table.Tr key={s.userUid}>
                   <Table.Td>{s.name}</Table.Td>
                   <Table.Td>
-                    {weaponLabel(s.brand, s.model, s.caliber, s.displayId, s.weaponActive, t)}
+                    <WeaponCell
+                      brand={s.brand} model={s.model} caliber={s.caliber}
+                      displayId={s.displayId} active={s.weaponActive} t={t}
+                    />
                   </Table.Td>
                   <Table.Td c="dimmed">
                     {t('maint_last_used')}:{' '}
@@ -120,7 +142,10 @@ export function MaintenancePage() {
               {(never.data ?? []).map((w) => (
                 <Table.Tr key={w.weaponUid}>
                   <Table.Td>
-                    {weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t)}
+                    <WeaponCell
+                      brand={w.brand} model={w.model} caliber={w.caliber}
+                      displayId={w.displayId} active t={t}
+                    />
                   </Table.Td>
                   <Table.Td c="dimmed" w={240}>
                     {t('maint_registered')}: {fmtDate(w.createdAt)}
@@ -142,7 +167,10 @@ export function MaintenancePage() {
                   onClick={() => setTagWeapon(w.weaponUid)}
                 >
                   <Table.Td>
-                    {weaponLabel(w.brand, w.model, w.caliber, w.displayId, true, t)}
+                    <WeaponCell
+                      brand={w.brand} model={w.model} caliber={w.caliber}
+                      displayId={w.displayId} active t={t}
+                    />
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs">
