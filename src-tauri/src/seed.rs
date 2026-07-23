@@ -367,6 +367,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
 mod tests {
     use super::*;
     use crate::db::migrated_in_memory;
+    use chrono::Datelike;
 
     fn count(conn: &Connection, sql: &str) -> i64 {
         conn.query_row(sql, [], |r| r.get(0)).unwrap()
@@ -433,6 +434,36 @@ mod tests {
                 "SELECT COUNT(*) FROM checkouts
                  WHERE julianday('now') - julianday(checked_out_at) > 600"
             ) >= 1
+        );
+        // Regression-pin the three properties the formula depends on, so a future
+        // formula tweak fails loud instead of silently dropping coverage.
+        assert!(
+            count(&conn, "SELECT COUNT(DISTINCT strftime('%H', checked_out_at)) FROM checkouts")
+                >= 5
+        );
+        let prev_year = Utc::now().year() - 1;
+        assert!(
+            count(
+                &conn,
+                &format!(
+                    "SELECT COUNT(*) FROM checkouts WHERE strftime('%Y', checked_out_at) = '{prev_year}'"
+                )
+            ) >= 3
+        );
+        // No assigned member has ever completed (closed) a loan of their own
+        // currently-assigned weapon. Scoped to CLOSED loans: the N_OPEN loop above
+        // deliberately exercises assign=true on one still-open checkout, which by
+        // design makes that weapon the member's preferred one — a legitimate match,
+        // not a stale pair, and it stays open forever in this seed.
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM checkouts c
+                   JOIN users u ON u.uid = c.user_uid
+                 WHERE c.weapon_uid = u.preferred_weapon_uid
+                   AND c.checked_in_at IS NOT NULL"
+            ),
+            0
         );
 
         // Re-seed wipes first → counts stay the same, not doubled.
