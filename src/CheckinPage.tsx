@@ -126,7 +126,14 @@ export function CheckinPage() {
         ) : (
           // List scrolls in the remaining space; title + fast check-in stay put.
           <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
-            <Stack gap="sm">
+            {/* Responsive columns: as many 480px-min cards as the width fits. */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))',
+                gap: 'var(--mantine-spacing-sm)',
+              }}
+            >
               {(open.data ?? []).map((o) => (
                 <Card key={o.id} withBorder padding="md">
                   <Group justify="space-between" wrap="nowrap">
@@ -222,7 +229,7 @@ export function CheckinPage() {
                   </Group>
                 </Card>
               ))}
-            </Stack>
+            </div>
           </ScrollArea>
         )}
       </Stack>
