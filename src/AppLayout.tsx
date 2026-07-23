@@ -77,6 +77,7 @@ export function AppLayout() {
                   to={item.to}
                   variant={pathname === item.to ? 'light' : 'subtle'}
                   size="lg"
+                  px="md"
                   rightSection={
                     item.to === '/checkin' && openCount > 0 ? (
                       <Badge size="lg" circle color="teal">
@@ -99,8 +100,9 @@ export function AppLayout() {
                   component={NavLink}
                   to={item.to}
                   variant={pathname === item.to ? 'light' : 'subtle'}
-                  size="md"
-                >
+                  size="lg"
+                  px="md"
+>
                   {t(item.key)}
                 </Button>
               ),
