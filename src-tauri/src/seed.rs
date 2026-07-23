@@ -13,7 +13,7 @@
 //! KEEP IN SYNC: when you add a new entity, field, or log type, extend the seed
 //! here so it's exercised too. See CLAUDE.md "Dev data".
 
-use chrono::{Duration, Utc};
+use chrono::{Duration, Timelike, Utc};
 use rusqlite::{params, Connection};
 
 use crate::checkout::{do_checkin, do_checkout};
@@ -66,6 +66,36 @@ const N_SERVICE: usize = 15;
 
 fn days_ago(n: i64) -> String {
     (Utc::now() - Duration::days(n.max(0))).to_rfc3339()
+}
+
+/// Checks a weapon out to `user` and immediately back in, backdated `days` days
+/// ago with checkout pinned to `hour` (checkin one hour later, same day). Same
+/// do_checkout/do_checkin + UPDATE-backdate pattern as the loops below, factored
+/// out because the historical spread calls it a hundred-odd times.
+fn seed_historical_loan(
+    conn: &Connection,
+    weapon: i64,
+    user: i64,
+    op_out: i64,
+    op_in: i64,
+    days: i64,
+    hour: u32,
+) -> Result<i64, AppError> {
+    let at = |h: u32| {
+        (Utc::now() - Duration::days(days.max(0)))
+            .with_hour(h)
+            .and_then(|d| d.with_minute(0))
+            .and_then(|d| d.with_second(0))
+            .unwrap()
+            .to_rfc3339()
+    };
+    let c = do_checkout(conn, weapon, user, op_out, None, false)?;
+    do_checkin(conn, c.id, op_in)?;
+    conn.execute(
+        "UPDATE checkouts SET checked_out_at = ?2, checked_in_at = ?3 WHERE id = ?1",
+        params![c.id, at(hour), at(hour + 1)],
+    )?;
+    Ok(c.id)
 }
 
 fn delete_tables(conn: &Connection, tables: &[&str]) -> Result<(), AppError> {
@@ -163,6 +193,20 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
         weapon_uids.push(w.uid);
     }
 
+    // --- Fixture: a 21st weapon that is created but never checked out, so
+    // stats/maintenance pages have an active, idle weapon to render. ---
+    weapon_create(
+        conn,
+        NewWeapon {
+            display_id: Some("21".to_string()),
+            brand: Some("Sako".to_string()),
+            model: Some("Quad".to_string()),
+            serial: Some("SN-0021".to_string()),
+            caliber: Some(".22 LR".to_string()),
+            notes: None,
+        },
+    )?;
+
     // --- Preferred weapons: a few members favor a specific weapon (exclusive,
     // one member per weapon — mirrors the partial unique index). ---
     for (ui, wi) in [(2usize, 0usize), (5, 3), (9, 7)] {
@@ -192,6 +236,28 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
             k += 1;
         }
     }
+
+    // --- Historical spread: ~14 months of closed loans over the closed-weapon
+    // pool so every Statistik period (day/week/month/year/Allt) has data.
+    // Round-robins members × weapons; days_ago wraps past i=105 (i*4 > 420),
+    // which lands those tail days on top of the earliest days from i=0..14 —
+    // free same-day multi-loan coverage for the "day" bucket. Hour cycles
+    // 9..17 for the "hour" bucket. Verified (see task report) this pairing
+    // never lands a stale-assignment member on their own assigned weapon. ---
+    for i in 0..120i64 {
+        let weapon = weapon_uids[(i as usize) % returned];
+        let user = user_uids[(i as usize) % N_USERS];
+        let days = 1 + (i * 4) % 420;
+        let hour = 9u32 + (i % 9) as u32;
+        let id =
+            seed_historical_loan(conn, weapon, user, op(i as usize), op(i as usize + 1), days, hour)?;
+        checkout_ids.push(id);
+    }
+    // The spread above only reaches ~14 months back; add one loan further out
+    // so the "Allt" per-year bars have a second year to show beyond last year.
+    let id = seed_historical_loan(conn, weapon_uids[3], user_uids[11], op(120), op(121), 730, 13)?;
+    checkout_ids.push(id);
+
     for j in 0..N_OPEN {
         let weapon = weapon_uids[returned + j];
         let user = user_uids[(N_STAFF + 2 + j) % N_USERS]; // active, not retired below
@@ -208,10 +274,30 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
 
     // --- Guests: one repeat visitor with an open loan, one without history. ---
     let g1 = user_upsert_guest(conn, "Gustav Gästsson".into(), "19870707-7777".into())?.uid;
-    user_upsert_guest(conn, "Greta Gästberg".into(), "19920202-2222".into())?;
+    let greta = user_upsert_guest(conn, "Greta Gästberg".into(), "19920202-2222".into())?.uid;
     // weapon_uids[0] was checked out+in above (returned round-robin) so it's free.
     let c = do_checkout(conn, weapon_uids[0], g1, op(0), None, false)?;
     checkout_ids.push(c.id);
+    // g1's second visit: a closed loan on a different weapon/day, so stats pages
+    // have a repeat-guest fixture (not just a single open loan).
+    let c2 = do_checkout(conn, weapon_uids[1], g1, op(0), None, false)?;
+    do_checkin(conn, c2.id, op(1))?;
+    conn.execute(
+        "UPDATE checkouts SET checked_out_at = ?2, checked_in_at = ?3 WHERE id = ?1",
+        params![c2.id, days_ago(10), days_ago(9)],
+    )?;
+    checkout_ids.push(c2.id);
+    // g1 + Greta each get 2 more backdated closed loans spread across earlier
+    // months, so both guests show up across multiple Statistik periods (Greta
+    // had zero checkouts before this).
+    for id in [
+        seed_historical_loan(conn, weapon_uids[2], g1, op(2), op(3), 150, 11)?,
+        seed_historical_loan(conn, weapon_uids[4], g1, op(4), op(5), 250, 14)?,
+        seed_historical_loan(conn, weapon_uids[5], greta, op(6), op(7), 100, 10)?,
+        seed_historical_loan(conn, weapon_uids[6], greta, op(8), op(9), 300, 15)?,
+    ] {
+        checkout_ids.push(id);
+    }
 
     // --- Weapon condition tags: current-state flags, independent of checkout status. ---
     weapon_set_tags(conn, weapon_uids[1], true, false, false, false, Some("Kolven glappar".into()))?;
@@ -281,6 +367,7 @@ pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
 mod tests {
     use super::*;
     use crate::db::migrated_in_memory;
+    use chrono::Datelike;
 
     fn count(conn: &Connection, sql: &str) -> i64 {
         conn.query_row(sql, [], |r| r.get(0)).unwrap()
@@ -292,7 +379,7 @@ mod tests {
         seed_dev_database(&conn).unwrap();
 
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22); // 20 members + 2 guests
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 21); // 20 + never-checked-out fixture
         assert!(count(&conn, "SELECT COUNT(*) FROM checkouts") > 0);
         assert!(count(&conn, "SELECT COUNT(*) FROM debts") > 0);
         assert!(count(&conn, "SELECT COUNT(*) FROM weapon_service_log") > 0);
@@ -300,11 +387,89 @@ mod tests {
         assert!(count(&conn, "SELECT COUNT(*) FROM debts WHERE settled_at IS NOT NULL") >= 1);
         assert!(count(&conn, "SELECT COUNT(*) FROM users WHERE active = 0") >= 1);
         assert!(count(&conn, "SELECT COUNT(*) FROM weapons WHERE active = 0") >= 1);
+        // Stats/maintenance fixtures: an active weapon with zero checkouts, and a
+        // guest with 2+ checkouts.
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM weapons w WHERE w.active = 1
+                   AND NOT EXISTS (SELECT 1 FROM checkouts c WHERE c.weapon_uid = w.uid)"
+            ),
+            1
+        );
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM (
+                   SELECT c.user_uid FROM checkouts c
+                   JOIN users u ON u.uid = c.user_uid AND u.is_guest = 1
+                   GROUP BY c.user_uid HAVING COUNT(*) >= 2
+                 )"
+            ),
+            2 // both seeded guests (g1, Greta) now have repeat visits
+        );
+
+        // Historical spread (Task 11): the Statistik period nav needs data across
+        // many months, at least one same-day collision, and a bucket beyond the
+        // ~14-month spread for the "Allt" per-year view.
+        assert!(count(&conn, "SELECT COUNT(*) FROM checkouts") >= 150);
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(DISTINCT strftime('%Y-%m', checked_out_at)) FROM checkouts"
+            ) >= 12
+        );
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM (
+                   SELECT strftime('%Y-%m-%d', checked_out_at) AS d, COUNT(*) AS c
+                   FROM checkouts GROUP BY d HAVING c >= 2
+                 )"
+            ) >= 1
+        );
+        assert!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM checkouts
+                 WHERE julianday('now') - julianday(checked_out_at) > 600"
+            ) >= 1
+        );
+        // Regression-pin the three properties the formula depends on, so a future
+        // formula tweak fails loud instead of silently dropping coverage.
+        assert!(
+            count(&conn, "SELECT COUNT(DISTINCT strftime('%H', checked_out_at)) FROM checkouts")
+                >= 5
+        );
+        let prev_year = Utc::now().year() - 1;
+        assert!(
+            count(
+                &conn,
+                &format!(
+                    "SELECT COUNT(*) FROM checkouts WHERE strftime('%Y', checked_out_at) = '{prev_year}'"
+                )
+            ) >= 3
+        );
+        // No assigned member has ever completed (closed) a loan of their own
+        // currently-assigned weapon. Scoped to CLOSED loans: the N_OPEN loop above
+        // deliberately exercises assign=true on one still-open checkout, which by
+        // design makes that weapon the member's preferred one — a legitimate match,
+        // not a stale pair, and it stays open forever in this seed.
+        assert_eq!(
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM checkouts c
+                   JOIN users u ON u.uid = c.user_uid
+                 WHERE c.weapon_uid = u.preferred_weapon_uid
+                   AND c.checked_in_at IS NOT NULL"
+            ),
+            0
+        );
 
         // Re-seed wipes first → counts stay the same, not doubled.
         seed_dev_database(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22);
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 20);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 21);
     }
 
     #[test]
