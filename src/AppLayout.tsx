@@ -25,6 +25,8 @@ const NAV = [
   { to: '/members', key: 'nav_members' },
   { to: '/weapons', key: 'nav_weapons' },
   { to: '/logs', key: 'nav_logs' },
+  { to: '/stats', key: 'nav_stats' },
+  { to: '/maintenance', key: 'nav_maintenance' },
 ] as const;
 
 export function AppLayout() {

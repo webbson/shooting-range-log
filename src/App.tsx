@@ -20,6 +20,8 @@ import { MembersPage } from './MembersPage';
 import { WeaponsPage } from './WeaponsPage';
 import { LogsPage } from './LogsPage';
 import { SettingsPage } from './SettingsPage';
+import { StatsPage } from './StatsPage';
+import { MaintenancePage } from './MaintenancePage';
 
 // Tauri invoke is IPC, not HTTP — never pause queries/mutations on
 // navigator.onLine (default networkMode 'online' froze refetches when the
@@ -55,6 +57,8 @@ export default function App() {
                 <Route path="members" element={<MembersPage />} />
                 <Route path="weapons" element={<WeaponsPage />} />
                 <Route path="logs" element={<LogsPage />} />
+                <Route path="stats" element={<StatsPage />} />
+                <Route path="maintenance" element={<MaintenancePage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="backup" element={<Navigate to="/settings" replace />} />
               </Route>
