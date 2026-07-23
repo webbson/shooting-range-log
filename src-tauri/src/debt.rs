@@ -124,7 +124,7 @@ pub(crate) fn settle(conn: &Connection, debt_id: i64, operator_uid: i64) -> Resu
     debt_require(conn, debt_id)
 }
 
-fn outstanding(conn: &Connection) -> Result<Vec<OutstandingDebt>, AppError> {
+pub(crate) fn outstanding(conn: &Connection) -> Result<Vec<OutstandingDebt>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT user_uid, SUM(amount_kr) AS total FROM debts
          WHERE settled_at IS NULL GROUP BY user_uid HAVING total > 0",

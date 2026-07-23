@@ -415,18 +415,20 @@ fn fmt_local(iso: &str) -> String {
 }
 
 fn weapon_name(brand: &Option<String>, model: &Option<String>, caliber: &Option<String>) -> String {
-    let mut s = [brand.as_deref(), model.as_deref()]
+    let base = [brand.as_deref(), model.as_deref()]
         .iter()
         .flatten()
         .copied()
         .collect::<Vec<_>>()
         .join(" ");
-    if let Some(c) = caliber.as_deref() {
-        if !c.is_empty() {
-            s = format!("{s}, {c}");
-        }
+    let caliber = caliber.as_deref().filter(|c| !c.is_empty());
+    if base.is_empty() {
+        caliber.unwrap_or_default().to_string()
+    } else if let Some(c) = caliber {
+        format!("{base}, {c}")
+    } else {
+        base
     }
-    s
 }
 
 fn csv_content(
@@ -499,20 +501,13 @@ fn csv_content(
         }
         "debts" => {
             rows.push(["Namn", "Belopp (kr)"].map(String::from).to_vec());
-            let mut stmt = conn.prepare(
-                "SELECT u.name, SUM(d.amount_kr) AS total
-                 FROM debts d JOIN users u ON u.uid = d.user_uid
-                 WHERE d.settled_at IS NULL
-                 GROUP BY d.user_uid
-                 HAVING total > 0
-                 ORDER BY total DESC",
-            )?;
-            let data = stmt
-                .query_map([], |r| {
-                    Ok(vec![r.get::<_, String>(0)?, r.get::<_, i64>(1)?.to_string()])
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            rows.extend(data);
+            let mut outstanding = crate::debt::outstanding(conn)?;
+            outstanding.sort_by(|a, b| b.amount_kr.cmp(&a.amount_kr));
+            let mut name_stmt = conn.prepare("SELECT name FROM users WHERE uid = ?1")?;
+            for o in outstanding {
+                let name: String = name_stmt.query_row(rusqlite::params![o.user_uid], |r| r.get(0))?;
+                rows.push(vec![name, o.amount_kr.to_string()]);
+            }
         }
         "stale_assignments" => {
             rows.push(["Medlem", "Vapen-ID", "Vapen", "Senast använt"].map(String::from).to_vec());
@@ -773,6 +768,16 @@ mod tests {
         assert_eq!(rows[0].last_visit.as_deref(), Some("2026-06-20T12:00:00Z"));
         assert_eq!((rows[1].name.as_str(), rows[1].loan_count), ("Gäst Ett", 0));
         assert!(rows[1].last_visit.is_none());
+    }
+
+    #[test]
+    fn weapon_name_formats() {
+        assert_eq!(weapon_name(&None, &None, &Some("9mm".into())), "9mm");
+        assert_eq!(
+            weapon_name(&Some("Glock".into()), &Some("17".into()), &Some("9mm".into())),
+            "Glock 17, 9mm"
+        );
+        assert_eq!(weapon_name(&Some("Glock".into()), &None, &None), "Glock");
     }
 
     #[test]

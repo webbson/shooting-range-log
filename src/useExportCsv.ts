@@ -11,12 +11,12 @@ export function useExportCsv() {
     defaultName: string,
     params: { from?: string | null; to?: string | null; months?: number | null } = {},
   ) => {
-    const path = await save({
-      defaultPath: defaultName,
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
-    });
-    if (!path) return;
     try {
+      const path = await save({
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV', extensions: ['csv'] }],
+      });
+      if (!path) return;
       const n = await exportCsvCmd(kind, path, params.from, params.to, params.months);
       notifications.show({ message: t('export_done', { count: n }) });
     } catch (e) {

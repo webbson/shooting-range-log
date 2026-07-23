@@ -52,6 +52,7 @@ export function MaintenancePage() {
       qc.invalidateQueries({ queryKey: ['maintGuests'] });
       qc.invalidateQueries({ queryKey: ['users'] });
       setPromoteTarget(null);
+      notifications.show({ message: t('promoted_ok') });
     },
     onError: (e) => notifications.show({ color: 'red', message: errorMessage(e, t) }),
   });
@@ -73,6 +74,7 @@ export function MaintenancePage() {
                 data={Array.from({ length: 12 }, (_, i) => String(i + 1))}
               />
               <ActionIcon
+                size="xl"
                 variant="light"
                 aria-label={t('export_csv')}
                 onClick={() =>
@@ -97,7 +99,7 @@ export function MaintenancePage() {
                   </Table.Td>
                   <Table.Td w={200}>
                     <Button
-                      size="sm"
+                      size="lg"
                       color="orange"
                       variant="light"
                       onClick={() => setUnassignTarget(s)}
@@ -161,6 +163,7 @@ export function MaintenancePage() {
           <Group justify="space-between" mb="sm">
             <Title order={4}>{t('stats_guests')}</Title>
             <ActionIcon
+              size="xl"
               variant="light"
               aria-label={t('export_csv')}
               onClick={() => doExport('guests', `gaster-${stamp}.csv`)}
@@ -179,7 +182,7 @@ export function MaintenancePage() {
                   </Table.Td>
                   <Table.Td w={180}>
                     {isAdmin && (
-                      <Button size="sm" variant="light" onClick={() => setPromoteTarget(g)}>
+                      <Button size="lg" variant="light" onClick={() => setPromoteTarget(g)}>
                         {t('promote_guest')}
                       </Button>
                     )}
