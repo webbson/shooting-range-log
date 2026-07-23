@@ -1990,3 +1990,17 @@ Deterministic historical loans so every stats view has data:
 - Update seed test count assertions. Never touch weapon 21 (never-borrowed
   fixture) or break existing fixtures (open loans, stale assignments).
 - Gate: `cargo test --manifest-path src-tauri/Cargo.toml` green.
+
+### Task 12: Teal tag-chip weapon rendering on new pages (user follow-up 2026-07-23)
+
+**Files:** Modify: `src/StatsPage.tsx`, `src/MaintenancePage.tsx`
+
+Weapon rows on the new pages must render like everywhere else: teal number
+chip first, label without `[id]` suffix (idiom at `LogsPage.tsx:85-92`):
+`Group gap="xs" wrap="nowrap"` → conditional
+`Badge color="teal" variant="light" size="lg" radius="sm"` with `displayId`
+(only when active + displayId) → `weaponLabel(brand, model, caliber, null,
+active, t)`. Apply to: Statistik weapon-usage table; Underhåll stale
+assignments, never-borrowed, tagged weapons rows. Never-borrowed/tagged are
+active-only lists (pass `true`); stale uses `weaponActive`. Gate:
+`npm run build` green.
