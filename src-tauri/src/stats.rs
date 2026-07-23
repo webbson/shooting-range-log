@@ -100,6 +100,107 @@ pub fn stats_loans_buckets(
     loans_buckets(&conn, from.as_deref(), to.as_deref(), &bucket)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeaponUsage {
+    pub weapon_uid: i64,
+    pub brand: Option<String>,
+    pub model: Option<String>,
+    pub caliber: Option<String>,
+    pub display_id: Option<String>,
+    pub active: bool,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberActivity {
+    pub user_uid: i64,
+    pub name: String,
+    pub is_guest: bool,
+    pub active: bool,
+    pub count: i64,
+}
+
+fn weapon_usage(
+    conn: &Connection,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<Vec<WeaponUsage>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT c.weapon_uid, w.brand, w.model, w.caliber, w.display_id, w.active,
+                COUNT(*) AS cnt
+         FROM checkouts c
+         JOIN weapons w ON w.uid = c.weapon_uid
+         WHERE (?1 IS NULL OR c.checked_out_at >= ?1)
+           AND (?2 IS NULL OR c.checked_out_at < ?2)
+         GROUP BY c.weapon_uid
+         ORDER BY cnt DESC, CAST(w.display_id AS INTEGER)",
+    )?;
+    let rows = stmt
+        .query_map(rusqlite::params![from, to], |r| {
+            Ok(WeaponUsage {
+                weapon_uid: r.get(0)?,
+                brand: r.get(1)?,
+                model: r.get(2)?,
+                caliber: r.get(3)?,
+                display_id: r.get(4)?,
+                active: r.get(5)?,
+                count: r.get(6)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn member_activity(
+    conn: &Connection,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<Vec<MemberActivity>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT c.user_uid, u.name, u.is_guest, u.active, COUNT(*) AS cnt
+         FROM checkouts c
+         JOIN users u ON u.uid = c.user_uid
+         WHERE (?1 IS NULL OR c.checked_out_at >= ?1)
+           AND (?2 IS NULL OR c.checked_out_at < ?2)
+         GROUP BY c.user_uid
+         ORDER BY cnt DESC, u.name",
+    )?;
+    let rows = stmt
+        .query_map(rusqlite::params![from, to], |r| {
+            Ok(MemberActivity {
+                user_uid: r.get(0)?,
+                name: r.get(1)?,
+                is_guest: r.get(2)?,
+                active: r.get(3)?,
+                count: r.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn stats_weapon_usage(
+    db: State<Db>,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<Vec<WeaponUsage>, AppError> {
+    let conn = lock(&db)?;
+    weapon_usage(&conn, from.as_deref(), to.as_deref())
+}
+
+#[tauri::command]
+pub fn stats_member_activity(
+    db: State<Db>,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<Vec<MemberActivity>, AppError> {
+    let conn = lock(&db)?;
+    member_activity(&conn, from.as_deref(), to.as_deref())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +294,44 @@ mod tests {
         assert_eq!(hours[0].count, 2);
 
         assert!(loans_buckets(&conn, None, None, "fortnight").is_err());
+    }
+
+    #[test]
+    fn weapon_usage_sorted_and_filtered() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let anna = mk_user(&conn, "Anna", false);
+        let w1 = mk_weapon(&conn, "1");
+        let w2 = mk_weapon(&conn, "2");
+        ins_checkout(&conn, w1, anna, op, "2026-06-10T12:00:00Z", None);
+        ins_checkout(&conn, w2, anna, op, "2026-06-11T12:00:00Z", None);
+        ins_checkout(&conn, w2, anna, op, "2026-06-12T12:00:00Z", None);
+
+        let rows = weapon_usage(&conn, None, None).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!((rows[0].weapon_uid, rows[0].count), (w2, 2));
+        assert_eq!((rows[1].weapon_uid, rows[1].count), (w1, 1));
+        assert_eq!(rows[0].brand.as_deref(), Some("Glock"));
+
+        let june12 = weapon_usage(&conn, Some("2026-06-12T00:00:00Z"), None).unwrap();
+        assert_eq!(june12.len(), 1);
+        assert_eq!(june12[0].count, 1);
+    }
+
+    #[test]
+    fn member_activity_sorted_with_guest_flag() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let anna = mk_user(&conn, "Anna", false);
+        let guest = mk_user(&conn, "Gäst", true);
+        let w = mk_weapon(&conn, "1");
+        ins_checkout(&conn, w, guest, op, "2026-06-10T12:00:00Z", None);
+        ins_checkout(&conn, w, anna, op, "2026-06-11T12:00:00Z", None);
+        ins_checkout(&conn, w, anna, op, "2026-06-12T12:00:00Z", None);
+
+        let rows = member_activity(&conn, None, None).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!((rows[0].name.as_str(), rows[0].count, rows[0].is_guest), ("Anna", 2, false));
+        assert_eq!((rows[1].name.as_str(), rows[1].count, rows[1].is_guest), ("Gäst", 1, true));
     }
 }
