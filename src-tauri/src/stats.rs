@@ -390,6 +390,172 @@ pub fn maintenance_guests(db: State<Db>) -> Result<Vec<GuestRow>, AppError> {
     guest_rows(&conn)
 }
 
+fn csv_field(s: &str) -> String {
+    if s.contains(';') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+fn csv_join(rows: &[Vec<String>]) -> String {
+    let mut out = String::from("\u{FEFF}");
+    for r in rows {
+        out.push_str(&r.iter().map(|f| csv_field(f)).collect::<Vec<_>>().join(";"));
+        out.push_str("\r\n");
+    }
+    out
+}
+
+/// RFC3339 UTC -> local "YYYY-MM-DD HH:MM" for humans in Excel.
+fn fmt_local(iso: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(iso)
+        .map(|d| d.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_else(|_| iso.to_string())
+}
+
+fn weapon_name(brand: &Option<String>, model: &Option<String>, caliber: &Option<String>) -> String {
+    let mut s = [brand.as_deref(), model.as_deref()]
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if let Some(c) = caliber.as_deref() {
+        if !c.is_empty() {
+            s = format!("{s}, {c}");
+        }
+    }
+    s
+}
+
+fn csv_content(
+    conn: &Connection,
+    kind: &str,
+    from: Option<&str>,
+    to: Option<&str>,
+    months: Option<i64>,
+) -> Result<(String, i64), AppError> {
+    let yes_no = |b: bool| if b { "Ja" } else { "Nej" }.to_string();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    match kind {
+        "loans_raw" => {
+            rows.push(
+                ["Utlämnad", "Återlämnad", "Vapen-ID", "Vapen", "Serienummer",
+                 "Låntagare", "Gäst", "Utlämnad av", "Mottagen av"]
+                    .map(String::from)
+                    .to_vec(),
+            );
+            let mut stmt = conn.prepare(
+                "SELECT c.checked_out_at, c.checked_in_at,
+                        w.display_id, w.brand, w.model, w.caliber, w.serial,
+                        u.name, u.is_guest, oo.name, oi.name
+                 FROM checkouts c
+                 JOIN users u ON u.uid = c.user_uid
+                 JOIN weapons w ON w.uid = c.weapon_uid
+                 LEFT JOIN users oo ON oo.uid = c.operator_out_uid
+                 LEFT JOIN users oi ON oi.uid = c.operator_in_uid
+                 WHERE (?1 IS NULL OR c.checked_out_at >= ?1)
+                   AND (?2 IS NULL OR c.checked_out_at < ?2)
+                 ORDER BY c.checked_out_at DESC, c.id DESC",
+            )?;
+            let data = stmt
+                .query_map(rusqlite::params![from, to], |r| {
+                    let out_at: String = r.get(0)?;
+                    let in_at: Option<String> = r.get(1)?;
+                    let brand: Option<String> = r.get(3)?;
+                    let model: Option<String> = r.get(4)?;
+                    let caliber: Option<String> = r.get(5)?;
+                    Ok(vec![
+                        fmt_local(&out_at),
+                        in_at.as_deref().map(fmt_local).unwrap_or_default(),
+                        r.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                        weapon_name(&brand, &model, &caliber),
+                        r.get::<_, Option<String>>(6)?.unwrap_or_default(),
+                        r.get::<_, String>(7)?,
+                        if r.get::<_, bool>(8)? { "Ja".into() } else { "Nej".into() },
+                        r.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                        r.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                    ])
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            rows.extend(data);
+        }
+        "weapon_usage" => {
+            rows.push(["Vapen-ID", "Vapen", "Antal lån"].map(String::from).to_vec());
+            for u in weapon_usage(conn, from, to)? {
+                rows.push(vec![
+                    u.display_id.unwrap_or_default(),
+                    weapon_name(&u.brand, &u.model, &u.caliber),
+                    u.count.to_string(),
+                ]);
+            }
+        }
+        "member_activity" => {
+            rows.push(["Namn", "Gäst", "Antal lån"].map(String::from).to_vec());
+            for m in member_activity(conn, from, to)? {
+                rows.push(vec![m.name, yes_no(m.is_guest), m.count.to_string()]);
+            }
+        }
+        "debts" => {
+            rows.push(["Namn", "Belopp (kr)"].map(String::from).to_vec());
+            let mut stmt = conn.prepare(
+                "SELECT u.name, SUM(d.amount_kr) AS total
+                 FROM debts d JOIN users u ON u.uid = d.user_uid
+                 WHERE d.settled_at IS NULL
+                 GROUP BY d.user_uid
+                 HAVING total > 0
+                 ORDER BY total DESC",
+            )?;
+            let data = stmt
+                .query_map([], |r| {
+                    Ok(vec![r.get::<_, String>(0)?, r.get::<_, i64>(1)?.to_string()])
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            rows.extend(data);
+        }
+        "stale_assignments" => {
+            rows.push(["Medlem", "Vapen-ID", "Vapen", "Senast använt"].map(String::from).to_vec());
+            for s in stale_assignments(conn, months.unwrap_or(3))? {
+                rows.push(vec![
+                    s.name,
+                    s.display_id.unwrap_or_default(),
+                    weapon_name(&s.brand, &s.model, &s.caliber),
+                    s.last_used.as_deref().map(fmt_local).unwrap_or_default(),
+                ]);
+            }
+        }
+        "guests" => {
+            rows.push(["Namn", "Antal lån", "Senaste besök"].map(String::from).to_vec());
+            for g in guest_rows(conn)? {
+                rows.push(vec![
+                    g.name,
+                    g.loan_count.to_string(),
+                    g.last_visit.as_deref().map(fmt_local).unwrap_or_default(),
+                ]);
+            }
+        }
+        other => return Err(AppError::internal(format!("unknown export kind: {other}"))),
+    }
+    let count = (rows.len() as i64) - 1;
+    Ok((csv_join(&rows), count))
+}
+
+#[tauri::command]
+pub fn export_csv(
+    db: State<Db>,
+    kind: String,
+    from: Option<String>,
+    to: Option<String>,
+    months: Option<i64>,
+    path: String,
+) -> Result<i64, AppError> {
+    let conn = lock(&db)?;
+    let (content, count) = csv_content(&conn, &kind, from.as_deref(), to.as_deref(), months)?;
+    std::fs::write(&path, content)?;
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -607,5 +773,52 @@ mod tests {
         assert_eq!(rows[0].last_visit.as_deref(), Some("2026-06-20T12:00:00Z"));
         assert_eq!((rows[1].name.as_str(), rows[1].loan_count), ("Gäst Ett", 0));
         assert!(rows[1].last_visit.is_none());
+    }
+
+    #[test]
+    fn csv_loans_raw_format() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let anna = mk_user(&conn, "An;na", false); // ; forces quoting
+        let w = mk_weapon(&conn, "1");
+        ins_checkout(&conn, w, anna, op, "2026-06-10T12:00:00Z", Some("2026-06-10T13:00:00Z"));
+
+        let (content, count) = csv_content(&conn, "loans_raw", None, None, None).unwrap();
+        assert_eq!(count, 1);
+        assert!(content.starts_with('\u{FEFF}'));
+        let lines: Vec<&str> = content.trim_start_matches('\u{FEFF}').split("\r\n").collect();
+        assert_eq!(
+            lines[0],
+            "Utlämnad;Återlämnad;Vapen-ID;Vapen;Serienummer;Låntagare;Gäst;Utlämnad av;Mottagen av"
+        );
+        assert!(lines[1].contains("\"An;na\""));
+        assert!(lines[1].contains(";Nej;"));
+        assert!(lines[1].contains("2026-06-10")); // local-formatted timestamp
+    }
+
+    #[test]
+    fn csv_kinds_and_bad_kind() {
+        let conn = migrated_in_memory();
+        let op = mk_user(&conn, "Op", false);
+        let anna = mk_user(&conn, "Anna", false);
+        let w = mk_weapon(&conn, "1");
+        ins_checkout(&conn, w, anna, op, "2026-06-10T12:00:00Z", None);
+        conn.execute(
+            "INSERT INTO debts (user_uid, operator_uid, amount_kr, reason, created_at)
+             VALUES (?1, ?2, 150, 'ammo', '2026-06-10T12:00:00Z')",
+            params![anna, op],
+        )
+        .unwrap();
+
+        for kind in ["weapon_usage", "member_activity", "debts", "stale_assignments", "guests"] {
+            let (content, _) = csv_content(&conn, kind, None, None, Some(3)).unwrap();
+            assert!(content.starts_with('\u{FEFF}'), "{kind} missing BOM");
+            assert!(content.contains(';'), "{kind} not ;-separated");
+        }
+        let (debts_csv, dc) = csv_content(&conn, "debts", None, None, None).unwrap();
+        assert_eq!(dc, 1);
+        assert!(debts_csv.contains("Anna;150"));
+
+        assert!(csv_content(&conn, "nonsense", None, None, None).is_err());
     }
 }
