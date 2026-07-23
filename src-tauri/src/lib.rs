@@ -12,6 +12,7 @@ pub mod seed;
 mod s3;
 mod service;
 mod settings;
+mod stats;
 
 use std::time::Duration;
 
@@ -292,6 +293,8 @@ pub fn run() {
             logs::list_checkouts,
             logs::last_shot_dates,
             logs::last_weapon_users,
+            stats::stats_summary,
+            stats::stats_loans_buckets,
             service::add_service,
             service::list_weapon_service,
             import::import_list_sheets,
