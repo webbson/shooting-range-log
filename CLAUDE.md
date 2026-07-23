@@ -108,6 +108,8 @@ commit on a `feat/*` branch → merge to `main`.
   (connection, `SCHEMA_V1`+`SCHEMA_V2`, migrations, test conn), `error.rs`, `models.rs`
   (User/Weapon + New/Update, serde camelCase), `commands.rs` (entity CRUD + display_id/serial
   rules), `checkout.rs` (evaluate/checkout/checkin/open list), `debt.rs`, `logs.rs`, `service.rs`,
+  `stats.rs` (stats/maintenance read queries + 6-kind CSV export: `;`-separated, UTF-8 BOM,
+  Swedish headers, local timestamps),
   `settings.rs` (S3/passphrase settings, get/update commands),
   `backup.rs` (snapshot_local via VACUUM INTO, GFS retention, list_local, restore_from_file via rusqlite backup API),
   `crypto.rs` (age passphrase encrypt/decrypt),
@@ -136,7 +138,14 @@ commit on a `feat/*` branch → merge to `main`.
   columns, row → info modal; xl two-column edit modal incl. preferred weapon),
   `WeaponsPage.tsx` (list + create/edit; brand/model/caliber Autocomplete + "base on existing weapon"),
   `weaponPresets.ts` (curated brand/caliber lists + DB-merge suggestion helper),
-  `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`, `api.ts` (invoke wrappers + types),
+  `LogsPage.tsx`, `DebtModal.tsx`, `ServiceModal.tsx`,
+  `StatsPage.tsx` (Statistik: preset SegmentedControl + ‹ › period navigation to any past
+  day/week/month/year, number tiles, dependency-free CSS bar chart with whole-period
+  zero-fill, weapon-usage/member-activity/debts tables, CSV exports),
+  `MaintenancePage.tsx` (Underhåll: stale assignments with months select 1–12 + confirm-popup
+  unassign, never-borrowed weapons, tagged weapons → TagModal, guests by loan count with
+  admin-gated promote), `useExportCsv.ts` (save-dialog → `export_csv` hook),
+  `api.ts` (invoke wrappers + types),
   `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`, `global.css` (app-wide
   user-select off).
 
@@ -152,6 +161,10 @@ weapon-first selector with direct checkout + candidate-user radio boxes, member 
 removed from all UI (DB column remains), assign-at-checkout with confirm popups, checkout
 notes removed, SSN normalization (`normalize_ssn`), reusable-guest touch modal, on-screen
 keyboards, teal tag chips/stripes, responsive check-in columns, 90% modals.
++ Stats/maintenance wave (`feat/stats-maintenance`, 2026-07-23, merged bf087e2): `stats.rs`
+(9 commands: summary/buckets/usage/activity, stale/never-borrowed/tagged/guests, CSV export),
+Statistik + Underhåll pages with period navigation, teal chip weapon rows, seed historical
+spread (~120 backdated loans, prior-year data) with property-pinning tests.
 M7 (packaging/CI/updater) deferred — see `BACKLOG.md`.
 Git is local-only (no remote yet → Windows installer not yet built).
 

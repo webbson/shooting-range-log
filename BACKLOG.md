@@ -7,7 +7,10 @@ pass, then the deferred milestones below.
 _Collect tweaks here as they come up._
 - [ ] Bundle size: app JS chunk >500 kB — consider route-level `lazy()` code-splitting.
 - [ ] `npm audit` reports 3 high (dev-tool transitive) — triage / `audit fix`.
-- [ ] CSV export of log views (was marked stretch in M4 — add if wanted).
+- [x] CSV export of log views (was marked stretch in M4 — add if wanted). — resolved 2026-07-23: stats/maintenance wave ships 6-kind CSV export incl. raw loans.
+- [ ] MembersPage promote button fires without confirm popup — now inconsistent with MaintenancePage's confirm+toast promote flow (2026-07-23 review note).
+- [ ] Stats export default filename is today-stamped, not period-stamped — use the period label when StatsPage is next touched (2026-07-23 review note).
+- [ ] Stats bar-chart arrows lack aria-labels (a11y; add stats_prev_period/stats_next_period keys).
 - [ ] Review touch sizing/layout at 1920×1080 / 1920×1200 / 2560×1440 on the actual laptop.
 - [ ] (add items here)
 - [x] Retired members retain their preferred-weapon slot (star hidden for all on that weapon; exclusivity error names the retired holder) — decide policy: clear preference on deactivation, or allow taking over a weapon from an inactive holder. — resolved: deactivation clears the favorite
