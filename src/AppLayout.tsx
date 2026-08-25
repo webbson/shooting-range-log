@@ -14,6 +14,8 @@ import {
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { IconMaximize, IconMinimize } from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
@@ -38,6 +40,13 @@ export function AppLayout() {
   const operator = useAppStore((s) => s.operator);
   const setOperator = useAppStore((s) => s.setOperator);
   const isAdmin = useIsAdmin();
+  const fullscreen = useAppStore((s) => s.fullscreen);
+  const setFullscreen = useAppStore((s) => s.setFullscreen);
+
+  // Applies the toggle and, on mount, restores the persisted mode from launch.
+  useEffect(() => {
+    getCurrentWindow().setFullscreen(fullscreen).catch(console.warn);
+  }, [fullscreen]);
 
   const { toggleColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light');
@@ -169,6 +178,16 @@ export function AppLayout() {
             >
               {computed === 'dark' ? '☀' : '🌙'}
             </ActionIcon>
+            <Tooltip label={fullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}>
+              <ActionIcon
+                variant="default"
+                size="lg"
+                aria-label={fullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}
+                onClick={() => setFullscreen(!fullscreen)}
+              >
+                {fullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
+              </ActionIcon>
+            </Tooltip>
             {isAdmin && (
               <ActionIcon
                 variant="default"
