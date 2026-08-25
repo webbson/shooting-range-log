@@ -19,8 +19,11 @@ interface AppState {
    *  preselect them by default (the operator itself is still re-confirmed). */
   lastOperatorUid: number | null;
   language: Lang;
+  /** Window fullscreen mode. Persisted so the app relaunches in the same mode. */
+  fullscreen: boolean;
   setOperator: (op: Operator | null) => void;
   setLanguage: (lang: Lang) => void;
+  setFullscreen: (on: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -29,6 +32,7 @@ export const useAppStore = create<AppState>()(
       operator: null,
       lastOperatorUid: null,
       language: 'sv',
+      fullscreen: false,
       // Selecting an operator also remembers them; clearing (switch) keeps the
       // last uid so the picker still defaults to it.
       setOperator: (op) => set(op ? { operator: op, lastOperatorUid: op.uid } : { operator: op }),
@@ -36,11 +40,17 @@ export const useAppStore = create<AppState>()(
         i18n.changeLanguage(language);
         set({ language });
       },
+      setFullscreen: (fullscreen) => set({ fullscreen }),
     }),
     {
       name: 'srl-app',
-      // Persist language + last operator uid — the active operator is per-session.
-      partialize: (s) => ({ language: s.language, lastOperatorUid: s.lastOperatorUid }),
+      // Persist language + fullscreen + last operator uid — the active operator
+      // is per-session.
+      partialize: (s) => ({
+        language: s.language,
+        fullscreen: s.fullscreen,
+        lastOperatorUid: s.lastOperatorUid,
+      }),
       onRehydrateStorage: () => (state) => {
         if (state) i18n.changeLanguage(state.language);
       },

@@ -119,7 +119,7 @@ commit on a `feat/*` branch → merge to `main`.
 - `src/`: `App.tsx` (providers + routes; `/checkout` remounts on nav click via `location.key`
   → full flow reset), `UpdatePrompt.tsx` (prompt-on-launch updater modal, sv/en),
   `AppLayout.tsx` (shell, footer status bar, operator
-  badge), `OperatorPicker.tsx`, `CheckoutPage.tsx` (weapon-first flow: tag-numpad selector
+  badge, theme + fullscreen toggles), `OperatorPicker.tsx`, `CheckoutPage.tsx` (weapon-first flow: tag-numpad selector
   step with candidate-user radio boxes [assigned default, last-borrower alternative] and
   direct checkout, then a member/weapon form step with assign checkbox + transfer/replace
   confirm popups — no longer hosts the open-loans list, see `CheckinPage.tsx`),
@@ -148,35 +148,16 @@ commit on a `feat/*` branch → merge to `main`.
   unassign, never-borrowed weapons, tagged weapons → TagModal, guests by loan count with
   admin-gated promote), `useExportCsv.ts` (save-dialog → `export_csv` hook),
   `api.ts` (invoke wrappers + types),
-  `store.ts` (Zustand), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`, `global.css` (app-wide
+  `store.ts` (Zustand; `persist` keeps language, fullscreen, last operator uid), `i18n.ts`, `errors.ts`, `format.ts`, `theme.ts`, `global.css` (app-wide
   user-select off).
 - `.github/workflows/`: `release.yml`
   (on `v*` tag push: stamps the tag version into `tauri.conf.json`, `tauri-action` builds the
   NSIS installer + updater artifacts/`latest.json`, RC tags marked prerelease).
 
 ## Status
-M0–M6 done on `main` (M6 backup/restore live-smoked). Picker modals + preferred-weapon
-feature (3 waves, 2026-07-14) merged to `main` after live-smoke
-+ UX refinements wave (2026-07-14): member-first checkout, info modals, inner-scroll lists.
-+ Guest checkout / weapon condition tags / admin gating wave (`feat/checkin-guest-tags-admin`,
-2026-07-21): `SCHEMA_V4`, `upsert_guest`/`promote_guest`, `set_weapon_tags`, `useIsAdmin`
-bootstrap gate, `CheckinPage` split out of `CheckoutPage` — merged 2026-07-22 (a665cfd).
-+ Checkout redesign wave (`feat/checkout-redesign`, 2026-07-22/23, merged b7fb032):
-weapon-first selector with direct checkout + candidate-user radio boxes, member display_id
-removed from all UI (DB column remains), assign-at-checkout with confirm popups, checkout
-notes removed, SSN normalization (`normalize_ssn`), reusable-guest touch modal, on-screen
-keyboards, teal tag chips/stripes, responsive check-in columns, 90% modals.
-+ Stats/maintenance wave (`feat/stats-maintenance`, 2026-07-23, merged bf087e2): `stats.rs`
-(9 commands: summary/buckets/usage/activity, stale/never-borrowed/tagged/guests, CSV export),
-Statistik + Underhåll pages with period navigation, teal chip weapon rows, seed historical
-spread (~120 backdated loans, prior-year data) with property-pinning tests.
-+ Auto-update wave (`feat/auto-update`, 2026-07-23): repo now public at
-github.com/webbson/shooting-range-log; `tauri-plugin-updater`/`tauri-plugin-process`
-registered; `release.yml` builds and publishes the NSIS installer + updater artifacts
-(tag-stamped version, `latest.json`) on `v*` tag push, RC tags marked prerelease;
-`UpdatePrompt.tsx` prompts on launch when an update is available.
+M0–M6 done on `main`; all waves through auto-update (2026-07-23) merged and live-smoked.
 M7 remaining: Windows code signing — see `BACKLOG.md`.
-Git is no longer local-only: `origin` is github.com/webbson/shooting-range-log (public).
+`origin` = github.com/webbson/shooting-range-log (public).
 
 ## Backup architecture (M6)
 - **Snapshot:** `VACUUM INTO` every 10 min (timer thread) + on `ExitRequested`. Always local first.
