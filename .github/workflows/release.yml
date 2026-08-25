@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The git tag is the single version source: stamp it into tauri.conf.json
       # (the version the bundler embeds and the updater compares).
@@ -34,7 +34,7 @@ jobs:
             echo 'TAG_MSG_EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: lts/*
           cache: npm
