@@ -127,15 +127,14 @@ commit on a `feat/*` branch → merge to `main`.
   `CheckinPage.tsx` (the open-loans list: responsive auto-fill columns, teal tag stripe per
   card, check-in/debt/assign/tag actions),
   `GuestModal.tsx` (reusable guests: two-panel 90% touch modal — pick existing / create new,
-  shared on-screen keyboard with digit row, focus-routed; SSN identifies via `upsert_guest`),
-  `Keyboard.tsx` (on-screen Swedish QWERTY, optional digit row via `withDigits`),
+  OS touch keyboard for text entry; SSN identifies via `upsert_guest`),
   `TagModal.tsx` (per-weapon condition tags + free comment, no admin gate — technician workflow),
   `useIsAdmin.ts` (UI-only admin gate hook; bootstrap rule disables gating while no active
   admin exists in the DB),
   `Numpad.tsx` (shared keypad) + `IdNumpadModal.tsx` (fast check-in),
   `WeaponPickerModal.tsx` (90% touch picker: tag numpad, brand/caliber + available/unassigned
   filters, teal tag chips, out-weapons sink) / `MemberPickerModal.tsx` (90% touch picker:
-  name search + on-screen keyboard, last-shot sort),
+  name search, last-shot sort),
   `MemberInfoModal.tsx` / `WeaponInfoModal.tsx` (read-only info + history modals, launched from
   lists/logs/open-loans), `MembersPage.tsx` (list: sortable, last-shot + assigned-weapon
   columns, row → info modal; xl two-column edit modal incl. preferred weapon),
