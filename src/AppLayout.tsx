@@ -8,6 +8,8 @@ import {
   Tooltip,
   SegmentedControl,
   ActionIcon,
+  Modal,
+  Stack,
   useMantineColorScheme,
   useComputedColorScheme,
 } from '@mantine/core';
@@ -15,7 +17,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { IconMaximize, IconMinimize } from '@tabler/icons-react';
+import { IconMaximize, IconMinimize, IconPower } from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
@@ -42,6 +44,7 @@ export function AppLayout() {
   const isAdmin = useIsAdmin();
   const fullscreen = useAppStore((s) => s.fullscreen);
   const setFullscreen = useAppStore((s) => s.setFullscreen);
+  const [confirmShutdown, setConfirmShutdown] = useState(false);
 
   // Applies the toggle and, on mount, restores the persisted mode from launch.
   useEffect(() => {
@@ -198,10 +201,52 @@ export function AppLayout() {
                 ⚙
               </ActionIcon>
             )}
+            {/* Fullscreen hides the window's own close button — this is the only
+                way out of the app while in that mode. */}
+            {fullscreen && (
+              <Tooltip label={t('shutdown')}>
+                <ActionIcon
+                  variant="light"
+                  size="lg"
+                  color="red"
+                  aria-label={t('shutdown')}
+                  onClick={() => setConfirmShutdown(true)}
+                >
+                  <IconPower size={18} />
+                </ActionIcon>
+              </Tooltip>
+            )}
           </Group>
         </Group>
       </AppShell.Footer>
       </AppShell>
+
+      <Modal
+        opened={confirmShutdown}
+        onClose={() => setConfirmShutdown(false)}
+        title={t('shutdown')}
+        centered
+      >
+        <Stack>
+          <Text fz="lg">{t('shutdown_confirm')}</Text>
+          <Text fz="lg" fw={600}>
+            {t('are_you_sure')}
+          </Text>
+          <Group grow>
+            <Button size="lg" variant="default" onClick={() => setConfirmShutdown(false)}>
+              {t('no')}
+            </Button>
+            <Button
+              size="lg"
+              color="red"
+              // close() (not destroy()) so the backup snapshot on ExitRequested runs.
+              onClick={() => getCurrentWindow().close()}
+            >
+              {t('yes')}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 }

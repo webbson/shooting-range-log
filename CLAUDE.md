@@ -119,7 +119,8 @@ commit on a `feat/*` branch → merge to `main`.
 - `src/`: `App.tsx` (providers + routes; `/checkout` remounts on nav click via `location.key`
   → full flow reset), `UpdatePrompt.tsx` (prompt-on-launch updater modal, sv/en),
   `AppLayout.tsx` (shell, footer status bar, operator
-  badge, theme + fullscreen toggles), `OperatorPicker.tsx`, `CheckoutPage.tsx` (weapon-first flow: tag-numpad selector
+  badge, theme + fullscreen toggles, fullscreen-only shutdown button with confirm
+  → `close()` so the `ExitRequested` backup snapshot runs), `OperatorPicker.tsx`, `CheckoutPage.tsx` (weapon-first flow: tag-numpad selector
   step with candidate-user radio boxes [assigned default, last-borrower alternative] and
   direct checkout, then a member/weapon form step with assign checkbox + transfer/replace
   confirm popups — no longer hosts the open-loans list, see `CheckinPage.tsx`),
