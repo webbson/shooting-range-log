@@ -22,6 +22,7 @@ import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
 import { useIsAdmin } from './useIsAdmin';
+import { useScanner } from './useScanner.ts';
 
 const NAV = [
   { to: '/checkout', key: 'nav_checkout' },
@@ -42,6 +43,7 @@ export function AppLayout() {
   const operator = useAppStore((s) => s.operator);
   const setOperator = useAppStore((s) => s.setOperator);
   const isAdmin = useIsAdmin();
+  useScanner();
   const fullscreen = useAppStore((s) => s.fullscreen);
   const setFullscreen = useAppStore((s) => s.setFullscreen);
   const [confirmShutdown, setConfirmShutdown] = useState(false);
