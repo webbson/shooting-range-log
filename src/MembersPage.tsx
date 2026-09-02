@@ -91,7 +91,7 @@ export function MembersPage() {
 
   // List view: active-only by default, with a search box + show-inactive toggle.
   const [search, setSearch] = useState('');
-  // One exclusive list view: active members (default) / inactive / guests (admin).
+  // One exclusive list view: active members (default) / inactive / guests.
   const [view, setView] = useState<'active' | 'inactive' | 'guests'>('active');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'name',
@@ -378,7 +378,7 @@ export function MembersPage() {
           data={[
             { value: 'active', label: t('filter_active') },
             { value: 'inactive', label: t('filter_inactive') },
-            ...(isAdmin ? [{ value: 'guests', label: t('filter_guests') }] : []),
+            { value: 'guests', label: t('filter_guests') },
           ]}
           value={view}
           onChange={(v) => setView((v as 'active' | 'inactive' | 'guests') ?? 'active')}
