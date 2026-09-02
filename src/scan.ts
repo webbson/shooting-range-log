@@ -47,6 +47,13 @@ function luhnValid(tenDigits: string): boolean {
 }
 
 function trySsn(raw: string): Scan | null {
+  // A licence barcode emits 10 or 12 digits, optionally hyphenated — nothing
+  // else. Without this guard the \D strip below would quietly turn any code
+  // carrying a Luhn-valid digit run ('v8001011231', a labelled parcel tag)
+  // into a person, and a mis-scan would create a junk guest holding a real
+  // personnummer.
+  if (/[^\d\s-]/.test(raw)) return null;
+
   const digits = raw.replace(/\D/g, '');
   if (digits.length !== 10 && digits.length !== 12) return null;
 

@@ -72,4 +72,31 @@ assertEqual<Scan>(
 assertEqual<Scan>(classify('vXYZ', 'v####'), { kind: 'unknown', raw: 'vXYZ' }, 'letters where digits expected is unknown');
 assertEqual<Scan>(classify('12345', 'v####'), { kind: 'unknown', raw: '12345' }, 'wrong digit length is unknown');
 
+// --- a Luhn-valid digit run inside a code carrying letters is NOT a person ---
+// '8001011231' on its own is a real personnummer; prefixed by anything
+// non-numeric it must not be mistaken for one, or a mis-scan creates a junk
+// guest record.
+assertEqual<Scan>(
+  classify('v8001011231', 'v####'),
+  { kind: 'unknown', raw: 'v8001011231' },
+  'weapon prefix + valid ssn digits is unknown, not ssn',
+);
+assertEqual<Scan>(
+  classify('x8001011231', 'v####'),
+  { kind: 'unknown', raw: 'x8001011231' },
+  'stray letter + valid ssn digits is unknown, not ssn',
+);
+assertEqual<Scan>(
+  classify('A0031303938474284', 'v####'),
+  { kind: 'unknown', raw: 'A0031303938474284' },
+  'parcel-label fragment is unknown',
+);
+// Hyphen and surrounding whitespace stay acceptable — that is how a licence
+// barcode and a hand-typed personnummer actually look.
+assertEqual<Scan>(
+  classify(' 800101-1231 ', 'v####'),
+  { kind: 'ssn', ssn: '19800101-1231' },
+  'hyphen and padding whitespace still accepted',
+);
+
 console.log(`scan.check.ts: ${count} assertions passed`);
