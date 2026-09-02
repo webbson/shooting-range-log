@@ -118,13 +118,22 @@ listener, attached only while `scannerEnabled` is true.
   `now - lastKeyTime > scannerMaxGapMs`, the buffer is reset before appending —
   human typing can never accumulate a burst.
 - On `Enter`, if the buffer holds at least 3 characters and the gap held
-  throughout, the buffer is classified. When the result is `weapon` or `ssn`,
-  the handler calls `preventDefault()` and `stopImmediatePropagation()` **on the
-  Enter event only**, then dispatches
-  `window.dispatchEvent(new CustomEvent('scan', { detail }))`. Otherwise the
-  Enter is left entirely alone.
-- An `unknown` result raises a "unrecognised code" toast from the dispatcher
-  itself and is not dispatched to pages.
+  throughout, the burst is a scan and the handler calls `preventDefault()` and
+  `stopImmediatePropagation()` **on the Enter event only** — regardless of how
+  the buffer then classifies. A buffer that fails either gate is human typing
+  and its Enter is left entirely alone.
+- The buffer is then classified. `weapon` and `ssn` dispatch
+  `window.dispatchEvent(new CustomEvent('scan', { detail }))`. An `unknown`
+  result raises a "unrecognised code" toast from the dispatcher itself and is
+  not dispatched to pages.
+
+An unrecognised burst's Enter is consumed rather than passed through, because
+passing it through reaches whatever holds focus. Two handlers in this app
+submit on Enter with no confirmation step: `IdNumpadModal` appends digit
+characters and calls `onFastCheckinSubmit`, which returns a weapon
+immediately, and the checkout selector's keydown handler fires a direct
+checkout. A junk barcode whose leaked digits happened to match an open loan's
+tag would otherwise check that weapon in silently.
 
 ### Why characters are allowed to leak
 
@@ -137,9 +146,12 @@ Instead, every input in this app is React-controlled, so each consumer overwrite
 its own state on receiving a scan (`setTag(...)`, `setSearch(...)`) and the
 leaked characters disappear. No DOM manipulation is involved.
 
-Blocking the Enter is also what makes a stray scan safe while an unrelated modal
-is open: digits leak into a field, but no submit fires. That is the whole of the
-"modals ignore scans unless they opt in" rule.
+Blocking the Enter of every qualified burst is also what makes a stray scan safe
+while an unrelated modal is open: digits leak into a field, but no submit fires.
+That is the whole of the "modals ignore scans unless they opt in" rule — and it
+only holds because the block is unconditional. Classifying first and blocking
+only a recognised code would leave exactly the unrecognised codes, the ones
+carrying arbitrary digits, free to submit whatever has focus.
 
 Consumers subscribe through `useScan(handler)`, a small hook wrapping
 `addEventListener('scan', …)`.

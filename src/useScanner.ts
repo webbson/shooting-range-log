@@ -43,16 +43,23 @@ export function useScanner(): void {
         buffer = '';
 
         const withinGap = now - lastKeyTime <= maxGapRef.current;
-        if (candidate.length < 3 || !withinGap) return; // too short / gap exceeded: let Enter through untouched
+        if (candidate.length < 3 || !withinGap) return; // human typing: let Enter through untouched
+
+        // A burst that clears the length and speed gates is a scan, so its
+        // Enter is ours no matter how the code classified. An unrecognised
+        // code must not fall through to whatever holds focus: the fast
+        // check-in numpad appends the burst's digits and submits on Enter,
+        // returning a weapon with no confirmation, and the checkout selector
+        // does the same for a direct checkout.
+        e.preventDefault();
+        e.stopImmediatePropagation();
 
         const scan = classify(candidate, weaponFormatRef.current);
-        if (scan.kind === 'weapon' || scan.kind === 'ssn') {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          window.dispatchEvent(new CustomEvent<Scan>('scan', { detail: scan }));
-        } else {
+        if (scan.kind === 'unknown') {
           notifications.show({ color: 'red', message: tRef.current('scan_unknown_code', { raw: scan.raw }) });
+          return;
         }
+        window.dispatchEvent(new CustomEvent<Scan>('scan', { detail: scan }));
         return;
       }
 
