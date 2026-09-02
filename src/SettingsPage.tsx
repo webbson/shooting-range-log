@@ -577,10 +577,20 @@ function ScannerMeasureModal({ opened, onClose }: { opened: boolean; onClose: ()
   const setScannerSuspended = useAppStore((s) => s.setScannerSuspended);
 
   const [result, setResult] = useState<{ raw: string; maxGap: number; total: number } | null>(null);
+  // The suggestion is built from the worst gap across every scan taken while
+  // this modal is open, not from the last one. A single burst under-reports:
+  // the first inter-character gap is the slowest and most variable part of a
+  // scan, so one sample can miss the case that actually breaks capture.
+  const [worstGap, setWorstGap] = useState(0);
+  const [samples, setSamples] = useState(0);
 
   // Reset the shown measurement each time the modal opens.
   useEffect(() => {
-    if (opened) setResult(null);
+    if (opened) {
+      setResult(null);
+      setWorstGap(0);
+      setSamples(0);
+    }
   }, [opened]);
 
   // Own capture-phase listener, independent of scannerEnabled — measuring is
@@ -603,6 +613,8 @@ function ScannerMeasureModal({ opened, onClose }: { opened: boolean; onClose: ()
           const maxGap = gaps.length > 0 ? Math.round(Math.max(...gaps)) : 0;
           const total = Math.round(buf[buf.length - 1].t - buf[0].t);
           setResult({ raw, maxGap, total });
+          setWorstGap((w) => Math.max(w, maxGap));
+          setSamples((n) => n + 1);
         }
         buf = [];
         return;
@@ -641,6 +653,9 @@ function ScannerMeasureModal({ opened, onClose }: { opened: boolean; onClose: ()
               <b>{t('scanner_measure_total')}:</b> {result.total} ms
             </Text>
             <Text size="sm">
+              <b>{t('scanner_measure_worst', { n: samples })}:</b> {worstGap} ms
+            </Text>
+            <Text size="sm">
               <b>{t('scanner_measure_result')}:</b>{' '}
               {scan.kind === 'weapon' && `${t('scan_kind_weapon')} — ${scan.candidates.join(', ')}`}
               {scan.kind === 'ssn' && `${t('scan_kind_ssn')} — ${scan.ssn}`}
@@ -650,7 +665,7 @@ function ScannerMeasureModal({ opened, onClose }: { opened: boolean; onClose: ()
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => setScannerMaxGapMs(Math.max(1, result.maxGap * 2))}
+                onClick={() => setScannerMaxGapMs(Math.max(1, worstGap * 2))}
               >
                 {t('scanner_measure_apply')}
               </Button>

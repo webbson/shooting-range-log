@@ -34,7 +34,13 @@ export function useScanner(): void {
     let lastKeyTime = 0;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const now = Date.now();
+      // performance.now(), not Date.now(): the Windows system clock is
+      // quantised to a ~15.6ms tick, so Date.now() reports a true 10ms gap as
+      // 0 or 16 depending on where the tick falls. That inflated gaps the
+      // Settings measure tool — which has always used performance.now() —
+      // never showed, resetting the buffer mid-burst and eating the leading
+      // characters of a scan. Both paths must time on the same monotonic clock.
+      const now = performance.now();
 
       if (e.key === 'Enter') {
         // An Enter always ends a burst, so the buffer is dropped either way —
