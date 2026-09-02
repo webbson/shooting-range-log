@@ -9,6 +9,7 @@ import {
   Text,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
+import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -17,6 +18,8 @@ import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
 import { MemberInfoModal } from './MemberInfoModal';
 import { WeaponInfoModal } from './WeaponInfoModal';
+import { useScan } from './useScanner';
+import { findWeaponByCandidates, findUserBySsn } from './scanMatch';
 
 export function LogsPage() {
   const { t } = useTranslation();
@@ -66,6 +69,26 @@ export function LogsPage() {
     value: String(o.uid),
     label: o.name,
   }));
+
+  // Scan routing: both kinds set the corresponding filter.
+  useScan((scan) => {
+    if (scan.kind === 'weapon') {
+      const match = findWeaponByCandidates(weapons.data ?? [], scan.candidates);
+      if (!match) {
+        notifications.show({ color: 'red', message: t('scan_weapon_unknown') });
+        return;
+      }
+      setWeaponUid(match.uid);
+      return;
+    }
+    if (scan.kind !== 'ssn') return;
+    const match = findUserBySsn(users.data ?? [], scan.ssn);
+    if (!match) {
+      notifications.show({ color: 'red', message: t('scan_member_not_found') });
+      return;
+    }
+    setUserUid(match.uid);
+  });
 
   const clearFilters = () => {
     setWeaponUid(null);

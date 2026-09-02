@@ -8,6 +8,7 @@ import {
   ActionIcon,
   Tooltip,
   ScrollArea,
+  Badge,
 } from '@mantine/core';
 import { IconCoins, IconArrowBackUp, IconTag } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -16,20 +17,25 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import {
   listUsers,
+  listWeapons,
   listOpenCheckouts,
   doCheckin,
   setPreferredWeapon,
   outstandingDebts,
+  type OpenCheckout,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
 import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
+import { useScan } from './useScanner';
+import { findWeaponByCandidates, findUserBySsn } from './scanMatch';
 import { DebtModal } from './DebtModal';
 import { IdNumpadModal } from './IdNumpadModal';
 import { MemberInfoModal } from './MemberInfoModal';
 import { WeaponInfoModal } from './WeaponInfoModal';
 import { TagModal } from './TagModal';
+import { CheckinConfirmModal, CheckinLoanPreview } from './CheckinConfirmModal';
 
 export function CheckinPage() {
   const { t } = useTranslation();
@@ -41,8 +47,11 @@ export function CheckinPage() {
   const [infoWeapon, setInfoWeapon] = useState<number | null>(null);
   const [fastCheckinOpen, setFastCheckinOpen] = useState(false);
   const [tagWeapon, setTagWeapon] = useState<number | null>(null);
+  const [scanLoan, setScanLoan] = useState<OpenCheckout | null>(null);
+  const [scanUserFilter, setScanUserFilter] = useState<{ uid: number; name: string } | null>(null);
 
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
+  const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const open = useQuery({
     queryKey: ['openCheckouts'],
     queryFn: listOpenCheckouts,
@@ -87,19 +96,7 @@ export function CheckinPage() {
   const matchCheckin = (id: string): React.ReactNode | null => {
     const o = (open.data ?? []).find((x) => x.weaponDisplayId === id);
     if (!o) return null;
-    return (
-      <Stack gap={2}>
-        <Text fw={600} c="teal">
-          {weaponLabel(o.weaponBrand, o.weaponModel, o.weaponCaliber, o.weaponDisplayId, o.weaponActive, t)}
-        </Text>
-        <Text size="sm">
-          {userLabel(o.userName, o.userActive, t, o.userIsGuest)}
-        </Text>
-        <Text size="xs" c="dimmed">
-          {t('label_checked_out_at')}: {fmtDateTime(o.checkedOutAt)}
-        </Text>
-      </Stack>
-    );
+    return <CheckinLoanPreview loan={o} />;
   };
 
   const onFastCheckinSubmit = (id: string) => {
@@ -109,6 +106,49 @@ export function CheckinPage() {
       setFastCheckinOpen(false);
     }
   };
+
+  // Scan-driven check-in never mutates directly (unlike onFastCheckinSubmit,
+  // whose numpad Enter IS the confirmation) — every scan resolves to a loan
+  // and opens CheckinConfirmModal, or a notification if it can't.
+  useScan((scan) => {
+    if (scan.kind === 'weapon') {
+      const w = findWeaponByCandidates(weapons.data ?? [], scan.candidates);
+      if (!w) {
+        notifications.show({ color: 'red', message: t('scan_weapon_unknown') });
+        return;
+      }
+      const loan = (open.data ?? []).find((o) => o.weaponUid === w.uid);
+      if (!loan) {
+        notifications.show({ color: 'red', message: t('scan_weapon_not_out') });
+        return;
+      }
+      setScanLoan(loan);
+      return;
+    }
+    if (scan.kind !== 'ssn') return; // 'unknown' never reaches useScan handlers
+
+    const u = findUserBySsn(users.data ?? [], scan.ssn);
+    if (!u) {
+      notifications.show({ color: 'red', message: t('scan_member_not_found') });
+      return;
+    }
+    const loans = (open.data ?? []).filter((o) => o.userUid === u.uid);
+    const name = userLabel(u.name, u.active, t, u.isGuest);
+    if (loans.length === 0) {
+      notifications.show({ color: 'red', message: t('scan_no_open_loans', { name }) });
+      return;
+    }
+    if (loans.length === 1) {
+      setScanUserFilter(null);
+      setScanLoan(loans[0]);
+      return;
+    }
+    setScanUserFilter({ uid: u.uid, name });
+  });
+
+  const visibleOpen = scanUserFilter
+    ? (open.data ?? []).filter((o) => o.userUid === scanUserFilter.uid)
+    : (open.data ?? []);
 
   return (
     <>
@@ -121,7 +161,20 @@ export function CheckinPage() {
             {t('fast_checkin')}
           </Button>
         </Group>
-        {(open.data?.length ?? 0) === 0 ? (
+        {scanUserFilter && (
+          // SSN scan matched several open loans — filter the list to them
+          // rather than picking; the badge names the active filter, the
+          // button is the one-tap way to clear it.
+          <Group>
+            <Badge size="lg" variant="light" color="teal">
+              {scanUserFilter.name}
+            </Badge>
+            <Button size="lg" variant="subtle" onClick={() => setScanUserFilter(null)}>
+              {t('clear_filters')}
+            </Button>
+          </Group>
+        )}
+        {visibleOpen.length === 0 ? (
           <Text c="dimmed">{t('no_open_checkouts')}</Text>
         ) : (
           // List scrolls in the remaining space; title + fast check-in stay put.
@@ -134,7 +187,7 @@ export function CheckinPage() {
                 gap: 'var(--mantine-spacing-sm)',
               }}
             >
-              {(open.data ?? []).map((o) => (
+              {visibleOpen.map((o) => (
                 <Card key={o.id} withBorder padding={0}>
                   <Group wrap="nowrap" gap={0} align="stretch">
                     {/* Full-height tag stripe — the number the operator reads
@@ -256,6 +309,17 @@ export function CheckinPage() {
           </ScrollArea>
         )}
       </Stack>
+
+      <CheckinConfirmModal
+        loan={scanLoan}
+        opened={scanLoan != null}
+        onClose={() => setScanLoan(null)}
+        loading={checkinMut.isPending}
+        onConfirm={() => {
+          if (scanLoan) checkinMut.mutate(scanLoan.id);
+          setScanLoan(null);
+        }}
+      />
 
       <DebtModal
         userUid={debtUser?.uid ?? null}
