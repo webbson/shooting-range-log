@@ -16,10 +16,12 @@ export function GuestModal({
   opened,
   onClose,
   onSelect,
+  initialSsn,
 }: {
   opened: boolean;
   onClose: () => void;
   onSelect: (uid: number) => void;
+  initialSsn?: string;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -31,7 +33,7 @@ export function GuestModal({
     if (opened) {
       setSearch('');
       setName('');
-      setSsn('');
+      setSsn(initialSsn ?? '');
     }
   }, [opened]);
 

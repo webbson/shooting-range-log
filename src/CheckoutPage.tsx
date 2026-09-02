@@ -20,6 +20,7 @@ import {
   listWeapons,
   evaluateCheckout,
   doCheckout,
+  doCheckin,
   lastShotDates,
   outstandingDebts,
   lastWeaponUsers,
@@ -27,6 +28,7 @@ import {
   activeTagKeys,
   type Weapon,
   type User,
+  type OpenCheckout,
 } from './api';
 import { useAppStore } from './store';
 import { errorMessage } from './errors';
@@ -36,6 +38,9 @@ import { WeaponPickerModal } from './WeaponPickerModal';
 import { MemberPickerModal } from './MemberPickerModal';
 import { GuestModal } from './GuestModal';
 import { Numpad } from './Numpad';
+import { useScan } from './useScanner';
+import { findWeaponByCandidates, findUserBySsn } from './scanMatch';
+import { CheckinConfirmModal } from './CheckinConfirmModal';
 
 export function CheckoutPage() {
   const { t } = useTranslation();
@@ -54,6 +59,11 @@ export function CheckoutPage() {
   const [guestOpen, setGuestOpen] = useState(false);
   // Selector radio pick between the weapon's candidate users (uid); null = default.
   const [chosenUserUid, setChosenUserUid] = useState<number | null>(null);
+  // Scan-driven check-in: a scanned weapon that's currently out opens this
+  // confirm modal instead of touching the flow directly.
+  const [scanCheckin, setScanCheckin] = useState<{ loan: OpenCheckout; weapon: Weapon } | null>(null);
+  // SSN scan with no user match: prefills GuestModal's SSN field.
+  const [scanGuestSsn, setScanGuestSsn] = useState<string | undefined>(undefined);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -187,6 +197,89 @@ export function CheckoutPage() {
     onError,
   });
 
+  // Scan-driven check-in for a weapon that's already out. vars carry the
+  // weapon and the user selected at confirm-click time, so the success
+  // handler never has to re-read (possibly stale) component state.
+  const scanCheckinMut = useMutation({
+    mutationFn: (vars: { loan: OpenCheckout; weapon: Weapon; uid: number | null }) =>
+      doCheckin(vars.loan.id, operator!.uid),
+    onSuccess: (_data, vars) => {
+      notifications.show({ message: t('returned_ok') });
+      qc.invalidateQueries({ queryKey: ['openCheckouts'] });
+      qc.invalidateQueries({ queryKey: ['eval'] });
+      qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
+      qc.invalidateQueries({ queryKey: ['lastShotDates'] });
+      // The weapon stays selected as now-available for the checkout in
+      // progress — jump straight to the form step so a following scan lands
+      // on the (leak-immune) form step rather than a re-polluted tag.
+      enterForm(vars.weapon, vars.uid);
+      setScanCheckin(null);
+    },
+    onError,
+  });
+
+  // Scanner routing. See docs/superpowers/specs/2026-09-02-scanner-support-design.md
+  // section "4. Per-page behaviour → CheckoutPage".
+  useScan((scan) => {
+    if (scan.kind === 'weapon') {
+      const w = findWeaponByCandidates(weapons.data ?? [], scan.candidates);
+      if (!w || !w.active) {
+        // Nothing matched, or the match is retired — a sticker left on a
+        // retired weapon must not select anything. Clear any leaked digits
+        // rather than leaving numpad garbage (or a coincidental match) behind.
+        setTag('');
+        notifications.show({ color: 'red', message: t('scan_weapon_unknown') });
+        return;
+      }
+      const loan = openMap.get(w.uid);
+      if (loan) {
+        // Show the same matched+held banner numpad entry would, so a
+        // cancelled confirm leaves the selector in a sensible state.
+        setTag(w.displayId ?? '');
+        setScanCheckin({ loan, weapon: w });
+        return;
+      }
+      if (step === 'selector') {
+        // Mirrors numpad entry: existing selector logic (candidate radio
+        // boxes, direct checkout) takes it from here.
+        setTag(w.displayId ?? '');
+      } else {
+        setAssign(false);
+        setWeaponUid(w.uid);
+      }
+      return;
+    }
+    if (scan.kind !== 'ssn') return; // 'unknown' never reaches useScan handlers
+
+    // The selector step's bubble-phase keydown handler has already appended
+    // the burst's leaked digits to tag on every keystroke of this very scan
+    // — by the terminating Enter, `tag` (and so `matched`) reflects that
+    // pollution, not whatever was matched before the scan started. So there
+    // is nothing worth preserving out of `tag` here; every branch clears it
+    // and moves on via enterForm(undefined, ...).
+    setTag('');
+    const u = findUserBySsn(users.data ?? [], scan.ssn);
+    if (!u) {
+      if (step === 'selector') enterForm(undefined, null);
+      setScanGuestSsn(scan.ssn);
+      setGuestOpen(true);
+      return;
+    }
+    if (!u.active) {
+      // The SSN belongs to a retired member — upsert_guest would reject it
+      // with a unique-SSN error, so no "create guest" offer here.
+      notifications.show({ color: 'red', message: t('scan_member_inactive', { name: u.name }) });
+      if (step === 'selector') enterForm(undefined, null);
+      return;
+    }
+    if (step === 'selector') enterForm(undefined, null);
+    // onMemberChange's own guard preserves a weapon already selected via
+    // weaponUid (form step) and autofills only when none is set — the
+    // right behavior whether we just entered the form step above or were
+    // already on it (e.g. after a scan-driven check-in put a weapon there).
+    onMemberChange(u.uid);
+  });
+
   // isPending guard: the button shows loading, but a held Enter key would
   // otherwise fire a second mutate before the first lands.
   const canDirectCheckout =
@@ -244,6 +337,7 @@ export function CheckoutPage() {
 
   if (step === 'selector') {
     return (
+      <>
       <Stack
         align="center"
         justify="center"
@@ -362,6 +456,17 @@ export function CheckoutPage() {
           </Stack>
         </Group>
       </Stack>
+      <CheckinConfirmModal
+        loan={scanCheckin?.loan ?? null}
+        opened={scanCheckin != null}
+        onClose={() => setScanCheckin(null)}
+        loading={scanCheckinMut.isPending}
+        onConfirm={() =>
+          scanCheckin &&
+          scanCheckinMut.mutate({ loan: scanCheckin.loan, weapon: scanCheckin.weapon, uid: userUid })
+        }
+      />
+      </>
     );
   }
 
@@ -566,8 +671,23 @@ export function CheckoutPage() {
 
       <GuestModal
         opened={guestOpen}
-        onClose={() => setGuestOpen(false)}
+        onClose={() => {
+          setGuestOpen(false);
+          setScanGuestSsn(undefined);
+        }}
         onSelect={(uid) => onMemberChange(uid)}
+        initialSsn={scanGuestSsn}
+      />
+
+      <CheckinConfirmModal
+        loan={scanCheckin?.loan ?? null}
+        opened={scanCheckin != null}
+        onClose={() => setScanCheckin(null)}
+        loading={scanCheckinMut.isPending}
+        onConfirm={() =>
+          scanCheckin &&
+          scanCheckinMut.mutate({ loan: scanCheckin.loan, weapon: scanCheckin.weapon, uid: userUid })
+        }
       />
 
       <WeaponPickerModal
