@@ -1,6 +1,7 @@
 // Runnable self-check for scan.ts. No test framework, no node imports —
 // run directly with `node src/scan.check.ts` (Node 24 strips TS natively).
 import { classify, isValidWeaponFormat, type Scan } from './scan.ts';
+import { findUserBySsn, findWeaponByCandidates, ssnDigits } from './scanMatch.ts';
 
 let count = 0;
 
@@ -97,6 +98,47 @@ assertEqual<Scan>(
   classify(' 800101-1231 ', 'v####'),
   { kind: 'ssn', ssn: '19800101-1231' },
   'hyphen and padding whitespace still accepted',
+);
+
+// --- scanMatch: resolving a scan against loaded rows ---
+// Member SSNs are stored in whatever shape they were entered, so matching is
+// on the last 10 digits, never on the string.
+assert(ssnDigits('19800101-1231') === '8001011231', '12-digit ssn reduces to 10');
+assert(ssnDigits('800101-1231') === '8001011231', '10-digit hyphenated ssn reduces to 10');
+assert(ssnDigits(null) === '', 'null ssn is empty');
+
+const users = [
+  { name: 'retired', ssn: '800101-1231', active: false },
+  { name: 'guest', ssn: '19800101-1231', active: true },
+  { name: 'other', ssn: '19701111-1111', active: true },
+];
+assertEqual(
+  findUserBySsn(users, '19800101-1231')?.name,
+  'guest',
+  'active row wins over a retired row holding the same ssn',
+);
+assertEqual(
+  findUserBySsn([users[0]], '800101-1231')?.name,
+  'retired',
+  'a retired member is still found when no active row shares the ssn',
+);
+assertEqual(findUserBySsn(users, '19990101-0000')?.name, undefined, 'unknown ssn matches nothing');
+
+const weapons = [
+  { displayId: '1', active: true },
+  { displayId: '0001', active: false },
+  { displayId: null, active: true },
+];
+assertEqual(
+  findWeaponByCandidates(weapons, ['0001', '1'])?.displayId,
+  '1',
+  'active weapon wins over a retired weapon holding a padded form of the tag',
+);
+assertEqual(findWeaponByCandidates(weapons, ['99'])?.displayId, undefined, 'unknown tag matches nothing');
+assertEqual(
+  findWeaponByCandidates(weapons, [])?.displayId,
+  undefined,
+  'a null display_id never matches an empty candidate list',
 );
 
 console.log(`scan.check.ts: ${count} assertions passed`);
