@@ -37,10 +37,16 @@ textarea {
  *
  * So paint a fixed-alpha wash of the text colour instead: it contrasts in both
  * themes, stays visible at ANY surface opacity, and still lets the image
- * through. Mantine's own selector is wrapped in `:where()` (zero specificity),
- * so one class + element + attribute wins comfortably. The sticky header is
+ * through.
+ *
+ * Match Mantine's own two selectors exactly. `data-striped` is present on
+ * EVERY row, carrying "odd" or "even"; it is the `:nth-of-type()` that decides
+ * which rows are actually striped. Selecting on the attribute alone paints
+ * every row and the banding disappears again. Mantine wraps its rules in
+ * `:where()` (zero specificity), so these win comfortably. The sticky header is
  * deliberately left solid: a translucent one shows rows scrolling through it,
  * which reads as a rendering bug rather than a design. */
-.mantine-AppShell-main tr[data-striped] {
+.mantine-AppShell-main tr[data-striped='odd']:nth-of-type(odd),
+.mantine-AppShell-main tr[data-striped='even']:nth-of-type(even) {
   background-color: color-mix(in srgb, var(--mantine-color-text) 7%, transparent);
 }
