@@ -127,9 +127,9 @@ export function LogsPage() {
   ));
 
   return (
-    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // Fill the shell (see --page-body-height in global.css) so the
     // table grows into the free space instead of leaving a void under it.
-    <Stack style={{ height: 'calc(100vh - 144px)' }}>
+    <Stack style={{ height: 'var(--page-body-height)' }}>
       <Group align="flex-end" wrap="wrap">
         <Select
           label={t('field_weapon')}

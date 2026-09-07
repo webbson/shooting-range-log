@@ -341,7 +341,7 @@ export function CheckoutPage() {
       <Stack
         align="center"
         justify="center"
-        style={{ height: 'calc(100vh - 144px)' }}
+        style={{ height: 'var(--page-body-height)' }}
       >
         <Group align="stretch" gap="xl">
           <Stack w={360} gap="md">
@@ -471,9 +471,9 @@ export function CheckoutPage() {
   }
 
   return (
-    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // Fill the shell (see --page-body-height in global.css) so the
     // cards grow into the free space instead of leaving a void under the button.
-    <Stack gap="lg" style={{ height: 'calc(100vh - 144px)' }}>
+    <Stack gap="lg" style={{ height: 'var(--page-body-height)' }}>
       {/* 2×2 grid: label row + card row. Grid rows keep the two columns
           aligned no matter how tall the header content (Guest button) or card
           content gets — flex-based equalization drifted here before. */}

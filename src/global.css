@@ -1,3 +1,13 @@
+/* Usable height of a page body inside the AppShell: 100vh minus the 64px
+ * header and the 2×16px main padding. Pages fill this so their lists grow into
+ * the free space instead of leaving a void underneath.
+ * Single source of truth on purpose — this was previously a `calc(100vh -
+ * 144px)` literal repeated across six pages, which silently went 48px wrong the
+ * moment the footer bar was removed. */
+:root {
+  --page-body-height: calc(100vh - 96px);
+}
+
 /* Kiosk-style touch UI: no text selection anywhere except text entry. */
 * {
   -webkit-user-select: none;

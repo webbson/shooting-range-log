@@ -24,6 +24,8 @@ const resources = {
       db_checking: 'Kontrollerar…',
       db_error: 'Databasfel',
       page_todo: 'Byggs i ett senare steg.',
+      menu: 'Meny',
+      status_backup_overdue: 'Ingen säkerhetskopia på över 2 timmar',
 
       // Operator picker
       pick_operator: 'Välj operatör',
@@ -199,6 +201,9 @@ const resources = {
       // unmatched rows are skipped and reported, never created)
       nav_settings: 'Inställningar',
       settings_title: 'Inställningar',
+      settings_tab_import: 'Synk / Import',
+      settings_tab_backup: 'Säkerhetskopiering',
+      settings_tab_looks: 'Utseende',
       import_title: 'Synka lån och vapen',
       import_desc: 'Synkronisera lån och vapen mot ett Excel-ark. Medlemmar skapas eller ändras inte.',
       import_pick_file: 'Välj Excel-fil',
@@ -428,6 +433,8 @@ const resources = {
       db_checking: 'Checking…',
       db_error: 'Database error',
       page_todo: 'Built in a later milestone.',
+      menu: 'Menu',
+      status_backup_overdue: 'No backup in over 2 hours',
 
       // Operator picker
       pick_operator: 'Select operator',
@@ -602,6 +609,9 @@ const resources = {
       // only, unmatched rows are skipped and reported, never created)
       nav_settings: 'Settings',
       settings_title: 'Settings',
+      settings_tab_import: 'Sync / Import',
+      settings_tab_backup: 'Backup',
+      settings_tab_looks: 'Looks',
       import_title: 'Sync loans & weapons',
       import_desc: 'Sync loans and weapons against an Excel sheet. Members are never created or changed.',
       import_pick_file: 'Choose Excel file',

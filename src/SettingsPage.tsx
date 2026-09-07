@@ -22,6 +22,7 @@ import {
   SimpleGrid,
   Slider,
   SegmentedControl,
+  Tabs,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -394,261 +395,622 @@ export function SettingsPage() {
     <Stack>
       <Title order={2}>{t('settings_title')}</Title>
 
-      {/* ── Excel import ── */}
-      <Card withBorder>
-        <Stack gap="md">
-          <Title order={4}>{t('import_title')}</Title>
-          <Text size="sm" c="dimmed">{t('import_desc')}</Text>
+      <Tabs defaultValue="import" keepMounted={false}>
+        <Tabs.List grow>
+          <Tabs.Tab value="import" fz="lg" py="md">{t('settings_tab_import')}</Tabs.Tab>
+          <Tabs.Tab value="backup" fz="lg" py="md">{t('settings_tab_backup')}</Tabs.Tab>
+          <Tabs.Tab value="scanner" fz="lg" py="md">{t('scanner')}</Tabs.Tab>
+          <Tabs.Tab value="looks" fz="lg" py="md">{t('settings_tab_looks')}</Tabs.Tab>
+        </Tabs.List>
 
-          {/* File picker */}
-          <Group align="center" gap="sm">
-            <Button variant="default" size="sm" onClick={pickFile}>
-              {t('import_pick_file')}
-            </Button>
-            <Text size="sm" c={filePath ? undefined : 'dimmed'} truncate maw={500}>
-              {filePath ?? t('import_no_file')}
-            </Text>
-          </Group>
+        <Tabs.Panel value="import" pt="md">
+          <Stack>
+          {/* ── Excel import ── */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Title order={4}>{t('import_title')}</Title>
+              <Text size="sm" c="dimmed">{t('import_desc')}</Text>
 
-          {/* Sheet selector — visible once a file is loaded */}
-          {filePath && (
-            <Group align="flex-end" gap="sm">
-              {sheetsLoading ? (
-                <Loader size="sm" />
-              ) : (
-                <Select
-                  label={t('import_select_sheet')}
-                  data={sheets ?? []}
-                  value={selectedSheet}
-                  onChange={(v) => setSelectedSheet(v)}
-                  w={240}
-                />
+              {/* File picker */}
+              <Group align="center" gap="sm">
+                <Button variant="default" size="sm" onClick={pickFile}>
+                  {t('import_pick_file')}
+                </Button>
+                <Text size="sm" c={filePath ? undefined : 'dimmed'} truncate maw={500}>
+                  {filePath ?? t('import_no_file')}
+                </Text>
+              </Group>
+
+              {/* Sheet selector — visible once a file is loaded */}
+              {filePath && (
+                <Group align="flex-end" gap="sm">
+                  {sheetsLoading ? (
+                    <Loader size="sm" />
+                  ) : (
+                    <Select
+                      label={t('import_select_sheet')}
+                      data={sheets ?? []}
+                      value={selectedSheet}
+                      onChange={(v) => setSelectedSheet(v)}
+                      w={240}
+                    />
+                  )}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    loading={previewMut.isPending}
+                    disabled={!canPreview}
+                    onClick={() => previewMut.mutate()}
+                  >
+                    {t('import_preview_btn')}
+                  </Button>
+                </Group>
               )}
-              <Button
-                variant="default"
-                size="sm"
-                loading={previewMut.isPending}
-                disabled={!canPreview}
-                onClick={() => previewMut.mutate()}
-              >
-                {t('import_preview_btn')}
-              </Button>
-            </Group>
-          )}
 
-          {/* Preview results */}
-          {preview && (
-            <>
-              <Divider label={t('import_preview_title')} labelPosition="left" />
-              <Stack gap="xs">
-                <PreviewRow label={t('import_members_match')} value={preview.membersToMatch} color="gray" />
-                <PreviewRow label={t('import_unmatched_count')} value={preview.membersUnmatched} color="orange" />
-                <PreviewRow label={t('import_weapons_create')} value={preview.weaponsToCreate} color="blue" />
-                <PreviewRow label={t('import_weapons_existing')} value={preview.weaponsExisting} color="gray" />
-                <PreviewRow label={t('import_loans_create')} value={preview.loansToCreate} color="blue" />
-                <PreviewRow label={t('import_loans_skip')} value={preview.loansSkippedDuplicate} color="gray" />
-              </Stack>
+              {/* Preview results */}
+              {preview && (
+                <>
+                  <Divider label={t('import_preview_title')} labelPosition="left" />
+                  <Stack gap="xs">
+                    <PreviewRow label={t('import_members_match')} value={preview.membersToMatch} color="gray" />
+                    <PreviewRow label={t('import_unmatched_count')} value={preview.membersUnmatched} color="orange" />
+                    <PreviewRow label={t('import_weapons_create')} value={preview.weaponsToCreate} color="blue" />
+                    <PreviewRow label={t('import_weapons_existing')} value={preview.weaponsExisting} color="gray" />
+                    <PreviewRow label={t('import_loans_create')} value={preview.loansToCreate} color="blue" />
+                    <PreviewRow label={t('import_loans_skip')} value={preview.loansSkippedDuplicate} color="gray" />
+                  </Stack>
 
-              {(() => {
-                const unmatched = preview.warnings.filter((w) => w.code === 'warn_member_unmatched');
-                if (unmatched.length === 0) return null;
-                return (
-                  <Box>
-                    <Group justify="space-between" mb={4}>
-                      <Text size="sm" fw={500}>
-                        {t('import_unmatched_count')} ({unmatched.length})
-                      </Text>
-                      <Button
-                        variant="subtle"
-                        size="xs"
-                        loading={exportUnmatchedMut.isPending}
-                        onClick={() => exportUnmatchedMut.mutate()}
-                      >
-                        {t('import_export_unmatched')}
-                      </Button>
-                    </Group>
-                    <Box
-                      mah={180}
-                      style={{
-                        overflowY: 'auto',
-                        border: '1px solid var(--mantine-color-orange-3)',
-                        borderRadius: 'var(--mantine-radius-sm)',
-                        padding: '6px 10px',
-                      }}
-                    >
-                      {unmatched.map((w, i) => (
-                        <Text key={i} size="xs" c="orange">
-                          {t('import_unmatched_row', {
-                            name: w.name ?? '',
-                            ssn: w.ssn ?? '–',
-                            weapon: w.weapon || '–',
-                          })}
+                  {(() => {
+                    const unmatched = preview.warnings.filter((w) => w.code === 'warn_member_unmatched');
+                    if (unmatched.length === 0) return null;
+                    return (
+                      <Box>
+                        <Group justify="space-between" mb={4}>
+                          <Text size="sm" fw={500}>
+                            {t('import_unmatched_count')} ({unmatched.length})
+                          </Text>
+                          <Button
+                            variant="subtle"
+                            size="xs"
+                            loading={exportUnmatchedMut.isPending}
+                            onClick={() => exportUnmatchedMut.mutate()}
+                          >
+                            {t('import_export_unmatched')}
+                          </Button>
+                        </Group>
+                        <Box
+                          mah={180}
+                          style={{
+                            overflowY: 'auto',
+                            border: '1px solid var(--mantine-color-orange-3)',
+                            borderRadius: 'var(--mantine-radius-sm)',
+                            padding: '6px 10px',
+                          }}
+                        >
+                          {unmatched.map((w, i) => (
+                            <Text key={i} size="xs" c="orange">
+                              {t('import_unmatched_row', {
+                                name: w.name ?? '',
+                                ssn: w.ssn ?? '–',
+                                weapon: w.weapon || '–',
+                              })}
+                            </Text>
+                          ))}
+                        </Box>
+                      </Box>
+                    );
+                  })()}
+
+                  {preview.openLoans > 0 && (
+                    <Alert color="orange" variant="light">
+                      <Stack gap="xs">
+                        <Text size="sm">
+                          {t('import_open_loans_warning', { count: preview.openLoans })}
                         </Text>
-                      ))}
+                        <Checkbox
+                          label={t('import_mark_open_returned')}
+                          checked={markOpenReturned}
+                          onChange={(e) => setMarkOpenReturned(e.currentTarget.checked)}
+                        />
+                      </Stack>
+                    </Alert>
+                  )}
+
+                  {(() => {
+                    const generalWarnings = preview.warnings.filter((w) => w.code !== 'warn_member_unmatched');
+                    if (generalWarnings.length === 0) return null;
+                    return (
+                      <Box>
+                        <Text size="sm" fw={500} mb={4}>
+                          {t('import_warnings')} ({generalWarnings.length})
+                        </Text>
+                        <Box
+                          mah={180}
+                          style={{
+                            overflowY: 'auto',
+                            border: '1px solid var(--mantine-color-orange-3)',
+                            borderRadius: 'var(--mantine-radius-sm)',
+                            padding: '6px 10px',
+                          }}
+                        >
+                          {generalWarnings.map((w, i) => (
+                            <Text key={i} size="xs" c="orange">
+                              {w.message}
+                            </Text>
+                          ))}
+                        </Box>
+                      </Box>
+                    );
+                  })()}
+
+                  <Group justify="flex-end">
+                    <Button
+                      color="blue"
+                      loading={commitMut.isPending}
+                      disabled={!canCommit}
+                      onClick={() => commitMut.mutate()}
+                    >
+                      {t('import_run_btn')}
+                    </Button>
+                  </Group>
+                </>
+              )}
+            </Stack>
+          </Card>
+
+          {/* ── Member import (club roster, workstream D) ── */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Title order={4}>{t('member_import_title')}</Title>
+
+              <Group align="center" gap="sm">
+                <Button variant="default" size="sm" onClick={pickMemberFile}>
+                  {t('import_pick_file')}
+                </Button>
+                <Text size="sm" c={memberFilePath ? undefined : 'dimmed'} truncate maw={500}>
+                  {memberFilePath ?? t('import_no_file')}
+                </Text>
+              </Group>
+
+              {memberFilePath && (
+                <Group>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    loading={memberPreviewMut.isPending}
+                    disabled={!canMemberPreview}
+                    onClick={() => memberPreviewMut.mutate()}
+                  >
+                    {t('import_preview_btn')}
+                  </Button>
+                </Group>
+              )}
+
+              {memberPreview && (
+                <>
+                  <Divider label={t('import_preview_title')} labelPosition="left" />
+                  <Stack gap="xs">
+                    <PreviewRow
+                      label={t('import_members_create')}
+                      value={memberPreview.created.length}
+                      color="blue"
+                      names={memberPreview.created}
+                    />
+                    <PreviewRow
+                      label={t('member_import_updated')}
+                      value={memberPreview.updated.length}
+                      color="gray"
+                      names={memberPreview.updated}
+                    />
+                    <PreviewRow
+                      label={t('member_import_admin_added')}
+                      value={memberPreview.adminAdded.length}
+                      color="blue"
+                      names={memberPreview.adminAdded}
+                    />
+                    <PreviewRow
+                      label={t('member_import_admin_removed')}
+                      value={memberPreview.adminRemoved.length}
+                      color="orange"
+                      names={memberPreview.adminRemoved}
+                    />
+                    <PreviewRow
+                      label={t('member_import_deactivated')}
+                      value={memberPreview.deactivated.length}
+                      color="orange"
+                      names={memberPreview.deactivated}
+                    />
+                  </Stack>
+
+                  {memberPreview.warnings.length > 0 && (
+                    <Box>
+                      <Text size="sm" fw={500} mb={4}>
+                        {t('import_warnings')} ({memberPreview.warnings.length})
+                      </Text>
+                      <Box
+                        mah={180}
+                        style={{
+                          overflowY: 'auto',
+                          border: '1px solid var(--mantine-color-orange-3)',
+                          borderRadius: 'var(--mantine-radius-sm)',
+                          padding: '6px 10px',
+                        }}
+                      >
+                        {memberPreview.warnings.map((w, i) => (
+                          <Text key={i} size="xs" c="orange">
+                            {w.message}
+                          </Text>
+                        ))}
+                      </Box>
                     </Box>
-                  </Box>
-                );
+                  )}
+
+                  <Group justify="flex-end">
+                    <Button
+                      color="blue"
+                      loading={memberCommitMut.isPending}
+                      disabled={!canMemberCommit}
+                      onClick={() => setConfirmMemberCommit(true)}
+                    >
+                      {t('import_run_btn')}
+                    </Button>
+                  </Group>
+                </>
+              )}
+            </Stack>
+          </Card>
+          </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="backup" pt="md">
+          {/* ── Backup settings (M6) ── */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Title order={4}>{t('nav_backup')}</Title>
+
+              {/* S3 configuration */}
+              <Divider label={t('backup_s3_title')} labelPosition="left" />
+              <Text size="sm" c="dimmed">{t('backup_s3_desc')}</Text>
+              <TextInput
+                label={t('backup_s3_endpoint')}
+                placeholder="https://<account-id>.r2.cloudflarestorage.com"
+                value={form.s3Endpoint ?? ''}
+                onChange={(e) => setForm({ ...form, s3Endpoint: e.target.value || null })}
+              />
+              <Group grow>
+                <TextInput
+                  label={t('backup_s3_region')}
+                  placeholder="auto"
+                  description={t('backup_s3_region_hint')}
+                  value={form.s3Region ?? ''}
+                  onChange={(e) => setForm({ ...form, s3Region: e.target.value || null })}
+                />
+                <TextInput
+                  label={t('backup_s3_bucket')}
+                  value={form.s3Bucket ?? ''}
+                  onChange={(e) => setForm({ ...form, s3Bucket: e.target.value || null })}
+                />
+              </Group>
+              <TextInput
+                label={t('backup_s3_prefix')}
+                placeholder="srl-backups"
+                value={form.s3Prefix ?? ''}
+                onChange={(e) => setForm({ ...form, s3Prefix: e.target.value || null })}
+              />
+              <Group grow>
+                <TextInput
+                  label={t('backup_s3_access_key_id')}
+                  value={form.s3AccessKeyId ?? ''}
+                  onChange={(e) => setForm({ ...form, s3AccessKeyId: e.target.value || null })}
+                />
+                <PasswordInput
+                  label={t('backup_s3_secret_key')}
+                  value={form.s3SecretAccessKey ?? ''}
+                  onChange={(e) => setForm({ ...form, s3SecretAccessKey: e.target.value || null })}
+                />
+              </Group>
+
+              <Group justify="flex-end">
+                <Button
+                  variant="default"
+                  size="sm"
+                  loading={testConnMut.isPending}
+                  onClick={() => testConnMut.mutate()}
+                >
+                  {t('backup_test_connection')}
+                </Button>
+              </Group>
+
+              {/* Encryption passphrase */}
+              <Divider label={t('backup_passphrase_title')} labelPosition="left" />
+              <Alert color="orange" variant="light">
+                <Text size="sm">{t('backup_passphrase_warning')}</Text>
+              </Alert>
+              <PasswordInput
+                label={t('backup_passphrase')}
+                value={form.backupPassphrase ?? ''}
+                onChange={(e) => setForm({ ...form, backupPassphrase: e.target.value || null })}
+              />
+
+              <Group justify="flex-end">
+                <Button
+                  color="blue"
+                  loading={settingsMut.isPending}
+                  onClick={() => settingsMut.mutate(form)}
+                >
+                  {t('backup_save_btn')}
+                </Button>
+              </Group>
+
+              {/* Backup operations */}
+              <Divider label={t('backup_list_title')} labelPosition="left" />
+              <Group>
+                <Button
+                  variant="default"
+                  size="sm"
+                  loading={backupNowMut.isPending}
+                  onClick={() => backupNowMut.mutate()}
+                >
+                  {t('backup_now_btn')}
+                </Button>
+                <Button variant="subtle" size="sm" onClick={() => refetchBackups()}>
+                  ↺
+                </Button>
+              </Group>
+
+              {/* Remote-newer alert */}
+              {(() => {
+                const newest_local = backupList.find((b) => b.source === 'local');
+                const newest_remote = backupList.find((b) => b.source === 'remote');
+                if (
+                  newest_remote &&
+                  (!newest_local || newest_remote.timestamp > newest_local.timestamp)
+                ) {
+                  return (
+                    <Alert color="blue" variant="light">
+                      <Text size="sm">{t('backup_remote_newer')}</Text>
+                    </Alert>
+                  );
+                }
+                return null;
               })()}
 
-              {preview.openLoans > 0 && (
-                <Alert color="orange" variant="light">
+              {/* Restore confirmation inline */}
+              {confirmingRestore && (
+                <Alert color="red" variant="light">
                   <Stack gap="xs">
-                    <Text size="sm">
-                      {t('import_open_loans_warning', { count: preview.openLoans })}
-                    </Text>
-                    <Checkbox
-                      label={t('import_mark_open_returned')}
-                      checked={markOpenReturned}
-                      onChange={(e) => setMarkOpenReturned(e.currentTarget.checked)}
-                    />
+                    <Text size="sm" fw={500}>{t('backup_restore_confirm')}</Text>
+                    <Text size="sm">{t('backup_restore_confirm_detail')}</Text>
+                    <Text size="xs" c="dimmed">{confirmingRestore.filename}</Text>
+                    <Group>
+                      <Button
+                        color="red"
+                        size="xs"
+                        loading={restoreMut.isPending}
+                        onClick={() =>
+                          restoreMut.mutate({
+                            filename: confirmingRestore.filename,
+                            source: confirmingRestore.source,
+                          })
+                        }
+                      >
+                        {t('backup_restore_btn')}
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="xs"
+                        onClick={() => setConfirmingRestore(null)}
+                      >
+                        {t('cancel')}
+                      </Button>
+                    </Group>
                   </Stack>
                 </Alert>
               )}
 
-              {(() => {
-                const generalWarnings = preview.warnings.filter((w) => w.code !== 'warn_member_unmatched');
-                if (generalWarnings.length === 0) return null;
-                return (
-                  <Box>
-                    <Text size="sm" fw={500} mb={4}>
-                      {t('import_warnings')} ({generalWarnings.length})
-                    </Text>
-                    <Box
-                      mah={180}
-                      style={{
-                        overflowY: 'auto',
-                        border: '1px solid var(--mantine-color-orange-3)',
-                        borderRadius: 'var(--mantine-radius-sm)',
-                        padding: '6px 10px',
-                      }}
-                    >
-                      {generalWarnings.map((w, i) => (
-                        <Text key={i} size="xs" c="orange">
-                          {w.message}
-                        </Text>
-                      ))}
-                    </Box>
-                  </Box>
-                );
-              })()}
-
-              <Group justify="flex-end">
-                <Button
-                  color="blue"
-                  loading={commitMut.isPending}
-                  disabled={!canCommit}
-                  onClick={() => commitMut.mutate()}
-                >
-                  {t('import_run_btn')}
-                </Button>
-              </Group>
-            </>
-          )}
-        </Stack>
-      </Card>
-
-      {/* ── Member import (club roster, workstream D) ── */}
-      <Card withBorder>
-        <Stack gap="md">
-          <Title order={4}>{t('member_import_title')}</Title>
-
-          <Group align="center" gap="sm">
-            <Button variant="default" size="sm" onClick={pickMemberFile}>
-              {t('import_pick_file')}
-            </Button>
-            <Text size="sm" c={memberFilePath ? undefined : 'dimmed'} truncate maw={500}>
-              {memberFilePath ?? t('import_no_file')}
-            </Text>
-          </Group>
-
-          {memberFilePath && (
-            <Group>
-              <Button
-                variant="default"
-                size="sm"
-                loading={memberPreviewMut.isPending}
-                disabled={!canMemberPreview}
-                onClick={() => memberPreviewMut.mutate()}
-              >
-                {t('import_preview_btn')}
-              </Button>
-            </Group>
-          )}
-
-          {memberPreview && (
-            <>
-              <Divider label={t('import_preview_title')} labelPosition="left" />
-              <Stack gap="xs">
-                <PreviewRow
-                  label={t('import_members_create')}
-                  value={memberPreview.created.length}
-                  color="blue"
-                  names={memberPreview.created}
-                />
-                <PreviewRow
-                  label={t('member_import_updated')}
-                  value={memberPreview.updated.length}
-                  color="gray"
-                  names={memberPreview.updated}
-                />
-                <PreviewRow
-                  label={t('member_import_admin_added')}
-                  value={memberPreview.adminAdded.length}
-                  color="blue"
-                  names={memberPreview.adminAdded}
-                />
-                <PreviewRow
-                  label={t('member_import_admin_removed')}
-                  value={memberPreview.adminRemoved.length}
-                  color="orange"
-                  names={memberPreview.adminRemoved}
-                />
-                <PreviewRow
-                  label={t('member_import_deactivated')}
-                  value={memberPreview.deactivated.length}
-                  color="orange"
-                  names={memberPreview.deactivated}
-                />
-              </Stack>
-
-              {memberPreview.warnings.length > 0 && (
-                <Box>
-                  <Text size="sm" fw={500} mb={4}>
-                    {t('import_warnings')} ({memberPreview.warnings.length})
-                  </Text>
-                  <Box
-                    mah={180}
-                    style={{
-                      overflowY: 'auto',
-                      border: '1px solid var(--mantine-color-orange-3)',
-                      borderRadius: 'var(--mantine-radius-sm)',
-                      padding: '6px 10px',
-                    }}
-                  >
-                    {memberPreview.warnings.map((w, i) => (
-                      <Text key={i} size="xs" c="orange">
-                        {w.message}
-                      </Text>
+              {/* Backup list */}
+              {backupList.length === 0 ? (
+                <Text size="sm" c="dimmed">{t('backup_no_backups')}</Text>
+              ) : (
+                <Table striped withTableBorder>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>{t('backup_ts')}</Table.Th>
+                      <Table.Th>{t('backup_source')}</Table.Th>
+                      <Table.Th />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {backupList.map((b) => (
+                      <Table.Tr key={`${b.source}-${b.filename}`}>
+                        <Table.Td>
+                          <Text size="sm">{b.timestamp.slice(0, 16).replace('T', ' ')}</Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge
+                            size="xs"
+                            color={b.source === 'local' ? 'gray' : 'blue'}
+                            variant="light"
+                          >
+                            {t(b.source === 'local' ? 'backup_source_local' : 'backup_source_remote')}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td style={{ textAlign: 'right' }}>
+                          <Button
+                            variant="default"
+                            size="xs"
+                            loading={restoreMut.isPending && confirmingRestore?.filename === b.filename}
+                            onClick={() => setConfirmingRestore(b)}
+                          >
+                            {t('backup_restore_btn')}
+                          </Button>
+                        </Table.Td>
+                      </Table.Tr>
                     ))}
-                  </Box>
-                </Box>
+                  </Table.Tbody>
+                </Table>
               )}
+            </Stack>
+          </Card>
+        </Tabs.Panel>
 
-              <Group justify="flex-end">
-                <Button
-                  color="blue"
-                  loading={memberCommitMut.isPending}
-                  disabled={!canMemberCommit}
-                  onClick={() => setConfirmMemberCommit(true)}
-                >
-                  {t('import_run_btn')}
+        <Tabs.Panel value="scanner" pt="md">
+          {/* ── Scanner settings ── */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Title order={4}>{t('scanner')}</Title>
+
+              <Checkbox
+                label={t('scanner_enabled')}
+                checked={scannerEnabled}
+                onChange={(e) => setScannerEnabled(e.target.checked)}
+              />
+
+              <NumberInput
+                label={t('scanner_max_gap')}
+                description={t('scanner_max_gap_hint')}
+                value={maxGapInput}
+                onChange={(v) => {
+                  setMaxGapInput(v);
+                  const n = typeof v === 'number' ? v : Number(v);
+                  if (Number.isFinite(n) && n > 0) setScannerMaxGapMs(n);
+                }}
+                min={1}
+                max={1000}
+                clampBehavior="blur"
+                allowDecimal={false}
+                w={280}
+              />
+
+              <TextInput
+                label={t('scanner_weapon_format')}
+                description={t('scanner_weapon_format_hint')}
+                value={weaponFormatInput}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setWeaponFormatInput(v);
+                  if (isValidWeaponFormat(v)) setScannerWeaponFormat(v);
+                }}
+                error={weaponFormatValid ? undefined : t('scanner_weapon_format_invalid')}
+                w={280}
+              />
+
+              <Group>
+                <Button variant="default" size="sm" onClick={() => setMeasureOpen(true)}>
+                  {t('scanner_measure')}
                 </Button>
               </Group>
-            </>
-          )}
-        </Stack>
-      </Card>
+            </Stack>
+          </Card>
+        </Tabs.Panel>
 
+        <Tabs.Panel value="looks" pt="md">
+          {/* ── Background image (workstream E) ── */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Title order={4}>{t('bg_title')}</Title>
+
+              <Checkbox
+                label={t('bg_enabled')}
+                checked={backgroundEnabled}
+                onChange={(e) => setBackgroundEnabled(e.target.checked)}
+              />
+
+              <Group>
+                <Button
+                  variant="default"
+                  size="sm"
+                  loading={setBackgroundMut.isPending}
+                  onClick={pickBackgroundImage}
+                >
+                  {t('bg_pick_image')}
+                </Button>
+                <Button
+                  variant="subtle"
+                  color="red"
+                  size="sm"
+                  disabled={!backgroundImage}
+                  loading={clearBackgroundMut.isPending}
+                  onClick={() => clearBackgroundMut.mutate()}
+                >
+                  {t('bg_clear_image')}
+                </Button>
+              </Group>
+
+              <Box>
+                <Text size="sm" fw={500} mb={6}>{t('bg_position')}</Text>
+                <SimpleGrid cols={3} spacing="xs" maw={200}>
+                  {BACKGROUND_POSITIONS.map((p) => (
+                    <ActionIcon
+                      key={p.value}
+                      variant={backgroundPosition === p.value ? 'filled' : 'default'}
+                      size="xl"
+                      aria-label={t(p.labelKey)}
+                      onClick={() => setBackgroundPosition(p.value)}
+                    >
+                      {p.glyph}
+                    </ActionIcon>
+                  ))}
+                </SimpleGrid>
+              </Box>
+
+              <Box maw={420}>
+                <Text size="sm" fw={500} mb={6}>{t('bg_size')}</Text>
+                <SegmentedControl
+                  value={backgroundSize}
+                  onChange={setBackgroundSize}
+                  data={BACKGROUND_SIZES.map((s) => ({ value: s.value, label: t(s.labelKey) }))}
+                  fullWidth
+                />
+              </Box>
+
+              <Box maw={420}>
+                <Text size="sm" fw={500} mb={6}>{t('bg_opacity')}</Text>
+                <Slider
+                  size="xl"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={backgroundOpacity}
+                  onChange={setBackgroundOpacity}
+                  label={(v) => `${Math.round(v * 100)}%`}
+                />
+              </Box>
+
+              <NumberInput
+                label={t('bg_margin')}
+                description={t('bg_margin_hint')}
+                value={backgroundMargin}
+                onChange={(v) => setBackgroundMargin(typeof v === 'number' ? v : Number(v) || 0)}
+                min={0}
+                max={300}
+                step={5}
+                clampBehavior="blur"
+                allowDecimal={false}
+                suffix=" px"
+                w={200}
+              />
+
+              <Box maw={420}>
+                <Text size="sm" fw={500} mb={6}>{t('bg_surface_opacity')}</Text>
+                <Text size="xs" c="dimmed" mb={6}>{t('bg_surface_opacity_hint')}</Text>
+                <Slider
+                  size="xl"
+                  min={0.5}
+                  max={1}
+                  step={0.02}
+                  value={surfaceOpacity}
+                  onChange={setSurfaceOpacity}
+                  label={(v) => `${Math.round(v * 100)}%`}
+                />
+              </Box>
+            </Stack>
+          </Card>
+        </Tabs.Panel>
+      </Tabs>
+
+      {/* Modals live outside the Tabs: they are portalled anyway, and keeping
+          them here means a confirm cannot vanish when the active tab changes. */}
       {/* Member import commit — confirm before applying, especially deactivations */}
       <Modal
         opened={confirmMemberCommit}
@@ -688,346 +1050,6 @@ export function SettingsPage() {
           </Group>
         </Stack>
       </Modal>
-
-      {/* ── Backup settings (M6) ── */}
-      <Card withBorder>
-        <Stack gap="md">
-          <Title order={4}>{t('nav_backup')}</Title>
-
-          {/* S3 configuration */}
-          <Divider label={t('backup_s3_title')} labelPosition="left" />
-          <Text size="sm" c="dimmed">{t('backup_s3_desc')}</Text>
-          <TextInput
-            label={t('backup_s3_endpoint')}
-            placeholder="https://<account-id>.r2.cloudflarestorage.com"
-            value={form.s3Endpoint ?? ''}
-            onChange={(e) => setForm({ ...form, s3Endpoint: e.target.value || null })}
-          />
-          <Group grow>
-            <TextInput
-              label={t('backup_s3_region')}
-              placeholder="auto"
-              description={t('backup_s3_region_hint')}
-              value={form.s3Region ?? ''}
-              onChange={(e) => setForm({ ...form, s3Region: e.target.value || null })}
-            />
-            <TextInput
-              label={t('backup_s3_bucket')}
-              value={form.s3Bucket ?? ''}
-              onChange={(e) => setForm({ ...form, s3Bucket: e.target.value || null })}
-            />
-          </Group>
-          <TextInput
-            label={t('backup_s3_prefix')}
-            placeholder="srl-backups"
-            value={form.s3Prefix ?? ''}
-            onChange={(e) => setForm({ ...form, s3Prefix: e.target.value || null })}
-          />
-          <Group grow>
-            <TextInput
-              label={t('backup_s3_access_key_id')}
-              value={form.s3AccessKeyId ?? ''}
-              onChange={(e) => setForm({ ...form, s3AccessKeyId: e.target.value || null })}
-            />
-            <PasswordInput
-              label={t('backup_s3_secret_key')}
-              value={form.s3SecretAccessKey ?? ''}
-              onChange={(e) => setForm({ ...form, s3SecretAccessKey: e.target.value || null })}
-            />
-          </Group>
-
-          <Group justify="flex-end">
-            <Button
-              variant="default"
-              size="sm"
-              loading={testConnMut.isPending}
-              onClick={() => testConnMut.mutate()}
-            >
-              {t('backup_test_connection')}
-            </Button>
-          </Group>
-
-          {/* Encryption passphrase */}
-          <Divider label={t('backup_passphrase_title')} labelPosition="left" />
-          <Alert color="orange" variant="light">
-            <Text size="sm">{t('backup_passphrase_warning')}</Text>
-          </Alert>
-          <PasswordInput
-            label={t('backup_passphrase')}
-            value={form.backupPassphrase ?? ''}
-            onChange={(e) => setForm({ ...form, backupPassphrase: e.target.value || null })}
-          />
-
-          <Group justify="flex-end">
-            <Button
-              color="blue"
-              loading={settingsMut.isPending}
-              onClick={() => settingsMut.mutate(form)}
-            >
-              {t('backup_save_btn')}
-            </Button>
-          </Group>
-
-          {/* Backup operations */}
-          <Divider label={t('backup_list_title')} labelPosition="left" />
-          <Group>
-            <Button
-              variant="default"
-              size="sm"
-              loading={backupNowMut.isPending}
-              onClick={() => backupNowMut.mutate()}
-            >
-              {t('backup_now_btn')}
-            </Button>
-            <Button variant="subtle" size="sm" onClick={() => refetchBackups()}>
-              ↺
-            </Button>
-          </Group>
-
-          {/* Remote-newer alert */}
-          {(() => {
-            const newest_local = backupList.find((b) => b.source === 'local');
-            const newest_remote = backupList.find((b) => b.source === 'remote');
-            if (
-              newest_remote &&
-              (!newest_local || newest_remote.timestamp > newest_local.timestamp)
-            ) {
-              return (
-                <Alert color="blue" variant="light">
-                  <Text size="sm">{t('backup_remote_newer')}</Text>
-                </Alert>
-              );
-            }
-            return null;
-          })()}
-
-          {/* Restore confirmation inline */}
-          {confirmingRestore && (
-            <Alert color="red" variant="light">
-              <Stack gap="xs">
-                <Text size="sm" fw={500}>{t('backup_restore_confirm')}</Text>
-                <Text size="sm">{t('backup_restore_confirm_detail')}</Text>
-                <Text size="xs" c="dimmed">{confirmingRestore.filename}</Text>
-                <Group>
-                  <Button
-                    color="red"
-                    size="xs"
-                    loading={restoreMut.isPending}
-                    onClick={() =>
-                      restoreMut.mutate({
-                        filename: confirmingRestore.filename,
-                        source: confirmingRestore.source,
-                      })
-                    }
-                  >
-                    {t('backup_restore_btn')}
-                  </Button>
-                  <Button
-                    variant="default"
-                    size="xs"
-                    onClick={() => setConfirmingRestore(null)}
-                  >
-                    {t('cancel')}
-                  </Button>
-                </Group>
-              </Stack>
-            </Alert>
-          )}
-
-          {/* Backup list */}
-          {backupList.length === 0 ? (
-            <Text size="sm" c="dimmed">{t('backup_no_backups')}</Text>
-          ) : (
-            <Table striped withTableBorder>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{t('backup_ts')}</Table.Th>
-                  <Table.Th>{t('backup_source')}</Table.Th>
-                  <Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {backupList.map((b) => (
-                  <Table.Tr key={`${b.source}-${b.filename}`}>
-                    <Table.Td>
-                      <Text size="sm">{b.timestamp.slice(0, 16).replace('T', ' ')}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge
-                        size="xs"
-                        color={b.source === 'local' ? 'gray' : 'blue'}
-                        variant="light"
-                      >
-                        {t(b.source === 'local' ? 'backup_source_local' : 'backup_source_remote')}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}>
-                      <Button
-                        variant="default"
-                        size="xs"
-                        loading={restoreMut.isPending && confirmingRestore?.filename === b.filename}
-                        onClick={() => setConfirmingRestore(b)}
-                      >
-                        {t('backup_restore_btn')}
-                      </Button>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          )}
-        </Stack>
-      </Card>
-
-      {/* ── Scanner settings ── */}
-      <Card withBorder>
-        <Stack gap="md">
-          <Title order={4}>{t('scanner')}</Title>
-
-          <Checkbox
-            label={t('scanner_enabled')}
-            checked={scannerEnabled}
-            onChange={(e) => setScannerEnabled(e.target.checked)}
-          />
-
-          <NumberInput
-            label={t('scanner_max_gap')}
-            description={t('scanner_max_gap_hint')}
-            value={maxGapInput}
-            onChange={(v) => {
-              setMaxGapInput(v);
-              const n = typeof v === 'number' ? v : Number(v);
-              if (Number.isFinite(n) && n > 0) setScannerMaxGapMs(n);
-            }}
-            min={1}
-            max={1000}
-            clampBehavior="blur"
-            allowDecimal={false}
-            w={280}
-          />
-
-          <TextInput
-            label={t('scanner_weapon_format')}
-            description={t('scanner_weapon_format_hint')}
-            value={weaponFormatInput}
-            onChange={(e) => {
-              const v = e.target.value;
-              setWeaponFormatInput(v);
-              if (isValidWeaponFormat(v)) setScannerWeaponFormat(v);
-            }}
-            error={weaponFormatValid ? undefined : t('scanner_weapon_format_invalid')}
-            w={280}
-          />
-
-          <Group>
-            <Button variant="default" size="sm" onClick={() => setMeasureOpen(true)}>
-              {t('scanner_measure')}
-            </Button>
-          </Group>
-        </Stack>
-      </Card>
-
-      {/* ── Background image (workstream E) ── */}
-      <Card withBorder>
-        <Stack gap="md">
-          <Title order={4}>{t('bg_title')}</Title>
-
-          <Checkbox
-            label={t('bg_enabled')}
-            checked={backgroundEnabled}
-            onChange={(e) => setBackgroundEnabled(e.target.checked)}
-          />
-
-          <Group>
-            <Button
-              variant="default"
-              size="sm"
-              loading={setBackgroundMut.isPending}
-              onClick={pickBackgroundImage}
-            >
-              {t('bg_pick_image')}
-            </Button>
-            <Button
-              variant="subtle"
-              color="red"
-              size="sm"
-              disabled={!backgroundImage}
-              loading={clearBackgroundMut.isPending}
-              onClick={() => clearBackgroundMut.mutate()}
-            >
-              {t('bg_clear_image')}
-            </Button>
-          </Group>
-
-          <Box>
-            <Text size="sm" fw={500} mb={6}>{t('bg_position')}</Text>
-            <SimpleGrid cols={3} spacing="xs" maw={200}>
-              {BACKGROUND_POSITIONS.map((p) => (
-                <ActionIcon
-                  key={p.value}
-                  variant={backgroundPosition === p.value ? 'filled' : 'default'}
-                  size="xl"
-                  aria-label={t(p.labelKey)}
-                  onClick={() => setBackgroundPosition(p.value)}
-                >
-                  {p.glyph}
-                </ActionIcon>
-              ))}
-            </SimpleGrid>
-          </Box>
-
-          <Box maw={420}>
-            <Text size="sm" fw={500} mb={6}>{t('bg_size')}</Text>
-            <SegmentedControl
-              value={backgroundSize}
-              onChange={setBackgroundSize}
-              data={BACKGROUND_SIZES.map((s) => ({ value: s.value, label: t(s.labelKey) }))}
-              fullWidth
-            />
-          </Box>
-
-          <Box maw={420}>
-            <Text size="sm" fw={500} mb={6}>{t('bg_opacity')}</Text>
-            <Slider
-              size="xl"
-              min={0.05}
-              max={1}
-              step={0.05}
-              value={backgroundOpacity}
-              onChange={setBackgroundOpacity}
-              label={(v) => `${Math.round(v * 100)}%`}
-            />
-          </Box>
-
-          <NumberInput
-            label={t('bg_margin')}
-            description={t('bg_margin_hint')}
-            value={backgroundMargin}
-            onChange={(v) => setBackgroundMargin(typeof v === 'number' ? v : Number(v) || 0)}
-            min={0}
-            max={300}
-            step={5}
-            clampBehavior="blur"
-            allowDecimal={false}
-            suffix=" px"
-            w={200}
-          />
-
-          <Box maw={420}>
-            <Text size="sm" fw={500} mb={6}>{t('bg_surface_opacity')}</Text>
-            <Text size="xs" c="dimmed" mb={6}>{t('bg_surface_opacity_hint')}</Text>
-            <Slider
-              size="xl"
-              min={0.5}
-              max={1}
-              step={0.02}
-              value={surfaceOpacity}
-              onChange={setSurfaceOpacity}
-              label={(v) => `${Math.round(v * 100)}%`}
-            />
-          </Box>
-        </Stack>
-      </Card>
 
       <ScannerMeasureModal opened={measureOpen} onClose={() => setMeasureOpen(false)} />
     </Stack>

@@ -152,9 +152,9 @@ export function CheckinPage() {
 
   return (
     <>
-      {/* Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+      {/* Fill the shell (see --page-body-height in global.css) so the
           list grows into the free space instead of leaving a void under it. */}
-      <Stack gap="lg" style={{ height: 'calc(100vh - 144px)' }}>
+      <Stack gap="lg" style={{ height: 'var(--page-body-height)' }}>
         <Group justify="space-between" align="center">
           <Title order={3}>{t('open_checkouts')}</Title>
           <Button size="lg" variant="default" onClick={() => setFastCheckinOpen(true)}>

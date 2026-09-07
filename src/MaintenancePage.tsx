@@ -78,8 +78,9 @@ export function MaintenancePage() {
 
   const stamp = dayjs().format('YYYY-MM-DD');
 
+  // Fill the shell (see --page-body-height in global.css).
   return (
-    <ScrollArea h="calc(100vh - 144px)">
+    <ScrollArea h="var(--page-body-height)">
       <Stack gap="lg" pb="lg">
         <Card withBorder>
           <Group justify="space-between" mb="sm">
