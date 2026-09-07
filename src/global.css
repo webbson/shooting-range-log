@@ -50,3 +50,21 @@ textarea {
 .mantine-AppShell-main tr[data-striped='even']:nth-of-type(even) {
   background-color: color-mix(in srgb, var(--mantine-color-text) 7%, transparent);
 }
+
+/* Members, Weapons and Logs render their table bare inside a
+ * Table.ScrollContainer, with no Card around it — unlike every other page,
+ * where content sits on a Paper. So on those three the background image had
+ * nothing dimming it and showed at full strength, while the same image looked
+ * correctly faded everywhere else. Give the bare table the same surface, and
+ * clear it again for tables that ARE inside a Paper so those are not dimmed
+ * twice. */
+.mantine-AppShell-main .mantine-Table-table {
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-body) calc(var(--surface-opacity, 0.92) * 100%),
+    transparent
+  );
+}
+.mantine-AppShell-main .mantine-Paper-root .mantine-Table-table {
+  background-color: transparent;
+}
