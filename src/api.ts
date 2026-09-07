@@ -337,10 +337,14 @@ export interface ImportWarning {
   row: number;
   code: string;
   message: string;
+  // Structured identification fields — populated only for warn_member_unmatched.
+  name: string | null;
+  ssn: string | null;
+  weapon: string | null;
 }
 
 export interface ImportPreview {
-  membersToCreate: number;
+  membersUnmatched: number;
   membersToMatch: number;
   weaponsToCreate: number;
   weaponsExisting: number;
@@ -351,7 +355,7 @@ export interface ImportPreview {
 }
 
 export interface ImportResult {
-  membersCreated: number;
+  membersUnmatched: number;
   membersMatched: number;
   weaponsCreated: number;
   weaponsMatched: number;
@@ -369,6 +373,35 @@ export const importPreview = (path: string, sheet: string) =>
 
 export const importCommit = (path: string, sheet: string, markOpenAsReturned: boolean) =>
   invoke<ImportResult>('import_commit', { path, sheet, markOpenAsReturned });
+
+export const importExportUnmatched = (path: string, sheet: string, outPath: string) =>
+  invoke<number>('import_export_unmatched', { path, sheet, outPath });
+
+// ---- Member import (club roster / Svenska Lag export) ----
+
+export interface MemberImportPreview {
+  created: string[];
+  updated: string[];
+  adminAdded: string[];
+  adminRemoved: string[];
+  deactivated: string[];
+  warnings: ImportWarning[];
+}
+
+export interface MemberImportResult {
+  created: number;
+  updated: number;
+  adminAdded: number;
+  adminRemoved: number;
+  deactivated: number;
+  warnings: ImportWarning[];
+}
+
+export const memberImportPreview = (path: string) =>
+  invoke<MemberImportPreview>('member_import_preview', { path });
+
+export const memberImportCommit = (path: string) =>
+  invoke<MemberImportResult>('member_import_commit', { path });
 
 // ---- Settings (M6) ----
 
@@ -398,7 +431,22 @@ export interface BackupInfo {
 }
 
 export const testS3Connection = (input: Settings) => invoke<string>('test_s3_connection', { input });
-export const backupNow = () => invoke<string>('backup_now');
+export interface RetentionSummary {
+  listed: number;
+  due: number;
+  deleted: number;
+  failed: { key: string; error: string }[];
+  notAttempted: number;
+}
+
+export interface BackupNowResult {
+  filename: string;
+  /** Absent when no S3 endpoint is configured — local-only installs. */
+  remote: RetentionSummary | null;
+  remoteError: string | null;
+}
+
+export const backupNow = () => invoke<BackupNowResult>('backup_now');
 export const listBackups = () => invoke<BackupInfo[]>('list_backups');
 export const restoreBackup = (filename: string, source: BackupSource) =>
   invoke<void>('restore_backup', { filename, source });

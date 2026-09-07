@@ -1,3 +1,13 @@
+/* Usable height of a page body inside the AppShell: 100vh minus the 64px
+ * header and the 2×16px main padding. Pages fill this so their lists grow into
+ * the free space instead of leaving a void underneath.
+ * Single source of truth on purpose — this was previously a `calc(100vh -
+ * 144px)` literal repeated across six pages, which silently went 48px wrong the
+ * moment the footer bar was removed. */
+:root {
+  --page-body-height: calc(100vh - 96px);
+}
+
 /* Kiosk-style touch UI: no text selection anywhere except text entry. */
 * {
   -webkit-user-select: none;
@@ -7,4 +17,83 @@ input,
 textarea {
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Page-surface translucency (workstream E2): lets the background image show
+ * through the row boxes (Card/Paper) on each page. Scoped to
+ * `.mantine-AppShell-main` — Mantine renders modals, popovers, menus and
+ * select dropdowns as Paper too, but those render through a portal at body
+ * level, outside AppShell.Main, so this rule never reaches them; overlays
+ * stay solid. `--surface-opacity` is set on AppShell.Main from the
+ * persisted `surfaceOpacity` store value (AppLayout.tsx). Blended with
+ * `color-mix` against Mantine's own `--mantine-color-body` token so it
+ * follows the light/dark theme instead of a hard-coded colour. */
+.mantine-AppShell-main .mantine-Paper-root {
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-body) calc(var(--surface-opacity, 0.92) * 100%),
+    transparent
+  );
+}
+
+/* Striped table rows are NOT Paper — Mantine paints them from
+ * `--table-striped-color` on the row itself, so the Paper rule above leaves
+ * them fully opaque and the image only shows through between the stripes.
+ *
+ * Fading that token by the surface opacity does NOT work: the stripe colour
+ * (gray-0 / dark-6) is nearly the surface colour, so diluting both by the same
+ * amount erases the difference and the stripes vanish. What made them visible
+ * was never opacity, it was the tint.
+ *
+ * So paint a fixed-alpha wash of the text colour instead: it contrasts in both
+ * themes, stays visible at ANY surface opacity, and still lets the image
+ * through.
+ *
+ * Match Mantine's own two selectors exactly. `data-striped` is present on
+ * EVERY row, carrying "odd" or "even"; it is the `:nth-of-type()` that decides
+ * which rows are actually striped. Selecting on the attribute alone paints
+ * every row and the banding disappears again. Mantine wraps its rules in
+ * `:where()` (zero specificity), so these win comfortably. The sticky header is
+ * deliberately left solid: a translucent one shows rows scrolling through it,
+ * which reads as a rendering bug rather than a design. */
+.mantine-AppShell-main tr[data-striped='odd']:nth-of-type(odd),
+.mantine-AppShell-main tr[data-striped='even']:nth-of-type(even) {
+  background-color: color-mix(in srgb, var(--mantine-color-text) 7%, transparent);
+}
+
+/* Members, Weapons and Logs render their table bare inside a
+ * Table.ScrollContainer, with no Card around it — unlike every other page,
+ * where content sits on a Paper. So on those three the background image had
+ * nothing dimming it and showed at full strength, while the same image looked
+ * correctly faded everywhere else. Give the bare table the same surface, and
+ * clear it again for tables that ARE inside a Paper so those are not dimmed
+ * twice. */
+.mantine-AppShell-main .mantine-Table-table {
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-body) calc(var(--surface-opacity, 0.92) * 100%),
+    transparent
+  );
+}
+.mantine-AppShell-main .mantine-Paper-root .mantine-Table-table {
+  background-color: transparent;
+}
+
+/* Restore highlight-on-hover for striped rows. Mantine's own hover rule is
+ * `.m_4e7aa4fd:hover:where([data-hover])` — specificity (0,2,0) — while the
+ * striped rule above is (0,3,1) and was therefore winning even while hovered,
+ * so exactly the alternate rows stopped highlighting. Adding the second
+ * attribute lifts these to (0,4,1).
+ * Both branches are needed and the second is the one that counts here: the
+ * target machine is a touch screen, which matches `hover: none`, where Mantine
+ * drives the highlight from `:active` rather than `:hover`. */
+@media (hover: hover) {
+  .mantine-AppShell-main tr[data-hover][data-striped]:hover {
+    background-color: var(--tr-hover-bg);
+  }
+}
+@media (hover: none) {
+  .mantine-AppShell-main tr[data-hover][data-striped]:active {
+    background-color: var(--tr-hover-bg);
+  }
 }

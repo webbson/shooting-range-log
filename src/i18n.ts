@@ -24,6 +24,8 @@ const resources = {
       db_checking: 'Kontrollerar…',
       db_error: 'Databasfel',
       page_todo: 'Byggs i ett senare steg.',
+      menu: 'Meny',
+      status_backup_overdue: 'Ingen säkerhetskopia på över 2 timmar',
 
       // Operator picker
       pick_operator: 'Välj operatör',
@@ -32,6 +34,9 @@ const resources = {
       no_operators_hint:
         'Inga operatörer. Lägg till en medlem med personalbehörighet först.',
       add_first_operator: 'Lägg till operatör',
+      no_members_hint: 'Inga medlemmar. Lägg till en medlem för att komma igång.',
+      add_first_member: 'Lägg till medlem',
+      continue_as_operator: 'Fortsätt som {{name}}',
       change_operator: 'Byt operatör',
 
       // Generic actions / status
@@ -191,11 +196,16 @@ const resources = {
       field_serviced_at: 'Servicedatum',
       no_service: 'Ingen servicehistorik.',
 
-      // Settings & Excel-import
+      // Settings & Excel-import — loans/weapons sync (workstream C, renamed from
+      // the old member-managing Excel import; matching is by personnummer only,
+      // unmatched rows are skipped and reported, never created)
       nav_settings: 'Inställningar',
       settings_title: 'Inställningar',
-      import_title: 'Excel-import',
-      import_desc: 'Importera medlemmar, vapen och lånloggar från ett Excel-ark.',
+      settings_tab_import: 'Synk / Import',
+      settings_tab_backup: 'Säkerhetskopiering',
+      settings_tab_looks: 'Utseende',
+      import_title: 'Synka lån och vapen',
+      import_desc: 'Synkronisera lån och vapen mot ett Excel-ark. Medlemmar skapas eller ändras inte.',
       import_pick_file: 'Välj Excel-fil',
       import_no_file: 'Ingen fil vald',
       import_select_sheet: 'Ark',
@@ -211,8 +221,26 @@ const resources = {
       import_warnings: 'Varningar',
       import_open_loans_warning: '{{count}} lånposter saknar återlämningstid och skulle lämnas öppna.',
       import_mark_open_returned: 'Markera alla som återlämnade samma dag',
-      import_done: 'Import klar — {{membersCreated}} nya medlemmar, {{weaponsCreated}} nya vapen, {{loansCreated}} lånposter',
+      import_done: 'Synk klar — {{weaponsCreated}} nya vapen, {{loansCreated}} lånposter',
       err_import_sheet_not_found: "Arknamnet '{{sheet}}' hittades inte i filen.",
+      import_unmatched_count: 'Rader utan matchning',
+      import_unmatched_row: '{{name}} ({{ssn}}) – {{weapon}}',
+      import_export_unmatched: 'Exportera rader utan matchning',
+
+      // Member import (workstream D) — separate import from the club's member
+      // export (Svenska Lag); creates/updates members and sets admin status,
+      // never touched by the loans/weapons sync above
+      member_import_title: 'Importera medlemslista',
+      member_import_updated: 'Uppdaterade medlemmar',
+      member_import_admin_added: 'Nya administratörer',
+      member_import_admin_removed: 'Borttagna administratörer',
+      member_import_deactivated: 'Inaktiverade medlemmar',
+      err_member_import_headers_not_found: 'Kunde inte hitta kolumnrubrikerna i filen.',
+      member_import_confirm_title: 'Bekräfta import',
+      member_import_confirm_summary:
+        '{{created}} nya medlemmar, {{updated}} uppdaterade, {{adminChanges}} ändrade administratörsroller.',
+      member_import_confirm_deactivated:
+        '{{count}} medlemmar som saknas i filen kommer att inaktiveras.',
 
       // Backup & settings (M6)
       settings_saved: 'Inställningar sparade',
@@ -237,6 +265,9 @@ const resources = {
       backup_test_ok: 'Anslutning OK: bucket {{bucket}}',
       backup_now_btn: 'Säkerhetskopiera nu',
       backup_now_ok: 'Säkerhetskopia skapad',
+      backup_retention_ok: 'Gallring i fjärrlagring: {{deleted}} raderade',
+      backup_retention_partial: 'Gallring i fjärrlagring: {{deleted}} raderade, {{remaining}} kvar — fortsätter automatiskt',
+      backup_retention_failed: 'Gallring i fjärrlagring: {{deleted}} raderade, {{failed}} misslyckade: {{reason}}',
       backup_list_title: 'Säkerhetskopior',
       backup_no_backups: 'Inga säkerhetskopior.',
       backup_restore_btn: 'Återställ',
@@ -352,6 +383,34 @@ const resources = {
       scan_member_not_found: 'Ingen medlem med det personnumret.',
       scan_no_open_loans: '{{name}} har inga pågående lån.',
       confirm_checkin_title: 'Återlämna vapnet?',
+
+      // Background image (workstream E)
+      bg_title: 'Bakgrundsbild',
+      bg_enabled: 'Aktivera bakgrundsbild',
+      bg_pick_image: 'Välj bild',
+      bg_clear_image: 'Ta bort bild',
+      bg_position: 'Position',
+      bg_size: 'Storlek',
+      bg_opacity: 'Opacitet',
+      bg_pos_top_left: 'Överst till vänster',
+      bg_pos_top_center: 'Överst i mitten',
+      bg_pos_top_right: 'Överst till höger',
+      bg_pos_center_left: 'Vänster i mitten',
+      bg_pos_center: 'Centrerad',
+      bg_pos_center_right: 'Höger i mitten',
+      bg_pos_bottom_left: 'Nederst till vänster',
+      bg_pos_bottom_center: 'Nederst i mitten',
+      bg_pos_bottom_right: 'Nederst till höger',
+      bg_size_cover: 'Fyll',
+      bg_size_contain: 'Anpassa',
+      bg_size_actual: 'Verklig storlek',
+      bg_margin: 'Marginal',
+      bg_margin_hint: 'Avstånd i pixlar mellan bilden och skärmkanten.',
+      bg_surface_opacity: 'Opacitet för ytor',
+      bg_surface_opacity_hint:
+        'Hur mycket bakgrundsbilden lyser igenom rutorna på varje sida. Menyer och popup-fönster påverkas inte.',
+      err_background_invalid_type:
+        'Bildformatet stöds inte — använd PNG, JPG, JPEG, WEBP, GIF eller BMP.',
     },
   },
   en: {
@@ -374,6 +433,8 @@ const resources = {
       db_checking: 'Checking…',
       db_error: 'Database error',
       page_todo: 'Built in a later milestone.',
+      menu: 'Menu',
+      status_backup_overdue: 'No backup in over 2 hours',
 
       // Operator picker
       pick_operator: 'Select operator',
@@ -381,6 +442,9 @@ const resources = {
       confirm_operator: 'Select',
       no_operators_hint: 'No operators. Add a member with staff access first.',
       add_first_operator: 'Add operator',
+      no_members_hint: 'No members. Add a member to get started.',
+      add_first_member: 'Add member',
+      continue_as_operator: 'Continue as {{name}}',
       change_operator: 'Change operator',
 
       // Generic actions / status
@@ -540,11 +604,16 @@ const resources = {
       field_serviced_at: 'Service date',
       no_service: 'No service history.',
 
-      // Settings & Excel import
+      // Settings & Excel import — loans/weapons sync (workstream C, renamed from
+      // the old member-managing Excel import; matching is by personal number
+      // only, unmatched rows are skipped and reported, never created)
       nav_settings: 'Settings',
       settings_title: 'Settings',
-      import_title: 'Excel Import',
-      import_desc: 'Import members, weapons and loan logs from an Excel sheet.',
+      settings_tab_import: 'Sync / Import',
+      settings_tab_backup: 'Backup',
+      settings_tab_looks: 'Looks',
+      import_title: 'Sync loans & weapons',
+      import_desc: 'Sync loans and weapons against an Excel sheet. Members are never created or changed.',
       import_pick_file: 'Choose Excel file',
       import_no_file: 'No file selected',
       import_select_sheet: 'Sheet',
@@ -560,8 +629,26 @@ const resources = {
       import_warnings: 'Warnings',
       import_open_loans_warning: '{{count}} loan records have no return date and would be left open.',
       import_mark_open_returned: 'Mark all as returned on the same day',
-      import_done: 'Import complete — {{membersCreated}} new members, {{weaponsCreated}} new weapons, {{loansCreated}} loan records',
+      import_done: 'Sync complete — {{weaponsCreated}} new weapons, {{loansCreated}} loan records',
       err_import_sheet_not_found: "Sheet '{{sheet}}' not found in the file.",
+      import_unmatched_count: 'Unmatched rows',
+      import_unmatched_row: '{{name}} ({{ssn}}) – {{weapon}}',
+      import_export_unmatched: 'Export unmatched rows',
+
+      // Member import (workstream D) — separate import from the club's member
+      // export (Svenska Lag); creates/updates members and sets admin status,
+      // never touched by the loans/weapons sync above
+      member_import_title: 'Import member list',
+      member_import_updated: 'Updated members',
+      member_import_admin_added: 'New administrators',
+      member_import_admin_removed: 'Removed administrators',
+      member_import_deactivated: 'Deactivated members',
+      err_member_import_headers_not_found: 'Could not find the column headers in the file.',
+      member_import_confirm_title: 'Confirm import',
+      member_import_confirm_summary:
+        '{{created}} new members, {{updated}} updated, {{adminChanges}} admin role changes.',
+      member_import_confirm_deactivated:
+        '{{count}} members missing from the file will be deactivated.',
 
       // Backup & settings (M6)
       settings_saved: 'Settings saved',
@@ -586,6 +673,9 @@ const resources = {
       backup_test_ok: 'Connection OK: bucket {{bucket}}',
       backup_now_btn: 'Backup now',
       backup_now_ok: 'Backup created',
+      backup_retention_ok: 'Remote retention: {{deleted}} deleted',
+      backup_retention_partial: 'Remote retention: {{deleted}} deleted, {{remaining}} left — continues automatically',
+      backup_retention_failed: 'Remote retention: {{deleted}} deleted, {{failed}} failed: {{reason}}',
       backup_list_title: 'Backups',
       backup_no_backups: 'No backups.',
       backup_restore_btn: 'Restore',
@@ -701,6 +791,34 @@ const resources = {
       scan_member_not_found: 'No member has that personal number.',
       scan_no_open_loans: '{{name}} has no open loans.',
       confirm_checkin_title: 'Return weapon?',
+
+      // Background image (workstream E)
+      bg_title: 'Background image',
+      bg_enabled: 'Enable background image',
+      bg_pick_image: 'Choose image',
+      bg_clear_image: 'Clear image',
+      bg_position: 'Position',
+      bg_size: 'Size',
+      bg_opacity: 'Opacity',
+      bg_pos_top_left: 'Top left',
+      bg_pos_top_center: 'Top centre',
+      bg_pos_top_right: 'Top right',
+      bg_pos_center_left: 'Centre left',
+      bg_pos_center: 'Centre',
+      bg_pos_center_right: 'Centre right',
+      bg_pos_bottom_left: 'Bottom left',
+      bg_pos_bottom_center: 'Bottom centre',
+      bg_pos_bottom_right: 'Bottom right',
+      bg_size_cover: 'Cover',
+      bg_size_contain: 'Contain',
+      bg_size_actual: 'Actual size',
+      bg_margin: 'Margin',
+      bg_margin_hint: 'Gap in pixels between the image and the screen edge.',
+      bg_surface_opacity: 'Surface opacity',
+      bg_surface_opacity_hint:
+        'How much the background image shows through the boxes on each page. Menus and popups are unaffected.',
+      err_background_invalid_type:
+        'Unsupported image type — use PNG, JPG, JPEG, WEBP, GIF or BMP.',
     },
   },
 };

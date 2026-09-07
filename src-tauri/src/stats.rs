@@ -398,7 +398,7 @@ fn csv_field(s: &str) -> String {
     }
 }
 
-fn csv_join(rows: &[Vec<String>]) -> String {
+pub(crate) fn csv_join(rows: &[Vec<String>]) -> String {
     let mut out = String::from("\u{FEFF}");
     for r in rows {
         out.push_str(&r.iter().map(|f| csv_field(f)).collect::<Vec<_>>().join(";"));

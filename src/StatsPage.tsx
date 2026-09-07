@@ -174,8 +174,9 @@ export function StatsPage() {
     [t('stats_guests'), summary.data?.guestCount],
   ];
 
+  // Fill the shell (see --page-body-height in global.css).
   return (
-    <ScrollArea h="calc(100vh - 144px)">
+    <ScrollArea h="var(--page-body-height)">
       <Stack gap="lg" pb="lg">
         <Group justify="space-between">
           <Group>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import {
   AppShell,
   Group,
@@ -10,13 +10,19 @@ import {
   ActionIcon,
   Modal,
   Stack,
+  Drawer,
+  Burger,
+  Indicator,
+  Divider,
   useMantineColorScheme,
   useComputedColorScheme,
 } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import { IconMaximize, IconMinimize, IconPower } from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
@@ -24,15 +30,21 @@ import { OperatorPicker } from './OperatorPicker';
 import { useIsAdmin } from './useIsAdmin';
 import { useScanner } from './useScanner.ts';
 
-const NAV = [
+// Header: the four daily-use buttons. Drawer: everything else.
+const HEADER_NAV = [
   { to: '/checkout', key: 'nav_checkout' },
   { to: '/checkin', key: 'nav_checkin' },
   { to: '/members', key: 'nav_members' },
   { to: '/weapons', key: 'nav_weapons' },
+] as const;
+
+const DRAWER_NAV = [
   { to: '/logs', key: 'nav_logs' },
   { to: '/stats', key: 'nav_stats' },
   { to: '/maintenance', key: 'nav_maintenance' },
 ] as const;
+
+const BACKUP_OVERDUE_MS = 2 * 60 * 60 * 1000; // snapshots run hourly
 
 export function AppLayout() {
   const { t } = useTranslation();
@@ -47,6 +59,7 @@ export function AppLayout() {
   const fullscreen = useAppStore((s) => s.fullscreen);
   const setFullscreen = useAppStore((s) => s.setFullscreen);
   const [confirmShutdown, setConfirmShutdown] = useState(false);
+  const [drawerOpened, { close: closeDrawer, toggle: toggleDrawer }] = useDisclosure(false);
 
   // Applies the toggle and, on mount, restores the persisted mode from launch.
   useEffect(() => {
@@ -76,14 +89,70 @@ export function AppLayout() {
   });
   const openCount = open.data?.length ?? 0;
 
+  // Status is silent in the normal case — only surfaced when something is
+  // actually wrong. An empty/loading backup list (fresh install, first
+  // fetch) is not a fault, so it stays silent rather than reading "overdue".
+  const newestBackupMs = useMemo(() => {
+    if (!backups.data || backups.data.length === 0) return null;
+    return Math.max(...backups.data.map((b) => new Date(b.timestamp).getTime()));
+  }, [backups.data]);
+  const backupOverdue = newestBackupMs !== null && Date.now() - newestBackupMs > BACKUP_OVERDUE_MS;
+  const hasIssue = health.isError || backupOverdue;
+
+  // Background image (workstream E). staleTime: Infinity — the native file
+  // dialog (Settings' image picker) steals and returns window focus, which
+  // would otherwise refetch this multi-MB payload via refetchOnWindowFocus;
+  // set/clear mutations invalidate this key explicitly instead. Queried here
+  // (not in SettingsPage) so the layer persists across route changes.
+  const backgroundEnabled = useAppStore((s) => s.backgroundEnabled);
+  const backgroundPosition = useAppStore((s) => s.backgroundPosition);
+  const backgroundSize = useAppStore((s) => s.backgroundSize);
+  const backgroundOpacity = useAppStore((s) => s.backgroundOpacity);
+  const backgroundMargin = useAppStore((s) => s.backgroundMargin);
+  const surfaceOpacity = useAppStore((s) => s.surfaceOpacity);
+  const background = useQuery({
+    queryKey: ['background'],
+    queryFn: () => invoke<string | null>('get_background'),
+    staleTime: Infinity,
+  });
+  // Memoized so the clock's 1x/second re-render doesn't rebuild a fresh
+  // multi-MB `url(...)` string (and a full-length React style diff) every
+  // tick — only recomputes when the image or a display setting changes.
+  const imageData = background.data;
+  const backgroundStyle = useMemo<CSSProperties | undefined>(
+    () =>
+      imageData
+        ? {
+            position: 'fixed',
+            inset: backgroundMargin,
+            zIndex: -1,
+            pointerEvents: 'none',
+            backgroundImage: `url("${imageData}")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition,
+            backgroundSize,
+            opacity: backgroundOpacity,
+          }
+        : undefined,
+    [imageData, backgroundPosition, backgroundSize, backgroundOpacity, backgroundMargin],
+  );
+
+  // Surface (Paper/Card) translucency (workstream E2): a CSS custom property
+  // read by the `.mantine-AppShell-main .mantine-Paper-root` rule in
+  // global.css. Set on AppShell.Main (not :root) so it's scoped to page
+  // content — Mantine renders modals/popovers/dropdowns as Paper too, via a
+  // portal at body level, outside this element, so they stay solid.
+  const surfaceStyle = { '--surface-opacity': surfaceOpacity } as CSSProperties;
+
   return (
     <>
+      {backgroundEnabled && backgroundStyle && <div aria-hidden style={backgroundStyle} />}
       <OperatorPicker />
-      <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
+      <AppShell header={{ height: 64 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
-            {NAV.filter((item) => item.to === '/checkout' || item.to === '/checkin').map(
+            {HEADER_NAV.filter((item) => item.to === '/checkout' || item.to === '/checkin').map(
               (item) => (
                 <Button
                   key={item.to}
@@ -107,7 +176,7 @@ export function AppLayout() {
           </Group>
           <Text fw={600} size="lg">{clock}</Text>
           <Group gap="xs" wrap="nowrap" style={{ flex: 1, justifyContent: 'flex-end' }}>
-            {NAV.filter((item) => item.to !== '/checkout' && item.to !== '/checkin').map(
+            {HEADER_NAV.filter((item) => item.to !== '/checkout' && item.to !== '/checkin').map(
               (item) => (
                 <Button
                   key={item.to}
@@ -121,22 +190,56 @@ export function AppLayout() {
                 </Button>
               ),
             )}
+            <Indicator color="red" size={10} offset={4} disabled={!hasIssue}>
+              <Burger
+                opened={drawerOpened}
+                onClick={toggleDrawer}
+                aria-label={t('menu')}
+                size="lg"
+              />
+            </Indicator>
           </Group>
         </Group>
       </AppShell.Header>
 
-      <AppShell.Main>
+      <AppShell.Main style={surfaceStyle}>
         <Outlet />
       </AppShell.Main>
+      </AppShell>
 
-      <AppShell.Footer>
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Group gap="xs">
+      <Drawer
+        opened={drawerOpened}
+        onClose={closeDrawer}
+        position="right"
+        size="sm"
+        title={t('menu')}
+        padding="md"
+      >
+        <Stack gap="xs">
+          {DRAWER_NAV.map((item) => (
+            <Button
+              key={item.to}
+              component={NavLink}
+              to={item.to}
+              variant={pathname === item.to ? 'light' : 'subtle'}
+              size="lg"
+              justify="flex-start"
+              fullWidth
+              onClick={closeDrawer}
+            >
+              {t(item.key)}
+            </Button>
+          ))}
+
+          <Divider />
+
+          <Group justify="space-between" wrap="nowrap">
             <Text size="sm" c="dimmed">
-              {t('operator')}:
+              {t('operator')}
             </Text>
             <Tooltip label={t('change_operator')}>
               <Badge
+                size="lg"
                 color={operator ? 'blue' : 'gray'}
                 variant="light"
                 style={{ cursor: 'pointer' }}
@@ -147,27 +250,12 @@ export function AppLayout() {
             </Tooltip>
           </Group>
 
-          <Group gap="md">
-            <Text size="sm" c={health.isError ? 'red' : 'dimmed'}>
-              {t('db_status')}:{' '}
-              {health.isLoading
-                ? t('db_checking')
-                : health.isError
-                  ? t('db_error')
-                  : health.data}
-            </Text>
+          <Group justify="space-between" wrap="nowrap">
             <Text size="sm" c="dimmed">
-              {t('backup_last')}:{' '}
-              {(() => {
-                const latest = backups.data?.find((b) => b.source === 'remote');
-                if (!latest) return '–';
-                const ts = latest.timestamp.slice(0, 16).replace('T', ' ');
-                const today = new Date().toISOString().slice(0, 10);
-                return latest.timestamp.startsWith(today) ? ts.slice(11) : ts.slice(0, 10);
-              })()}
+              {t('language')}
             </Text>
             <SegmentedControl
-              size="xs"
+              size="sm"
               value={language}
               onChange={(v) => setLanguage(v as Lang)}
               data={[
@@ -175,6 +263,12 @@ export function AppLayout() {
                 { label: 'EN', value: 'en' },
               ]}
             />
+          </Group>
+
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="sm" c="dimmed">
+              {t('theme')}
+            </Text>
             <ActionIcon
               variant="default"
               size="lg"
@@ -183,45 +277,71 @@ export function AppLayout() {
             >
               {computed === 'dark' ? '☀' : '🌙'}
             </ActionIcon>
-            <Tooltip label={fullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}>
-              <ActionIcon
-                variant="default"
-                size="lg"
-                aria-label={fullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}
-                onClick={() => setFullscreen(!fullscreen)}
-              >
-                {fullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
-              </ActionIcon>
-            </Tooltip>
-            {isAdmin && (
-              <ActionIcon
-                variant="default"
-                size="lg"
-                aria-label={t('nav_settings')}
-                onClick={() => navigate('/settings')}
-              >
-                ⚙
-              </ActionIcon>
-            )}
-            {/* Fullscreen hides the window's own close button — this is the only
-                way out of the app while in that mode. */}
-            {fullscreen && (
-              <Tooltip label={t('shutdown')}>
-                <ActionIcon
-                  variant="light"
-                  size="lg"
-                  color="red"
-                  aria-label={t('shutdown')}
-                  onClick={() => setConfirmShutdown(true)}
-                >
-                  <IconPower size={18} />
-                </ActionIcon>
-              </Tooltip>
-            )}
           </Group>
-        </Group>
-      </AppShell.Footer>
-      </AppShell>
+
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="sm" c="dimmed">
+              {fullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}
+            </Text>
+            <ActionIcon
+              variant="default"
+              size="lg"
+              aria-label={fullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}
+              onClick={() => setFullscreen(!fullscreen)}
+            >
+              {fullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
+            </ActionIcon>
+          </Group>
+
+          {isAdmin && (
+            <Button
+              variant="subtle"
+              size="lg"
+              justify="flex-start"
+              fullWidth
+              onClick={() => {
+                navigate('/settings');
+                closeDrawer();
+              }}
+            >
+              {t('nav_settings')}
+            </Button>
+          )}
+
+          {/* Only rule off the tail when something actually follows it: the
+              status lines appear solely on a fault, and shutdown solely in
+              fullscreen, so windowed-and-healthy would otherwise end the
+              drawer with a divider under nothing. */}
+          {(hasIssue || fullscreen) && <Divider />}
+
+          {health.isError && (
+            <Text size="sm" c="red">
+              {t('db_status')}: {t('db_error')}
+            </Text>
+          )}
+          {backupOverdue && (
+            <Text size="sm" c="red">
+              {t('status_backup_overdue')}
+            </Text>
+          )}
+
+          {/* Fullscreen hides the window's own close button — this is the only
+              way out of the app while in that mode. */}
+          {fullscreen && (
+            <Button
+              variant="light"
+              color="red"
+              size="lg"
+              justify="flex-start"
+              fullWidth
+              leftSection={<IconPower size={18} />}
+              onClick={() => setConfirmShutdown(true)}
+            >
+              {t('shutdown')}
+            </Button>
+          )}
+        </Stack>
+      </Drawer>
 
       <Modal
         opened={confirmShutdown}

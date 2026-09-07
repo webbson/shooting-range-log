@@ -37,3 +37,24 @@ primer.md
 # local agent scratch
 .claude/worktrees/
 .foreman/
+
+# Agent review artifacts — contain raw diffs of real data, never commit
+.superpowers/
+
+# Club data exports — member lists and loan spreadsheets are LIVE personal data
+# (names, personnummer, addresses) and this repo is public. Read them for shape,
+# never commit one. Force-add a genuinely synthetic fixture if ever needed.
+*.xlsx
+*.xls
+*.csv
+
+# Backup artifacts (encrypted snapshots, git bundles) — contain real records
+*.age
+*.bundle
+
+# Secrets
+.env
+.env.*
+
+# Per-machine agent config — do not depend on a personal global gitignore
+.claude/settings.local.json

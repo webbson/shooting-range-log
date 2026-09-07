@@ -1,14 +1,16 @@
-import { Modal, Stack, Button, Text, Loader, Center, Select } from '@mantine/core';
+import { Modal, Stack, Button, Text, Loader, Center, TextInput, ScrollArea, Card } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from './store';
-import { listOperators } from './api';
+import { listUsers, type User } from './api';
 
-// Shown whenever no operator is selected. Once operators exist it is
-// non-dismissable (operator must be chosen at launch). On a fresh/empty DB it is
-// dismissable so the user can reach Members and create the first staff member.
+// Shown whenever no operator is selected. Any active non-guest member can
+// operate the software — search by name, tap to select (modelled on
+// MemberPickerModal). Once such members exist it is non-dismissable (an
+// operator must be chosen at launch). On a fresh/empty DB it is dismissable
+// so the user can reach Members and create the first one.
 export function OperatorPicker() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -16,28 +18,28 @@ export function OperatorPicker() {
   const setOperator = useAppStore((s) => s.setOperator);
   const lastOperatorUid = useAppStore((s) => s.lastOperatorUid);
   const [bootstrapDismissed, setBootstrapDismissed] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [text, setText] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['operators'],
-    queryFn: listOperators,
+    queryKey: ['users'],
+    queryFn: listUsers,
     enabled: operator === null,
   });
 
-  const hasOperators = (data?.length ?? 0) > 0;
-  const dismissable = !hasOperators; // only during first-run bootstrap
-  const opened = operator === null && (hasOperators || !bootstrapDismissed);
+  const pool = (data ?? []).filter((u) => u.active && !u.isGuest);
+  const hasMembers = pool.length > 0;
+  const dismissable = !hasMembers; // only during first-run bootstrap
+  const opened = operator === null && (hasMembers || !bootstrapDismissed);
 
-  const options = (data ?? []).map((op) => ({ value: String(op.uid), label: op.name }));
-  // Default to the last-used operator (if still an operator); the explicit pick
-  // overrides once the user touches the dropdown.
-  const lastStillValid = data?.some((op) => op.uid === lastOperatorUid) ?? false;
-  const selected = picked ?? (lastStillValid ? String(lastOperatorUid) : null);
+  useEffect(() => {
+    if (opened) setText('');
+  }, [opened]);
 
-  const confirm = () => {
-    const op = data?.find((o) => String(o.uid) === selected);
-    if (op) setOperator({ uid: op.uid, name: op.name, isAdmin: op.isAdmin });
-  };
+  const q = text.trim().toLowerCase();
+  const filtered = pool.filter((u) => !q || u.name.toLowerCase().includes(q));
+  const lastOperator = pool.find((u) => u.uid === lastOperatorUid);
+
+  const select = (u: User) => setOperator({ uid: u.uid, name: u.name, isAdmin: u.isAdmin });
 
   const goCreateFirst = () => {
     setBootstrapDismissed(true);
@@ -60,27 +62,45 @@ export function OperatorPicker() {
             <Loader />
           </Center>
         )}
-        {!isLoading && !hasOperators && (
+        {!isLoading && !hasMembers && (
           <>
-            <Text c="dimmed">{t('no_operators_hint')}</Text>
+            <Text c="dimmed">{t('no_members_hint')}</Text>
             <Button size="lg" fullWidth onClick={goCreateFirst}>
-              {t('add_first_operator')}
+              {t('add_first_member')}
             </Button>
           </>
         )}
-        {!isLoading && hasOperators && (
+        {!isLoading && hasMembers && (
           <>
-            <Select
-              data={options}
-              value={selected}
-              onChange={setPicked}
+            {lastOperator && (
+              // data-autofocus here, not the search input, so the OS touch
+              // keyboard doesn't pop on every launch.
+              <Button size="lg" fullWidth data-autofocus onClick={() => select(lastOperator)}>
+                {t('continue_as_operator', { name: lastOperator.name })}
+              </Button>
+            )}
+            <TextInput
+              size="lg"
               placeholder={t('select_operator_ph')}
-              nothingFoundMessage={t('no_results')}
-              searchable
+              value={text}
+              onChange={(e) => setText(e.target.value)}
             />
-            <Button size="lg" fullWidth disabled={!selected} onClick={confirm} data-autofocus>
-              {t('confirm_operator')}
-            </Button>
+            <ScrollArea h={360} type="auto">
+              <Stack gap="xs">
+                {filtered.length === 0 && <Text c="dimmed">{t('no_results')}</Text>}
+                {filtered.map((u) => (
+                  <Card
+                    key={u.uid}
+                    withBorder
+                    padding="sm"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => select(u)}
+                  >
+                    <Text fw={600}>{u.name}</Text>
+                  </Card>
+                ))}
+              </Stack>
+            </ScrollArea>
           </>
         )}
       </Stack>

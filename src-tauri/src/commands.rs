@@ -248,6 +248,20 @@ fn normalize_ssn(raw: &str) -> Result<String, AppError> {
     Ok(format!("{}-{}", &full[0..8], &full[8..12]))
 }
 
+/// Last 10 digits of a personnummer, ignoring format — the comparison key used
+/// wherever an SSN must be matched regardless of storage format (`user_create`
+/// only trims, `user_upsert_guest` canonicalises to 12 digits, and the Excel
+/// import used to have a third normalizer). Mirrors the frontend's `ssnDigits`
+/// (src/scanMatch.ts) so scanner and import share one definition. `None` when
+/// there are fewer than 10 digits — too short to be a real SSN.
+pub(crate) fn ssn_tail10(raw: &str) -> Option<String> {
+    let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 10 {
+        return None;
+    }
+    Some(digits[digits.len() - 10..].to_string())
+}
+
 /// Guest checkout entry: find an active user by SSN or create a guest.
 /// Active guest with this SSN → returned as-is (name is not overwritten).
 /// Active member with this SSN → error (use the normal member flow).
@@ -587,6 +601,15 @@ pub fn set_weapon_tags(
 mod tests {
     use super::*;
     use crate::db::migrated_in_memory;
+
+    #[test]
+    fn ssn_tail10_various_formats() {
+        assert_eq!(ssn_tail10("19800101-1231"), Some("8001011231".into()));
+        assert_eq!(ssn_tail10("800101-1231"), Some("8001011231".into()));
+        assert_eq!(ssn_tail10("8001011231"), Some("8001011231".into()));
+        assert_eq!(ssn_tail10("123"), None);
+        assert_eq!(ssn_tail10(""), None);
+    }
 
     fn new_user(name: &str, display_id: Option<&str>, is_staff: bool) -> NewUser {
         NewUser {

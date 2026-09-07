@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   Textarea,
-  Switch,
   Select,
   Checkbox,
   Stack,
@@ -131,7 +130,6 @@ export function MembersPage() {
     notifications.show({ color: 'red', message: errorMessage(e, t) });
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['users'] });
-    qc.invalidateQueries({ queryKey: ['operators'] });
     qc.invalidateQueries({ queryKey: ['hasAdmin'] });
   };
 
@@ -307,7 +305,7 @@ export function MembersPage() {
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
           {u.name}
-          {!u.isStaff && (!u.ssn || !isValidSwedishSSN(u.ssn)) && (
+          {(!u.ssn || !isValidSwedishSSN(u.ssn)) && (
             <Tooltip label={t('member_no_ssn_warning')} color="orange">
               <Text component="span" c="orange" size="sm">⚠</Text>
             </Tooltip>
@@ -340,7 +338,6 @@ export function MembersPage() {
       </Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="nowrap">
-          {u.isStaff && <Badge color="grape">{t('staff')}</Badge>}
           {u.isGuest && <Badge color="cyan">{t('label_guest')}</Badge>}
         </Group>
       </Table.Td>
@@ -387,9 +384,9 @@ export function MembersPage() {
   ));
 
   return (
-    // Fill the shell (100vh − 64 header − 48 footer − 2×16 main padding) so the
+    // Fill the shell (see --page-body-height in global.css) so the
     // table grows into the free space instead of leaving a void under it.
-    <Stack style={{ height: 'calc(100vh - 144px)' }}>
+    <Stack style={{ height: 'var(--page-body-height)' }}>
       <Group>
         <TextInput
           placeholder={t('search')}
@@ -490,10 +487,6 @@ export function MembersPage() {
                       />
                     )}
                   </Group>
-                  <Switch
-                    label={t('field_is_staff')}
-                    {...form.getInputProps('isStaff', { type: 'checkbox' })}
-                  />
                   {isAdmin && (
                     <Checkbox label={t('field_admin')} {...form.getInputProps('isAdmin', { type: 'checkbox' })} />
                   )}

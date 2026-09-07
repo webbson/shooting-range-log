@@ -4384,9 +4384,11 @@ name = "shooting-range-log"
 version = "0.1.0"
 dependencies = [
  "age",
+ "base64 0.22.1",
  "calamine",
  "chrono",
  "dirs",
+ "reqwest 0.12.28",
  "rusqlite",
  "rusqlite_migration",
  "rust-s3",
