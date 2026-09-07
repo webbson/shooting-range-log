@@ -37,3 +37,6 @@ primer.md
 # local agent scratch
 .claude/worktrees/
 .foreman/
+
+# Agent review artifacts — contain raw diffs of real data, never commit
+.superpowers/
