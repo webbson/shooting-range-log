@@ -984,7 +984,7 @@ export function SettingsPage() {
             <Slider
               size="xl"
               min={0.05}
-              max={0.5}
+              max={1}
               step={0.05}
               value={backgroundOpacity}
               onChange={setBackgroundOpacity}
