@@ -2,11 +2,41 @@
 
 use chrono::{Datelike, NaiveDate, Timelike, Utc};
 use s3::creds::Credentials;
+use s3::error::S3Error;
 use s3::{Bucket, Region};
+use serde::Serialize;
 
 use crate::backup::{BackupInfo, BackupSource};
 use crate::error::AppError;
 use crate::settings::Settings;
+
+/// One key whose remote delete failed during retention.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteFailure {
+    pub key: String,
+    /// HTTP status + response detail (or the raw error Display as fallback) —
+    /// enough to tell a signing bug (e.g. SignatureDoesNotMatch) apart from a
+    /// bucket policy denial (AccessDenied), which look identical otherwise.
+    pub error: String,
+}
+
+/// Outcome of one `retention_remote` pass, surfaced to the UI and logged —
+/// every previous delete failure was silently discarded (`let _ =`), so
+/// "remote never prunes" had no observable cause.
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RetentionSummary {
+    /// Objects listed under the prefix with a parseable backup timestamp.
+    pub listed: usize,
+    /// Of those, how many the GFS policy marked for deletion.
+    pub due: usize,
+    pub deleted: usize,
+    pub failed: Vec<DeleteFailure>,
+    /// Due for deletion but never attempted, because an earlier delete in
+    /// this pass already failed (see `retention_remote` doc comment).
+    pub not_attempted: usize,
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -239,8 +269,49 @@ pub async fn delete(settings: &Settings, key: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Turn a delete failure into a short, readable line: HTTP status plus the S3
+/// `<Code>` (e.g. "HTTP 403 AccessDenied" vs "HTTP 403 SignatureDoesNotMatch"),
+/// falling back to a truncated raw body when the XML doesn't parse that far,
+/// or the error's Display for anything that isn't an HTTP failure at all.
+///
+/// `rust-s3` 0.37.2 ships `fail-on-err` in its default features (verified in
+/// the vendored crate source), so a non-2xx delete response reaches us here as
+/// `Err(S3Error::HttpFailWithBody)`, not `Ok`. If that feature is ever turned
+/// off, `retention_remote`'s `Ok(resp)` branch below is the fallback.
+fn describe_delete_error(e: &S3Error) -> String {
+    match e {
+        S3Error::HttpFailWithBody(status, body) => {
+            let code = body
+                .split_once("<Code>")
+                .and_then(|(_, rest)| rest.split_once("</Code>"))
+                .map(|(code, _)| code);
+            match code {
+                Some(code) => format!("HTTP {status} {code}"),
+                None => format!("HTTP {status} {}", truncate(body)),
+            }
+        }
+        other => other.to_string(),
+    }
+}
+
+fn truncate(s: &str) -> String {
+    s.chars().take(200).collect()
+}
+
 /// Apply GFS retention to remote .age objects.
-pub async fn retention_remote(settings: &Settings) -> Result<(), AppError> {
+///
+/// Every failed `delete_object` is collected into the returned summary
+/// instead of being discarded — that silent discard was the actual bug behind
+/// "remote never prunes" (the listing, prefix-stripping and GFS slotting are
+/// shared with `list_remote`/local retention and already proven correct).
+///
+/// Stops after the first delete failure rather than retrying every due key:
+/// a bucket-policy denial is uniform across keys, and `rust-s3` retries each
+/// failed request once with a 1s sleep, so working through a backlog of
+/// hundreds of due-but-undeletable objects would hang the caller for minutes
+/// and hammer the bucket from the timer every hour. Remaining due keys are
+/// reported as `not_attempted`, not silently dropped.
+pub async fn retention_remote(settings: &Settings) -> Result<RetentionSummary, AppError> {
     let bucket = build_bucket(settings)?;
     let prefix = s3_prefix(settings);
 
@@ -267,7 +338,8 @@ pub async fn retention_remote(settings: &Settings) -> Result<(), AppError> {
         }
     }
 
-    // Newest first — first occurrence of a slot is the keeper.
+    // Newest first — first occurrence of a slot is the keeper. (Identical
+    // policy to backup::retention_local — do not change.)
     entries.sort_by(|a, b| b.1.cmp(&a.1));
 
     let now = Utc::now();
@@ -275,22 +347,89 @@ pub async fn retention_remote(settings: &Settings) -> Result<(), AppError> {
     let cy = today.year();
     let cm = today.month();
 
+    let listed = entries.len();
     let mut seen = std::collections::HashSet::new();
+    let mut due: Vec<String> = Vec::new();
     for (key, ts) in &entries {
         match gfs_slot(*ts, today, cy, cm) {
-            Some(slot) if seen.contains(&slot) => {
-                // Duplicate slot — delete older one.
-                let _ = bucket.delete_object(key).await;
-            }
+            Some(slot) if seen.contains(&slot) => due.push(key.clone()), // duplicate slot — delete older one
             Some(slot) => {
                 seen.insert(slot);
             }
-            None => {
-                // Too old — purge.
-                let _ = bucket.delete_object(key).await;
+            None => due.push(key.clone()), // too old — purge
+        }
+    }
+    let due_count = due.len();
+
+    let mut deleted = 0usize;
+    let mut failed: Vec<DeleteFailure> = Vec::new();
+    for key in &due {
+        match bucket.delete_object(key).await {
+            Ok(resp) if resp.status_code() < 300 => deleted += 1,
+            Ok(resp) => {
+                // Only reachable if `fail-on-err` is ever disabled — see doc
+                // comment on `describe_delete_error`.
+                let body = resp.to_string().unwrap_or_default();
+                failed.push(DeleteFailure {
+                    key: key.clone(),
+                    error: format!("HTTP {} {}", resp.status_code(), truncate(&body)),
+                });
+                break;
+            }
+            Err(e) => {
+                failed.push(DeleteFailure {
+                    key: key.clone(),
+                    error: describe_delete_error(&e),
+                });
+                break;
             }
         }
     }
+    let not_attempted = due_count - deleted - failed.len();
 
-    Ok(())
+    Ok(RetentionSummary {
+        listed,
+        due: due_count,
+        deleted,
+        failed,
+        not_attempted,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn describe_delete_error_extracts_code_from_xml_body() {
+        let e = S3Error::HttpFailWithBody(
+            403,
+            "<?xml version=\"1.0\"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>"
+                .to_owned(),
+        );
+        assert_eq!(describe_delete_error(&e), "HTTP 403 AccessDenied");
+    }
+
+    #[test]
+    fn describe_delete_error_distinguishes_signature_from_access_denied() {
+        let signing = S3Error::HttpFailWithBody(
+            403,
+            "<Error><Code>SignatureDoesNotMatch</Code></Error>".to_owned(),
+        );
+        let policy = S3Error::HttpFailWithBody(403, "<Error><Code>AccessDenied</Code></Error>".to_owned());
+        assert_ne!(describe_delete_error(&signing), describe_delete_error(&policy));
+    }
+
+    #[test]
+    fn describe_delete_error_falls_back_to_truncated_body_without_code() {
+        let body = "x".repeat(500);
+        let e = S3Error::HttpFailWithBody(403, body.clone());
+        let msg = describe_delete_error(&e);
+        assert!(msg.starts_with("HTTP 403 "));
+        assert!(msg.len() < body.len());
+    }
 }

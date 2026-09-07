@@ -1,4 +1,12 @@
-//! Excel import: parse xlsx → preview → commit historical member/weapon/loan data.
+//! Excel import: parse xlsx → preview → commit historical weapon/loan data.
+//!
+//! Loans/weapons only — this sync never creates, updates, or deactivates a
+//! member (that is workstream D's job, via a separate member-list import).
+//! Rows are matched to existing members by personnummer only, compared on the
+//! last 10 digits via `commands::ssn_tail10` (member SSNs are not stored
+//! canonically — `user_create` trims, `user_upsert_guest` canonicalises).  A
+//! row that matches no member is skipped, never created, and reported as a
+//! `warn_member_unmatched` warning carrying enough to identify the person.
 //!
 //! Three-layer architecture (each testable in isolation):
 //!   1. `parse_xlsx` — pure file parsing, no DB.
@@ -17,10 +25,13 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use tauri::State;
 
-use crate::commands::{user_create, user_set_active, user_set_preferred_weapon, weapon_create};
+use crate::commands::{
+    ssn_tail10, user_create, user_set_preferred_weapon, weapon_create,
+};
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{NewUser, NewWeapon};
+use crate::stats::csv_join;
 
 // ── Public output types (serialised over IPC) ────────────────────────────────
 
@@ -30,12 +41,28 @@ pub struct ImportWarning {
     pub row: u32,
     pub code: String,
     pub message: String,
+    /// Structured identification fields — populated only for
+    /// `warn_member_unmatched`, so the UI can render a translated row
+    /// (name/ssn/weapon) instead of the freeform `message` every other
+    /// warning code uses.
+    pub name: Option<String>,
+    pub ssn: Option<String>,
+    pub weapon: Option<String>, // ", "-joined weapon numbers referenced by the row
+}
+
+impl ImportWarning {
+    fn simple(row: u32, code: &str, message: String) -> Self {
+        ImportWarning { row, code: code.into(), message, name: None, ssn: None, weapon: None }
+    }
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportPreview {
-    pub members_to_create: u32,
+    /// Rows that matched no member — skipped, never created. See warnings
+    /// (code `warn_member_unmatched`) for who, and `import_export_unmatched`
+    /// to export the list.
+    pub members_unmatched: u32,
     pub members_to_match: u32,
     pub weapons_to_create: u32,
     pub weapons_existing: u32,
@@ -49,7 +76,7 @@ pub struct ImportPreview {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
-    pub members_created: u32,
+    pub members_unmatched: u32,
     pub members_matched: u32,
     pub weapons_created: u32,
     pub weapons_matched: u32,
@@ -73,7 +100,8 @@ pub struct ParsedLoan {
 pub struct ParsedMember {
     pub row: u32, // 1-based spreadsheet row (the member's "ID")
     pub name: String,
-    pub ssn: Option<String>,
+    pub ssn: Option<String>,     // raw, as typed in the file (trimmed) — for display/export
+    pub ssn_key: Option<String>, // ssn_tail10(ssn) — the match key
     pub favorite_weapon_no: Option<String>, // col 2 (`vapen`) — numeric tag or None
     pub loans: Vec<ParsedLoan>,
 }
@@ -85,15 +113,6 @@ pub struct ParsedSheet {
 }
 
 // ── Internal plan types ───────────────────────────────────────────────────────
-
-struct MemberAction {
-    row: u32,
-    name: String,
-    ssn: Option<String>,
-    display_id: Option<String>, // row number string, or None if tag is taken
-    existing_uid: Option<i64>,  // Some = already in DB, None = needs create
-    favorite_weapon_no: Option<String>,
-}
 
 struct WeaponAction {
     display_id: String, // the numeric weapon tag
@@ -109,7 +128,10 @@ struct LoanAction {
 }
 
 struct ImportPlan {
-    members: Vec<MemberAction>,
+    /// Matched members only: sheet row → existing user uid.
+    row_to_uid: HashMap<u32, i64>,
+    /// Matched members' favorite-weapon rows: (sheet row, weapon number).
+    favorites: Vec<(u32, String)>,
     weapons: Vec<WeaponAction>,
     loans: Vec<LoanAction>,
     warnings: Vec<ImportWarning>,
@@ -159,28 +181,6 @@ fn cell_as_f64(cell: &Data) -> Option<f64> {
 /// True iff string is a non-empty all-ASCII-digit token (a valid weapon number).
 fn is_weapon_no(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
-}
-
-/// Normalize a raw SSN string to canonical `YYYYMMDD-XXXX` form.
-///
-/// Handles:
-///   - `YYMMDD-XXXX` / `YYMMDDXXXX`  (10 raw digits) — infers century:
-///     yy > 26 → 1900s, yy ≤ 26 → 2000s (assumes no one older than ~90).
-///   - `YYYYMMDD-XXXX` / `YYYYMMDDXXXX` (12 raw digits) — just adds hyphen.
-///
-/// Returns `None` for anything that doesn't yield exactly 10 or 12 digits.
-fn normalize_ssn(raw: &str) -> Option<String> {
-    let digits: String = raw.trim().chars().filter(|c| c.is_ascii_digit()).collect();
-    let (date8, last4) = match digits.len() {
-        10 => {
-            let yy: u32 = digits[..2].parse().ok()?;
-            let century = if yy > 26 { 1900u32 } else { 2000u32 };
-            (format!("{}{}", century + yy, &digits[2..6]), digits[6..10].to_string())
-        }
-        12 => (digits[..8].to_string(), digits[8..12].to_string()),
-        _ => return None,
-    };
-    Some(format!("{}-{}", date8, last4))
 }
 
 /// Normalize member name to title case (first letter of each word uppercased,
@@ -256,7 +256,7 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
         .map(|((u, d), i)| (*u, *i, d.clone()))
         .collect();
 
-    // Dedup maps (within-file): SSN → member index, normalised name → member index.
+    // Dedup maps (within-file): ssn_key → member index, normalised name → member index.
     let mut ssn_to_idx: HashMap<String, usize> = HashMap::new();
     let mut name_to_idx: HashMap<String, usize> = HashMap::new();
     let mut members: Vec<ParsedMember> = Vec::new();
@@ -269,18 +269,19 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             _ => continue, // blank row
         };
 
-        let ssn = row.get(1).and_then(|c| cell_as_str(c)).and_then(|s| normalize_ssn(&s));
+        let ssn = row.get(1).and_then(|c| cell_as_str(c));
+        let ssn_key = ssn.as_deref().and_then(ssn_tail10);
 
         // Col 2: favorite weapon number (numeric tag only).
         let favorite_weapon_no = match row.get(2).and_then(|c| cell_as_str(c)) {
             None => None,
             Some(v) if is_weapon_no(&v) => Some(v),
             Some(v) => {
-                warnings.push(ImportWarning {
-                    row: row_num,
-                    code: "warn_junk_cell".into(),
-                    message: format!("Row {row_num}: non-numeric value '{v}' in vapen column ignored"),
-                });
+                warnings.push(ImportWarning::simple(
+                    row_num,
+                    "warn_junk_cell",
+                    format!("Row {row_num}: non-numeric value '{v}' in vapen column ignored"),
+                ));
                 None
             }
         };
@@ -294,32 +295,32 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             match &utlev_val {
                 None => {
                     if inlev_val.is_some() {
-                        warnings.push(ImportWarning {
-                            row: row_num,
-                            code: "warn_orphan_checkin".into(),
-                            message: format!(
+                        warnings.push(ImportWarning::simple(
+                            row_num,
+                            "warn_orphan_checkin",
+                            format!(
                                 "Row {row_num}: check-in without checkout at col {} — skipped",
                                 utlev_col + 1
                             ),
-                        });
+                        ));
                     }
                 }
                 Some(v) if !is_weapon_no(v) => {
-                    warnings.push(ImportWarning {
-                        row: row_num,
-                        code: "warn_junk_cell".into(),
-                        message: format!("Row {row_num}: non-numeric value '{v}' ignored"),
-                    });
+                    warnings.push(ImportWarning::simple(
+                        row_num,
+                        "warn_junk_cell",
+                        format!("Row {row_num}: non-numeric value '{v}' ignored"),
+                    ));
                 }
                 Some(weapon_no) => match date_opt {
                     None => {
-                        warnings.push(ImportWarning {
-                            row: row_num,
-                            code: "warn_no_date".into(),
-                            message: format!(
+                        warnings.push(ImportWarning::simple(
+                            row_num,
+                            "warn_no_date",
+                            format!(
                                 "Row {row_num}: weapon {weapon_no} in undated column — skipped"
                             ),
-                        });
+                        ));
                     }
                     Some(date) => {
                         let returned =
@@ -334,10 +335,10 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             }
         }
 
-        // Deduplicate within file: merge duplicate rows (same SSN, or same name when
-        // no SSN) into the first occurrence.
+        // Deduplicate within file: merge duplicate rows (same ssn_key, or same
+        // name when no SSN) into the first occurrence.
         let norm_name = name.to_lowercase();
-        let merge_into: Option<usize> = ssn
+        let merge_into: Option<usize> = ssn_key
             .as_ref()
             .and_then(|s| ssn_to_idx.get(s.as_str()).copied())
             .or_else(|| name_to_idx.get(&norm_name).copied());
@@ -348,32 +349,32 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             if members[idx].favorite_weapon_no.is_none() {
                 members[idx].favorite_weapon_no = favorite_weapon_no;
             }
-            warnings.push(ImportWarning {
-                row: row_num,
-                code: "warn_duplicate_member".into(),
-                message: format!(
+            warnings.push(ImportWarning::simple(
+                row_num,
+                "warn_duplicate_member",
+                format!(
                     "Row {row_num}: '{name}' merged with earlier row (duplicate in file)"
                 ),
-            });
+            ));
         } else {
             let idx = members.len();
-            if let Some(ref s) = ssn {
+            if let Some(ref s) = ssn_key {
                 ssn_to_idx.insert(s.clone(), idx);
             }
             name_to_idx.insert(norm_name, idx);
-            members.push(ParsedMember { row: row_num, name, ssn, favorite_weapon_no, loans });
+            members.push(ParsedMember { row: row_num, name, ssn, ssn_key, favorite_weapon_no, loans });
         }
     }
 
-    let name_only = members.iter().filter(|m| m.ssn.is_none()).count();
+    let name_only = members.iter().filter(|m| m.ssn_key.is_none()).count();
     if name_only > 0 {
-        warnings.push(ImportWarning {
-            row: 0,
-            code: "info_name_only_members".into(),
-            message: format!(
-                "{name_only} member(s) have no SSN and will be matched by name only"
+        warnings.push(ImportWarning::simple(
+            0,
+            "info_name_only_members",
+            format!(
+                "{name_only} member(s) have no personnummer and cannot be matched — skipped"
             ),
-        });
+        ));
     }
 
     Ok(ParsedSheet { members, warnings })
@@ -382,37 +383,30 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
 // ── Planning (read-only DB) ───────────────────────────────────────────────────
 
 fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, AppError> {
-    // Build lookup maps from ALL existing users (active + inactive) and active weapons.
-    // SSN → uid: use any user with that SSN (even inactive — same durable identity).
-    // Name → uid: normalised lower-case, takes last match if duplicates exist.
-    let (ssn_map, name_map, active_user_tags): (
-        HashMap<String, i64>,
-        HashMap<String, i64>,
-        HashSet<String>,
-    ) = {
-        let mut stmt = conn.prepare(
-            "SELECT uid, display_id, ssn, name, active FROM users",
-        )?;
-        let rows: Vec<(i64, Option<String>, Option<String>, String, bool)> = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+    // ssn_key (last 10 digits) → uid, built from ALL existing users (active +
+    // inactive — same durable identity). A tail-10 key can hit more than one
+    // user (e.g. an active member and an active guest holding the same SSN in
+    // different stored formats); tie-break prefers active, then non-guest,
+    // then lowest uid — mirrors the frontend's `findUserBySsn`.
+    let ssn_map: HashMap<String, i64> = {
+        let mut stmt = conn.prepare("SELECT uid, ssn, active, is_guest FROM users")?;
+        let rows: Vec<(i64, Option<String>, bool, bool)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
-        let mut ssn_map: HashMap<String, i64> = HashMap::new();
-        let mut name_map: HashMap<String, i64> = HashMap::new();
-        let mut active_tags: HashSet<String> = HashSet::new();
-
-        for (uid, display_id, ssn, name, active) in &rows {
-            if let Some(s) = ssn {
-                ssn_map.insert(s.clone(), *uid);
-            }
-            name_map.insert(name.to_lowercase(), *uid);
-            if *active {
-                if let Some(d) = display_id {
-                    active_tags.insert(d.clone());
-                }
+        let mut candidates: HashMap<String, Vec<(i64, bool, bool)>> = HashMap::new();
+        for (uid, ssn, active, is_guest) in rows {
+            if let Some(key) = ssn.as_deref().and_then(ssn_tail10) {
+                candidates.entry(key).or_default().push((uid, active, is_guest));
             }
         }
-        (ssn_map, name_map, active_tags)
+        candidates
+            .into_iter()
+            .map(|(key, mut cands)| {
+                cands.sort_by_key(|&(uid, active, is_guest)| (!active, is_guest, uid));
+                (key, cands[0].0)
+            })
+            .collect()
     };
 
     // Active weapon display_id → uid.
@@ -443,54 +437,51 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
             .collect()
     };
 
-    let mut member_actions: Vec<MemberAction> = Vec::new();
-    let mut member_row_to_existing_uid: HashMap<u32, Option<i64>> = HashMap::new();
+    let mut row_to_uid: HashMap<u32, i64> = HashMap::new();
     let mut warnings = parsed.warnings.clone();
 
     for pm in &parsed.members {
-        let existing_uid = pm
-            .ssn
-            .as_ref()
-            .and_then(|s| ssn_map.get(s.as_str()))
-            .copied()
-            .or_else(|| name_map.get(&pm.name.to_lowercase()).copied());
-
-        let display_id = if existing_uid.is_none() {
-            let tag = pm.row.to_string();
-            if active_user_tags.contains(&tag) {
+        match pm.ssn_key.as_ref().and_then(|k| ssn_map.get(k)).copied() {
+            Some(uid) => {
+                row_to_uid.insert(pm.row, uid);
+            }
+            None => {
+                let mut weapon_nos: Vec<String> = pm
+                    .loans
+                    .iter()
+                    .map(|l| l.weapon_no.clone())
+                    .chain(pm.favorite_weapon_no.clone())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                weapon_nos.sort();
+                let weapon_field = weapon_nos.join(", ");
                 warnings.push(ImportWarning {
                     row: pm.row,
-                    code: "warn_display_id_taken".into(),
+                    code: "warn_member_unmatched".into(),
                     message: format!(
-                        "Row {}: tag '{tag}' already in use — member created without tag",
-                        pm.row
+                        "Row {}: {} ({}) matches no member — weapon(s) {} — skipped",
+                        pm.row,
+                        pm.name,
+                        pm.ssn.as_deref().unwrap_or("no ssn"),
+                        if weapon_field.is_empty() { "none".into() } else { weapon_field.clone() },
                     ),
+                    name: Some(pm.name.clone()),
+                    ssn: pm.ssn.clone(),
+                    weapon: Some(weapon_field),
                 });
-                None
-            } else {
-                Some(tag)
             }
-        } else {
-            None // existing member; don't touch their tag
-        };
-
-        member_row_to_existing_uid.insert(pm.row, existing_uid);
-        member_actions.push(MemberAction {
-            row: pm.row,
-            name: pm.name.clone(),
-            ssn: pm.ssn.clone(),
-            display_id,
-            existing_uid,
-            favorite_weapon_no: pm.favorite_weapon_no.clone(),
-        });
+        }
     }
 
-    // Collect every weapon number referenced in the file (loans + favorites).
+    // Collect weapon numbers referenced by MATCHED members only (loans +
+    // favorites) — an unmatched row's weapons must never be created, since
+    // its loan is never inserted (would otherwise orphan weapon rows).
     let all_weapon_nos: HashSet<String> = parsed
         .members
         .iter()
-        .flat_map(|m| m.loans.iter().map(|l| l.weapon_no.clone()))
-        .chain(parsed.members.iter().filter_map(|m| m.favorite_weapon_no.clone()))
+        .filter(|pm| row_to_uid.contains_key(&pm.row))
+        .flat_map(|m| m.loans.iter().map(|l| l.weapon_no.clone()).chain(m.favorite_weapon_no.clone()))
         .collect();
 
     let mut weapon_actions: Vec<WeaponAction> = Vec::new();
@@ -505,14 +496,19 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
         });
     }
 
-    // Build loan actions with dedup check.
+    // Build loan + favorite actions — matched members only.
     let mut loan_actions: Vec<LoanAction> = Vec::new();
+    let mut favorites: Vec<(u32, String)> = Vec::new();
 
     for pm in &parsed.members {
-        let member_uid_opt = member_row_to_existing_uid
-            .get(&pm.row)
-            .copied()
-            .flatten();
+        let user_uid = match row_to_uid.get(&pm.row) {
+            Some(&u) => u,
+            None => continue,
+        };
+
+        if let Some(no) = &pm.favorite_weapon_no {
+            favorites.push((pm.row, no.clone()));
+        }
 
         for loan in &pm.loans {
             let weapon_uid_opt = weapon_no_to_existing_uid
@@ -520,14 +516,10 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
                 .copied()
                 .flatten();
 
-            // Dedup only possible when both member and weapon already exist.
-            let skip = match (member_uid_opt, weapon_uid_opt) {
-                (Some(user_uid), Some(weapon_uid)) => {
-                    let date_key = loan.checked_out_at[..10.min(loan.checked_out_at.len())]
-                        .to_string();
-                    existing_loans.contains(&(user_uid, weapon_uid, date_key))
-                }
-                _ => false,
+            let date_key = loan.checked_out_at[..10.min(loan.checked_out_at.len())].to_string();
+            let skip = match weapon_uid_opt {
+                Some(weapon_uid) => existing_loans.contains(&(user_uid, weapon_uid, date_key)),
+                None => false,
             };
 
             loan_actions.push(LoanAction {
@@ -541,7 +533,8 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
     }
 
     Ok(ImportPlan {
-        members: member_actions,
+        row_to_uid,
+        favorites,
         weapons: weapon_actions,
         loans: loan_actions,
         warnings,
@@ -550,8 +543,8 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
 
 fn plan_to_preview(plan: &ImportPlan) -> ImportPreview {
     ImportPreview {
-        members_to_create: plan.members.iter().filter(|m| m.existing_uid.is_none()).count() as u32,
-        members_to_match: plan.members.iter().filter(|m| m.existing_uid.is_some()).count() as u32,
+        members_unmatched: plan.warnings.iter().filter(|w| w.code == "warn_member_unmatched").count() as u32,
+        members_to_match: plan.row_to_uid.len() as u32,
         weapons_to_create: plan.weapons.iter().filter(|w| w.existing_uid.is_none()).count() as u32,
         weapons_existing: plan.weapons.iter().filter(|w| w.existing_uid.is_some()).count() as u32,
         loans_to_create: plan.loans.iter().filter(|l| !l.skip).count() as u32,
@@ -563,6 +556,23 @@ fn plan_to_preview(plan: &ImportPlan) -> ImportPreview {
             .count() as u32,
         warnings: plan.warnings.clone(),
     }
+}
+
+/// Build the "unmatched rows" CSV — `;`-separated, UTF-8 BOM, Swedish headers,
+/// matching the conventions in `stats::csv_content`. Returns (content, count).
+fn unmatched_csv(plan: &ImportPlan) -> (String, i64) {
+    let mut rows: Vec<Vec<String>> =
+        vec![["Rad", "Namn", "Personnummer", "Vapen-ID"].map(String::from).to_vec()];
+    for w in plan.warnings.iter().filter(|w| w.code == "warn_member_unmatched") {
+        rows.push(vec![
+            w.row.to_string(),
+            w.name.clone().unwrap_or_default(),
+            w.ssn.clone().unwrap_or_default(),
+            w.weapon.clone().unwrap_or_default(),
+        ]);
+    }
+    let count = (rows.len() as i64) - 1;
+    (csv_join(&rows), count)
 }
 
 // ── Execution ─────────────────────────────────────────────────────────────────
@@ -613,54 +623,14 @@ fn execute(
     // anything fails the operator record is also rolled back.
     let import_uid = ensure_import_operator(&tx)?;
 
-    let mut row_to_uid: HashMap<u32, i64> = HashMap::new();
     let mut wno_to_uid: HashMap<String, i64> = HashMap::new();
-    let mut members_created = 0u32;
-    let mut members_matched = 0u32;
     let mut weapons_created = 0u32;
     let mut weapons_matched = 0u32;
     let mut loans_created = 0u32;
     let mut loans_skipped = 0u32;
     let mut open_loans_marked_returned = 0u32;
 
-    // Pre-seed maps with existing uids (no-ops in execute, avoid duplicate lookups).
-    for m in &plan.members {
-        if let Some(uid) = m.existing_uid {
-            row_to_uid.insert(m.row, uid);
-        }
-    }
-    for w in &plan.weapons {
-        if let Some(uid) = w.existing_uid {
-            wno_to_uid.insert(w.display_id.clone(), uid);
-        }
-    }
-
-    // Create new members.
-    for m in &plan.members {
-        if let Some(uid) = m.existing_uid {
-            row_to_uid.insert(m.row, uid);
-            members_matched += 1;
-        } else {
-            let user = user_create(
-                &tx,
-                NewUser {
-                    display_id: m.display_id.clone(),
-                    name: m.name.clone(),
-                    email: None,
-                    phone: None,
-                    address: None,
-                    ssn: m.ssn.clone(),
-                    is_staff: false,
-                    is_admin: false,
-                    notes: Some("Importerad från Excel.".into()),
-                },
-            )?;
-            row_to_uid.insert(m.row, user.uid);
-            members_created += 1;
-        }
-    }
-
-    // Create new weapons (weapons require a display_id — all weapon_nos are numeric tags).
+    // Create/match weapons (weapons require a display_id — all weapon_nos are numeric tags).
     for w in &plan.weapons {
         if let Some(uid) = w.existing_uid {
             wno_to_uid.insert(w.display_id.clone(), uid);
@@ -689,9 +659,9 @@ fn execute(
             loans_skipped += 1;
             continue;
         }
-        let user_uid = match row_to_uid.get(&loan.member_row) {
+        let user_uid = match plan.row_to_uid.get(&loan.member_row) {
             Some(&u) => u,
-            None => continue,
+            None => continue, // unmatched — never reached, build_plan excludes these
         };
         let weapon_uid = match wno_to_uid.get(&loan.weapon_no) {
             Some(&w) => w,
@@ -726,16 +696,12 @@ fn execute(
         loans_created += 1;
     }
 
-    // Set favorite weapons — after members and weapons are guaranteed to exist.
-    // Never overwrites a pre-existing preference (skip silently for matched members).
-    // First row wins within-file: on conflict, push a warning and continue.
+    // Set favorite weapons for matched members — after members and weapons
+    // are guaranteed to exist. Never overwrites a pre-existing preference
+    // (skip silently). First row wins within-file: on conflict, warn and continue.
     let mut warnings = plan.warnings.clone();
-    for m in &plan.members {
-        let no = match &m.favorite_weapon_no {
-            Some(n) => n,
-            None => continue,
-        };
-        let user_uid = match row_to_uid.get(&m.row) {
+    for (row, no) in &plan.favorites {
+        let user_uid = match plan.row_to_uid.get(row) {
             Some(&u) => u,
             None => continue,
         };
@@ -754,14 +720,11 @@ fn execute(
             .optional()?
             .unwrap_or(false);
         if !active {
-            warnings.push(ImportWarning {
-                row: m.row,
-                code: "warn_favorite_inactive_member".into(),
-                message: format!(
-                    "Row {}: member is inactive — favorite weapon {no} skipped",
-                    m.row
-                ),
-            });
+            warnings.push(ImportWarning::simple(
+                *row,
+                "warn_favorite_inactive_member",
+                format!("Row {row}: member is inactive — favorite weapon {no} skipped"),
+            ));
             continue;
         }
         // Skip if the member already has a live preference (never overwrite).
@@ -779,23 +742,25 @@ fn execute(
         match user_set_preferred_weapon(&tx, user_uid, Some(weapon_uid)) {
             Ok(_) => {}
             Err(e) if e.code == "err_weapon_already_preferred" => {
-                warnings.push(ImportWarning {
-                    row: m.row,
-                    code: "warn_favorite_conflict".into(),
-                    message: format!(
-                        "Row {}: favorite weapon {no} already belongs to another member — skipped",
-                        m.row
+                warnings.push(ImportWarning::simple(
+                    *row,
+                    "warn_favorite_conflict",
+                    format!(
+                        "Row {row}: favorite weapon {no} already belongs to another member — skipped"
                     ),
-                });
+                ));
             }
             Err(e) => return Err(e),
         }
     }
 
+    let members_matched = plan.row_to_uid.len() as u32;
+    let members_unmatched = plan.warnings.iter().filter(|w| w.code == "warn_member_unmatched").count() as u32;
+
     tx.commit()?;
 
     Ok(ImportResult {
-        members_created,
+        members_unmatched,
         members_matched,
         weapons_created,
         weapons_matched,
@@ -853,11 +818,30 @@ pub fn import_commit(
     execute(&conn, &plan, mark_open_as_returned)
 }
 
+/// Export the unmatched-row list (name/personnummer/weapon-ids) to CSV, using
+/// the same conventions as `stats::export_csv`. Re-parses + re-plans, same
+/// idempotent pattern as `import_preview`/`import_commit`.
+#[tauri::command]
+pub fn import_export_unmatched(
+    db: State<Db>,
+    path: String,
+    sheet: String,
+    out_path: String,
+) -> Result<i64, AppError> {
+    let parsed = parse_xlsx(Path::new(&path), &sheet)?;
+    let conn = lock(&db)?;
+    let plan = build_plan(&conn, &parsed)?;
+    let (content, count) = unmatched_csv(&plan);
+    std::fs::write(&out_path, content)?;
+    Ok(count)
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::user_upsert_guest;
     use crate::db::migrated_in_memory;
 
     fn make_member(row: u32, name: &str, ssn: Option<&str>, loans: Vec<ParsedLoan>) -> ParsedMember {
@@ -865,6 +849,7 @@ mod tests {
             row,
             name: name.into(),
             ssn: ssn.map(String::from),
+            ssn_key: ssn.and_then(ssn_tail10),
             favorite_weapon_no: None, // override after construction when needed
             loans,
         }
@@ -884,6 +869,24 @@ mod tests {
 
     fn parsed_sheet(members: Vec<ParsedMember>) -> ParsedSheet {
         ParsedSheet { members, warnings: Vec::new() }
+    }
+
+    fn mk_member_user(conn: &Connection, name: &str, ssn: &str) -> crate::models::User {
+        user_create(
+            conn,
+            NewUser {
+                display_id: None,
+                name: name.into(),
+                ssn: Some(ssn.into()),
+                is_staff: false,
+                is_admin: false,
+                email: None,
+                phone: None,
+                address: None,
+                notes: None,
+            },
+        )
+        .unwrap()
     }
 
     // ── parse helpers ──
@@ -909,67 +912,63 @@ mod tests {
     // ── planning + execution ──
 
     #[test]
-    fn new_member_created_with_row_as_tag() {
+    fn member_matched_by_ssn_tail10() {
         let conn = migrated_in_memory();
-        let sheet = parsed_sheet(vec![make_member(4, "Tom Stevens", Some("19800101-1231"), vec![])]);
+        let existing = mk_member_user(&conn, "Tom Stevens", "19800101-1231");
+
+        let sheet = parsed_sheet(vec![make_member(4, "Tom Stevens", Some("800101-1231"), vec![])]);
         let plan = build_plan(&conn, &sheet).unwrap();
-        assert_eq!(plan.members.len(), 1);
-        assert!(plan.members[0].existing_uid.is_none());
-        assert_eq!(plan.members[0].display_id.as_deref(), Some("4"));
+        assert_eq!(plan.row_to_uid.get(&4), Some(&existing.uid));
     }
 
     #[test]
-    fn member_matched_by_ssn() {
+    fn unmatched_row_is_skipped_and_reported() {
         let conn = migrated_in_memory();
-        // Pre-create a user with the SSN
-        let existing = user_create(
-            &conn,
-            NewUser {
-                display_id: Some("99".into()),
-                name: "Tom Stevens".into(),
-                ssn: Some("19800101-1231".into()),
-                is_staff: false,
-                is_admin: false,
-                email: None,
-                phone: None,
-                address: None,
-                notes: None,
-            },
-        )
-        .unwrap();
+        let sheet = parsed_sheet(vec![make_member(
+            4,
+            "Nobody Here",
+            Some("19800101-1231"),
+            vec![make_loan("36", "2025-08-06", true)],
+        )]);
 
-        let sheet = parsed_sheet(vec![make_member(4, "Tom Stevens", Some("19800101-1231"), vec![])]);
         let plan = build_plan(&conn, &sheet).unwrap();
-        assert_eq!(plan.members[0].existing_uid, Some(existing.uid));
+        let preview = plan_to_preview(&plan);
+        assert_eq!(preview.loans_to_create, 0);
+        assert_eq!(preview.weapons_to_create, 0);
+        assert_eq!(preview.members_unmatched, 1);
+        let warn = preview.warnings.iter().find(|w| w.code == "warn_member_unmatched");
+        assert!(warn.is_some());
+        assert_eq!(warn.unwrap().weapon.as_deref(), Some("36"));
+
+        let result = execute(&conn, &plan, false).unwrap();
+        assert_eq!(result.loans_created, 0);
+        assert_eq!(result.weapons_created, 0);
+
+        let checkout_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM checkouts", [], |r| r.get(0)).unwrap();
+        let weapon_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM weapons", [], |r| r.get(0)).unwrap();
+        assert_eq!(checkout_count, 0);
+        assert_eq!(weapon_count, 0);
     }
 
     #[test]
-    fn member_matched_by_name_when_no_ssn() {
+    fn tail10_tie_break_prefers_active_member_over_active_guest() {
         let conn = migrated_in_memory();
-        let existing = user_create(
-            &conn,
-            NewUser {
-                display_id: Some("5".into()),
-                name: "Alice Ekvall".into(),
-                ssn: None,
-                is_staff: false,
-                is_admin: false,
-                email: None,
-                phone: None,
-                address: None,
-                notes: None,
-            },
-        )
-        .unwrap();
+        // Member stored trimmed-only (create_user does not canonicalise).
+        let member = mk_member_user(&conn, "Tom Stevens", "800101-1231");
+        // Guest stored canonicalised, same tail-10, also active.
+        user_upsert_guest(&conn, "Tom Guest".into(), "19800101-1231".into()).unwrap();
 
-        let sheet = parsed_sheet(vec![make_member(5, "alice ekvall", None, vec![])]);
+        let sheet = parsed_sheet(vec![make_member(4, "Tom Stevens", Some("19800101-1231"), vec![])]);
         let plan = build_plan(&conn, &sheet).unwrap();
-        assert_eq!(plan.members[0].existing_uid, Some(existing.uid));
+        assert_eq!(plan.row_to_uid.get(&4), Some(&member.uid));
     }
 
     #[test]
     fn loan_dedup_on_second_commit() {
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Tom", "19890330-0001");
         let sheet = parsed_sheet(vec![make_member(
             4,
             "Tom",
@@ -977,10 +976,9 @@ mod tests {
             vec![make_loan("36", "2025-08-06", true)],
         )]);
 
-        // First commit creates member, weapon, and loan.
+        // First commit creates the weapon and loan.
         let plan1 = build_plan(&conn, &sheet).unwrap();
         let r1 = execute(&conn, &plan1, false).unwrap();
-        assert_eq!(r1.members_created, 1);
         assert_eq!(r1.weapons_created, 1);
         assert_eq!(r1.loans_created, 1);
         assert_eq!(r1.loans_skipped, 0);
@@ -988,7 +986,6 @@ mod tests {
         // Second commit: everything matched / deduped.
         let plan2 = build_plan(&conn, &sheet).unwrap();
         let r2 = execute(&conn, &plan2, false).unwrap();
-        assert_eq!(r2.members_created, 0);
         assert_eq!(r2.weapons_created, 0);
         assert_eq!(r2.loans_created, 0);
         assert_eq!(r2.loans_skipped, 1);
@@ -997,6 +994,7 @@ mod tests {
     #[test]
     fn open_loan_has_null_checked_in_at() {
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Tom", "19890330-0001");
         let sheet = parsed_sheet(vec![make_member(
             4,
             "Tom",
@@ -1015,6 +1013,7 @@ mod tests {
     #[test]
     fn import_operator_created_once() {
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Tom", "19890330-0001");
         let sheet = parsed_sheet(vec![make_member(
             4,
             "Tom",
@@ -1034,60 +1033,9 @@ mod tests {
     }
 
     #[test]
-    fn new_member_display_id_collision_creates_without_tag() {
-        let conn = migrated_in_memory();
-        // Tag "4" is already taken by an active user
-        user_create(
-            &conn,
-            NewUser {
-                display_id: Some("4".into()),
-                name: "Other".into(),
-                ssn: None,
-                is_staff: false,
-                is_admin: false,
-                email: None,
-                phone: None,
-                address: None,
-                notes: None,
-            },
-        )
-        .unwrap();
-
-        let sheet = parsed_sheet(vec![make_member(4, "Tom", Some("19890330-0001"), vec![])]);
-        let plan = build_plan(&conn, &sheet).unwrap();
-        assert!(plan.members[0].display_id.is_none());
-        let warn = plan.warnings.iter().find(|w| w.code == "warn_display_id_taken");
-        assert!(warn.is_some(), "expected warn_display_id_taken");
-    }
-
-    #[test]
-    fn within_file_duplicate_member_merged() {
-        let conn = migrated_in_memory();
-        // Two members with same SSN (Alice Ekvall duplicate scenario)
-        let sheet = ParsedSheet {
-            members: Vec::new(), // build manually via parse-level dedup
-            warnings: Vec::new(),
-        };
-        // Simulate what parse_xlsx does: two rows with same SSN merge into one.
-        // We test at the parse level by checking the members vec length.
-        let path = Path::new("/dev/null"); // won't be opened — test the dedup logic inline
-        let _ = path; // suppress unused warning
-
-        // Direct unit test for the dedup logic in build_plan
-        let parsed_manually = ParsedSheet {
-            members: vec![
-                make_member(70, "Alice Ekvall", None, vec![make_loan("5", "2025-08-06", true)]),
-            ],
-            warnings: Vec::new(),
-        };
-        let plan1 = build_plan(&conn, &parsed_manually).unwrap();
-        assert_eq!(plan1.loans.len(), 1);
-        let _ = sheet; // suppress warning
-    }
-
-    #[test]
     fn mark_open_as_returned_closes_loan() {
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Tom", "19890330-0001");
         let sheet = parsed_sheet(vec![make_member(
             4,
             "Tom",
@@ -1109,6 +1057,7 @@ mod tests {
     #[test]
     fn weapon_reused_when_already_active() {
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Tom", "19890330-0001");
         let existing_w = weapon_create(
             &conn,
             NewWeapon {
@@ -1136,9 +1085,11 @@ mod tests {
 
     #[test]
     fn favorite_weapon_parsed_and_set_on_commit() {
-        // Scenario 1: member row has favorite_weapon_no "7"; no loan references "7".
-        // After commit: member's preferred_weapon_uid = the created weapon with tag "7".
+        // Scenario 1: matched member row has favorite_weapon_no "7"; no loan
+        // references "7". After commit: member's preferred_weapon_uid = the
+        // created weapon with tag "7".
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Tom", "19890330-0001");
         let mut member = make_member(4, "Tom", Some("19890330-0001"), vec![]);
         member.favorite_weapon_no = Some("7".into());
         let sheet = parsed_sheet(vec![member]);
@@ -1148,7 +1099,6 @@ mod tests {
         assert!(plan.weapons.iter().any(|w| w.display_id == "7"));
 
         let result = execute(&conn, &plan, false).unwrap();
-        assert_eq!(result.members_created, 1);
         assert_eq!(result.weapons_created, 1);
         assert!(result.warnings.iter().all(|w| w.code != "warn_favorite_conflict"));
 
@@ -1167,9 +1117,11 @@ mod tests {
 
     #[test]
     fn favorite_weapon_conflict_first_row_wins() {
-        // Scenario 2: two members share the same favorite "7".
+        // Scenario 2: two matched members share the same favorite "7".
         // Row 4 (lower row) gets it; row 5 receives warn_favorite_conflict.
         let conn = migrated_in_memory();
+        mk_member_user(&conn, "Alice", "19890330-0001");
+        mk_member_user(&conn, "Bob", "19900101-0002");
         let mut m1 = make_member(4, "Alice", Some("19890330-0001"), vec![]);
         m1.favorite_weapon_no = Some("7".into());
         let mut m2 = make_member(5, "Bob", Some("19900101-0002"), vec![]);
@@ -1208,18 +1160,7 @@ mod tests {
         // Scenario 3: pre-create member+weapon and set preference to W_A.
         // Import file says W_B — after commit, preference must still be W_A.
         let conn = migrated_in_memory();
-        let member = user_create(
-            &conn,
-            NewUser {
-                display_id: Some("9".into()),
-                name: "Carol".into(),
-                ssn: Some("19920101-0003".into()),
-                is_staff: false,
-                is_admin: false,
-                email: None, phone: None, address: None, notes: None,
-            },
-        )
-        .unwrap();
+        let member = mk_member_user(&conn, "Carol", "19920101-0003");
         let w_a = weapon_create(
             &conn,
             NewWeapon {
@@ -1267,20 +1208,9 @@ mod tests {
         // them and references a favorite weapon.  The member's preferred_weapon_uid
         // must stay NULL and the warning code must be present.
         let conn = migrated_in_memory();
-        let member = user_create(
-            &conn,
-            NewUser {
-                display_id: Some("77".into()),
-                name: "Dave Inactive".into(),
-                ssn: Some("19850101-0099".into()),
-                is_staff: false,
-                is_admin: false,
-                email: None, phone: None, address: None, notes: None,
-            },
-        )
-        .unwrap();
+        let member = mk_member_user(&conn, "Dave Inactive", "19850101-0099");
         // Deactivate (clear tag so the partial-unique index doesn't block us).
-        user_set_active(&conn, member.uid, false, true).unwrap();
+        crate::commands::user_set_active(&conn, member.uid, false, true).unwrap();
 
         // Import: row 3, same SSN, favorite weapon "55".
         let mut m = make_member(3, "Dave Inactive", Some("19850101-0099"), vec![]);
@@ -1306,22 +1236,23 @@ mod tests {
         assert!(pref.is_none(), "inactive member must not gain a favorite");
     }
 
+    // ── unmatched export ──
+
     #[test]
-    fn normalize_ssn_variants() {
-        // Already canonical
-        assert_eq!(normalize_ssn("19890330-1234"), Some("19890330-1234".into()));
-        // No hyphen, 12 digits
-        assert_eq!(normalize_ssn("198903301234"), Some("19890330-1234".into()));
-        // 10 digits, 19xx (yy=89 > 26)
-        assert_eq!(normalize_ssn("8903301234"), Some("19890330-1234".into()));
-        // 10 digits with hyphen, 19xx
-        assert_eq!(normalize_ssn("890330-1234"), Some("19890330-1234".into()));
-        // 10 digits, 20xx (yy=05 ≤ 26)
-        assert_eq!(normalize_ssn("0503301234"), Some("20050330-1234".into()));
-        // Leading/trailing whitespace
-        assert_eq!(normalize_ssn("  19890330-1234  "), Some("19890330-1234".into()));
-        // Garbage → None
-        assert_eq!(normalize_ssn("not-a-ssn"), None);
-        assert_eq!(normalize_ssn(""), None);
+    fn unmatched_csv_has_bom_and_semicolons() {
+        let conn = migrated_in_memory();
+        let sheet = parsed_sheet(vec![make_member(
+            4,
+            "Nobody",
+            Some("19800101-1231"),
+            vec![make_loan("36", "2025-08-06", true)],
+        )]);
+        let plan = build_plan(&conn, &sheet).unwrap();
+        let (content, count) = unmatched_csv(&plan);
+        assert_eq!(count, 1);
+        assert!(content.starts_with('\u{FEFF}'));
+        let lines: Vec<&str> = content.trim_start_matches('\u{FEFF}').split("\r\n").collect();
+        assert_eq!(lines[0], "Rad;Namn;Personnummer;Vapen-ID");
+        assert!(lines[1].starts_with("4;Nobody;19800101-1231;36"));
     }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import {
   AppShell,
   Group,
@@ -17,6 +17,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import { IconMaximize, IconMinimize, IconPower } from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
@@ -76,8 +77,54 @@ export function AppLayout() {
   });
   const openCount = open.data?.length ?? 0;
 
+  // Background image (workstream E). staleTime: Infinity — the native file
+  // dialog (Settings' image picker) steals and returns window focus, which
+  // would otherwise refetch this multi-MB payload via refetchOnWindowFocus;
+  // set/clear mutations invalidate this key explicitly instead. Queried here
+  // (not in SettingsPage) so the layer persists across route changes.
+  const backgroundEnabled = useAppStore((s) => s.backgroundEnabled);
+  const backgroundPosition = useAppStore((s) => s.backgroundPosition);
+  const backgroundSize = useAppStore((s) => s.backgroundSize);
+  const backgroundOpacity = useAppStore((s) => s.backgroundOpacity);
+  const backgroundMargin = useAppStore((s) => s.backgroundMargin);
+  const surfaceOpacity = useAppStore((s) => s.surfaceOpacity);
+  const background = useQuery({
+    queryKey: ['background'],
+    queryFn: () => invoke<string | null>('get_background'),
+    staleTime: Infinity,
+  });
+  // Memoized so the clock's 1x/second re-render doesn't rebuild a fresh
+  // multi-MB `url(...)` string (and a full-length React style diff) every
+  // tick — only recomputes when the image or a display setting changes.
+  const imageData = background.data;
+  const backgroundStyle = useMemo<CSSProperties | undefined>(
+    () =>
+      imageData
+        ? {
+            position: 'fixed',
+            inset: backgroundMargin,
+            zIndex: -1,
+            pointerEvents: 'none',
+            backgroundImage: `url("${imageData}")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition,
+            backgroundSize,
+            opacity: backgroundOpacity,
+          }
+        : undefined,
+    [imageData, backgroundPosition, backgroundSize, backgroundOpacity, backgroundMargin],
+  );
+
+  // Surface (Paper/Card) translucency (workstream E2): a CSS custom property
+  // read by the `.mantine-AppShell-main .mantine-Paper-root` rule in
+  // global.css. Set on AppShell.Main (not :root) so it's scoped to page
+  // content — Mantine renders modals/popovers/dropdowns as Paper too, via a
+  // portal at body level, outside this element, so they stay solid.
+  const surfaceStyle = { '--surface-opacity': surfaceOpacity } as CSSProperties;
+
   return (
     <>
+      {backgroundEnabled && backgroundStyle && <div aria-hidden style={backgroundStyle} />}
       <OperatorPicker />
       <AppShell header={{ height: 64 }} footer={{ height: 48 }} padding="md">
       <AppShell.Header>
@@ -125,7 +172,7 @@ export function AppLayout() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Main>
+      <AppShell.Main style={surfaceStyle}>
         <Outlet />
       </AppShell.Main>
 

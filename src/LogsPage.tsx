@@ -13,7 +13,7 @@ import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { listWeapons, listUsers, listOperators, listCheckouts } from './api';
+import { listWeapons, listUsers, listCheckouts } from './api';
 import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
 import { MemberInfoModal } from './MemberInfoModal';
@@ -35,7 +35,6 @@ export function LogsPage() {
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
-  const operators = useQuery({ queryKey: ['operators'], queryFn: listOperators });
 
   const logs = useQuery({
     queryKey: ['logs', weaponUid, userUid, operatorUid, from, to, onlyOpen],
@@ -64,10 +63,6 @@ export function LogsPage() {
   const userData = (users.data ?? []).map((u) => ({
     value: String(u.uid),
     label: u.name,
-  }));
-  const operatorData = (operators.data ?? []).map((o) => ({
-    value: String(o.uid),
-    label: o.name,
   }));
 
   // Scan routing: both kinds set the corresponding filter.
@@ -156,7 +151,7 @@ export function LogsPage() {
         />
         <Select
           label={t('operator')}
-          data={operatorData}
+          data={userData}
           value={operatorUid != null ? String(operatorUid) : null}
           onChange={(v) => setOperatorUid(v ? Number(v) : null)}
           searchable

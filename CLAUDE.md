@@ -171,3 +171,13 @@ M7 remaining: Windows code signing — see `BACKLOG.md`.
 SSN/personnummer is stored **plaintext** (deliberate). Mitigation is disk encryption
 (BitLocker) + encrypting backup artifacts before they leave the device (M6) — not column
 encryption. Keep this in mind for backups/export.
+
+**This repo is PUBLIC. Real personal data must never enter it — not in code, tests,
+fixtures, comments, docs, specs, commit messages or issues.** That means no real
+name, personnummer, phone number, e-mail address or street address, ever, including
+as a "format example". Club exports (member lists, loan spreadsheets) are live
+personal data: read them to derive *shape* — column names, row offsets, how many
+rows are empty — and then write fixtures from invented values. Test personnummer
+must be generated to satisfy Luhn, never copied from a person. Use
+`example.invalid` for e-mail. This has already been caught once in review: a
+member import's tests had been seeded with a real board member's full record.

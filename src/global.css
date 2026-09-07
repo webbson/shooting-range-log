@@ -8,3 +8,20 @@ textarea {
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* Page-surface translucency (workstream E2): lets the background image show
+ * through the row boxes (Card/Paper) on each page. Scoped to
+ * `.mantine-AppShell-main` — Mantine renders modals, popovers, menus and
+ * select dropdowns as Paper too, but those render through a portal at body
+ * level, outside AppShell.Main, so this rule never reaches them; overlays
+ * stay solid. `--surface-opacity` is set on AppShell.Main from the
+ * persisted `surfaceOpacity` store value (AppLayout.tsx). Blended with
+ * `color-mix` against Mantine's own `--mantine-color-body` token so it
+ * follows the light/dark theme instead of a hard-coded colour. */
+.mantine-AppShell-main .mantine-Paper-root {
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-body) calc(var(--surface-opacity, 0.92) * 100%),
+    transparent
+  );
+}
