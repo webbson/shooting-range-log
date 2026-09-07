@@ -4388,6 +4388,7 @@ dependencies = [
  "calamine",
  "chrono",
  "dirs",
+ "reqwest 0.12.28",
  "rusqlite",
  "rusqlite_migration",
  "rust-s3",

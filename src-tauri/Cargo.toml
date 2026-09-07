@@ -33,6 +33,11 @@ chrono = { version = "0.4.45", features = ["serde"] }
 thiserror = "2.0.18"
 dirs = "6"
 rust-s3 = "0.37.2"
+# Pinned to the exact reqwest version + TLS backend rust-s3 already pulls in
+# (native-tls, via its own default "tokio-native-tls" feature) so this adds no
+# second TLS stack — it just names the type to reuse rust-s3's own pooled
+# `Bucket::http_client()` for a presigned-URL DELETE (see s3.rs).
+reqwest = { version = "=0.12.28", default-features = false, features = ["native-tls"] }
 age = "0.11.3"
 base64 = "0.22"
 

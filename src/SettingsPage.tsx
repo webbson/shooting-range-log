@@ -203,6 +203,13 @@ export function SettingsPage() {
             reason: r.failed[0].error,
           }),
         });
+      } else if (r && r.notAttempted > 0) {
+        // A pass is capped so a long backlog cannot block the window; say so,
+        // or a partial result reads as a stall.
+        notifications.show({
+          color: 'green',
+          message: t('backup_retention_partial', { deleted: r.deleted, remaining: r.notAttempted }),
+        });
       } else if (r && r.deleted > 0) {
         notifications.show({ color: 'green', message: t('backup_retention_ok', { deleted: r.deleted }) });
       }
