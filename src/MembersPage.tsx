@@ -42,6 +42,8 @@ import { fmtDate } from './format';
 import { DebtModal } from './DebtModal';
 import { MemberInfoModal } from './MemberInfoModal';
 import { useIsAdmin } from './useIsAdmin';
+import { useScan } from './useScanner';
+import { findUserBySsn } from './scanMatch';
 
 const SSN_RE = /^\d{8}-\d{4}$/;
 const isValidSwedishSSN = (s: string) => SSN_RE.test(s.trim());
@@ -192,13 +194,34 @@ export function MembersPage() {
     onError,
   });
 
-  const openCreate = () => {
+  const openCreate = (prefillSsn?: string) => {
     setEditing(null);
     setPrefUid(null);
-    form.setValues(EMPTY);
-    form.resetDirty(EMPTY);
+    const values = prefillSsn ? { ...EMPTY, ssn: prefillSsn } : EMPTY;
+    form.setValues(values);
+    form.resetDirty(values);
     open();
   };
+
+  // Scan routing: SSN scans only (weapon scans are ignored on this page).
+  useScan((scan) => {
+    if (scan.kind !== 'ssn') return;
+    const match = findUserBySsn(users.data ?? [], scan.ssn);
+    if (match) {
+      setView(match.isGuest ? 'guests' : match.active ? 'active' : 'inactive');
+      setSearch(match.name);
+      return;
+    }
+    // No hit still has to settle the search box: the leading characters of the
+    // burst leaked into it, and leaving them there filters the list down to
+    // nothing behind the toast.
+    setSearch('');
+    if (isAdmin) {
+      openCreate(scan.ssn);
+    } else {
+      notifications.show({ color: 'red', message: t('scan_member_not_found') });
+    }
+  });
 
   const openEdit = (u: User) => {
     setEditing(u);
@@ -385,7 +408,7 @@ export function MembersPage() {
           allowDeselect={false}
           w={160}
         />
-        {isAdmin && <Button onClick={openCreate}>{t('new_member')}</Button>}
+        {isAdmin && <Button onClick={() => openCreate()}>{t('new_member')}</Button>}
       </Group>
 
       {(users.data?.length ?? 0) === 0 ? (

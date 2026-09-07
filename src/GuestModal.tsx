@@ -16,10 +16,12 @@ export function GuestModal({
   opened,
   onClose,
   onSelect,
+  initialSsn,
 }: {
   opened: boolean;
   onClose: () => void;
   onSelect: (uid: number) => void;
+  initialSsn?: string;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -27,13 +29,16 @@ export function GuestModal({
   const [name, setName] = useState('');
   const [ssn, setSsn] = useState('');
 
+  // Re-seeds on initialSsn too, not just on open: a second licence scan while
+  // this modal is already up must replace the prefill, or the operator files
+  // the new guest under the previous person's personnummer.
   useEffect(() => {
     if (opened) {
       setSearch('');
       setName('');
-      setSsn('');
+      setSsn(initialSsn ?? '');
     }
-  }, [opened]);
+  }, [opened, initialSsn]);
 
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: opened });
   const shots = useQuery({ queryKey: ['lastShotDates'], queryFn: lastShotDates, enabled: opened });

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "seed": "cargo run --manifest-path src-tauri/Cargo.toml --bin seed",
-    "wipe": "cargo run --manifest-path src-tauri/Cargo.toml --bin wipe"
+    "wipe": "cargo run --manifest-path src-tauri/Cargo.toml --bin wipe",
+    "test:scan": "node src/scan.check.ts"
   },
   "dependencies": {
     "@mantine/core": "^9.3.1",

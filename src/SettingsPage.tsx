@@ -16,6 +16,8 @@ import {
   TextInput,
   PasswordInput,
   Table,
+  NumberInput,
+  Modal,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -39,6 +41,8 @@ import {
   type BackupSource,
 } from './api';
 import { errorMessage } from './errors';
+import { useAppStore } from './store';
+import { classify, isValidWeaponFormat, type Scan } from './scan';
 
 const DEFAULT_SETTINGS: Settings = {
   s3Endpoint: null,
@@ -62,6 +66,24 @@ export function SettingsPage() {
 
   // ── Backup settings state ──
   const [form, setForm] = useState<Settings>(DEFAULT_SETTINGS);
+
+  // ── Scanner settings state ──
+  const scannerEnabled = useAppStore((s) => s.scannerEnabled);
+  const setScannerEnabled = useAppStore((s) => s.setScannerEnabled);
+  const scannerMaxGapMs = useAppStore((s) => s.scannerMaxGapMs);
+  const setScannerMaxGapMs = useAppStore((s) => s.setScannerMaxGapMs);
+  const scannerWeaponFormat = useAppStore((s) => s.scannerWeaponFormat);
+  const setScannerWeaponFormat = useAppStore((s) => s.setScannerWeaponFormat);
+  // Local staging so an in-progress edit (mid-typing, momentarily 0 or an
+  // invalid format) is never written to the (persisted) store.
+  const [maxGapInput, setMaxGapInput] = useState<number | string>(scannerMaxGapMs);
+  const [weaponFormatInput, setWeaponFormatInput] = useState(scannerWeaponFormat);
+  const weaponFormatValid = isValidWeaponFormat(weaponFormatInput);
+  const [measureOpen, setMeasureOpen] = useState(false);
+  // Echo store changes (e.g. the Measure modal's "Apply") back into the
+  // staging input — safe with the typing guard above since a valid keystroke
+  // writes the same value the store already has.
+  useEffect(() => setMaxGapInput(scannerMaxGapMs), [scannerMaxGapMs]);
 
   const { data: savedSettings } = useQuery({
     queryKey: ['settings'],
@@ -494,7 +516,164 @@ export function SettingsPage() {
           )}
         </Stack>
       </Card>
+
+      {/* ── Scanner settings ── */}
+      <Card withBorder>
+        <Stack gap="md">
+          <Title order={4}>{t('scanner')}</Title>
+
+          <Checkbox
+            label={t('scanner_enabled')}
+            checked={scannerEnabled}
+            onChange={(e) => setScannerEnabled(e.target.checked)}
+          />
+
+          <NumberInput
+            label={t('scanner_max_gap')}
+            description={t('scanner_max_gap_hint')}
+            value={maxGapInput}
+            onChange={(v) => {
+              setMaxGapInput(v);
+              const n = typeof v === 'number' ? v : Number(v);
+              if (Number.isFinite(n) && n > 0) setScannerMaxGapMs(n);
+            }}
+            min={1}
+            max={1000}
+            clampBehavior="blur"
+            allowDecimal={false}
+            w={280}
+          />
+
+          <TextInput
+            label={t('scanner_weapon_format')}
+            description={t('scanner_weapon_format_hint')}
+            value={weaponFormatInput}
+            onChange={(e) => {
+              const v = e.target.value;
+              setWeaponFormatInput(v);
+              if (isValidWeaponFormat(v)) setScannerWeaponFormat(v);
+            }}
+            error={weaponFormatValid ? undefined : t('scanner_weapon_format_invalid')}
+            w={280}
+          />
+
+          <Group>
+            <Button variant="default" size="sm" onClick={() => setMeasureOpen(true)}>
+              {t('scanner_measure')}
+            </Button>
+          </Group>
+        </Stack>
+      </Card>
+
+      <ScannerMeasureModal opened={measureOpen} onClose={() => setMeasureOpen(false)} />
     </Stack>
+  );
+}
+
+function ScannerMeasureModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const scannerWeaponFormat = useAppStore((s) => s.scannerWeaponFormat);
+  const setScannerMaxGapMs = useAppStore((s) => s.setScannerMaxGapMs);
+  const setScannerSuspended = useAppStore((s) => s.setScannerSuspended);
+
+  const [result, setResult] = useState<{ raw: string; maxGap: number; total: number } | null>(null);
+  // The suggestion is built from the worst gap across every scan taken while
+  // this modal is open, not from the last one. A single burst under-reports:
+  // the first inter-character gap is the slowest and most variable part of a
+  // scan, so one sample can miss the case that actually breaks capture.
+  const [worstGap, setWorstGap] = useState(0);
+  const [samples, setSamples] = useState(0);
+
+  // Reset the shown measurement each time the modal opens.
+  useEffect(() => {
+    if (opened) {
+      setResult(null);
+      setWorstGap(0);
+      setSamples(0);
+    }
+  }, [opened]);
+
+  // Own capture-phase listener, independent of scannerEnabled — measuring is
+  // the normal step BEFORE the feature is turned on. Suspends the global
+  // listener (useScanner) for as long as the modal is open so it cannot
+  // swallow the Enter or toast "unrecognised code" over the very burst being
+  // measured here.
+  useEffect(() => {
+    if (!opened) return;
+    setScannerSuspended(true);
+
+    let buf: { ch: string; t: number }[] = [];
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (buf.length > 0) {
+          const raw = buf.map((b) => b.ch).join('');
+          const gaps = buf.slice(1).map((b, i) => b.t - buf[i].t);
+          const maxGap = gaps.length > 0 ? Math.round(Math.max(...gaps)) : 0;
+          const total = Math.round(buf[buf.length - 1].t - buf[0].t);
+          setResult({ raw, maxGap, total });
+          setWorstGap((w) => Math.max(w, maxGap));
+          setSamples((n) => n + 1);
+        }
+        buf = [];
+        return;
+      }
+      if (e.key.length === 1) {
+        e.preventDefault();
+        buf.push({ ch: e.key, t: performance.now() });
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      setScannerSuspended(false);
+    };
+  }, [opened, setScannerSuspended]);
+
+  const scan: Scan | null = result ? classify(result.raw, scannerWeaponFormat) : null;
+
+  return (
+    <Modal opened={opened} onClose={onClose} title={t('scanner_measure_title')} centered>
+      <Stack gap="sm">
+        {!result || !scan ? (
+          <Text size="sm" c="dimmed">
+            {t('scanner_measure_prompt')}
+          </Text>
+        ) : (
+          <>
+            <Text size="sm">
+              <b>{t('scanner_measure_raw')}:</b> {result.raw}
+            </Text>
+            <Text size="sm">
+              <b>{t('scanner_measure_max_gap')}:</b> {result.maxGap} ms
+            </Text>
+            <Text size="sm">
+              <b>{t('scanner_measure_total')}:</b> {result.total} ms
+            </Text>
+            <Text size="sm">
+              <b>{t('scanner_measure_worst', { n: samples })}:</b> {worstGap} ms
+            </Text>
+            <Text size="sm">
+              <b>{t('scanner_measure_result')}:</b>{' '}
+              {scan.kind === 'weapon' && `${t('scan_kind_weapon')} — ${scan.candidates.join(', ')}`}
+              {scan.kind === 'ssn' && `${t('scan_kind_ssn')} — ${scan.ssn}`}
+              {scan.kind === 'unknown' && t('scan_kind_unknown')}
+            </Text>
+            <Group justify="flex-end">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setScannerMaxGapMs(Math.max(1, worstGap * 2))}
+              >
+                {t('scanner_measure_apply')}
+              </Button>
+            </Group>
+          </>
+        )}
+      </Stack>
+    </Modal>
   );
 }
 

@@ -40,6 +40,8 @@ import { CURATED_BRANDS, CURATED_CALIBERS, mergeSuggestions } from './weaponPres
 import { ServiceModal } from './ServiceModal';
 import { TagModal } from './TagModal';
 import { useIsAdmin } from './useIsAdmin';
+import { useScan } from './useScanner';
+import { findWeaponByCandidates } from './scanMatch';
 
 interface WeaponForm {
   displayId: string;
@@ -259,6 +261,21 @@ export function WeaponsPage() {
     setDeactivating(w);
     close();
   };
+
+  // Scan routing: weapon scans only (SSN scans are ignored on this page).
+  useScan((scan) => {
+    if (scan.kind !== 'weapon') return;
+    const match = findWeaponByCandidates(weapons.data ?? [], scan.candidates);
+    if (!match) {
+      // The leading characters of the burst leaked into the search box; leaving
+      // them there filters the list down to nothing behind the toast.
+      setSearch('');
+      notifications.show({ color: 'red', message: t('scan_weapon_unknown') });
+      return;
+    }
+    if (!match.active) setShowInactive(true);
+    setSearch(match.displayId ?? '');
+  });
 
   const q = search.trim().toLowerCase();
   const filtered = (weapons.data ?? []).filter((w) => {
