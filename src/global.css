@@ -68,3 +68,22 @@ textarea {
 .mantine-AppShell-main .mantine-Paper-root .mantine-Table-table {
   background-color: transparent;
 }
+
+/* Restore highlight-on-hover for striped rows. Mantine's own hover rule is
+ * `.m_4e7aa4fd:hover:where([data-hover])` — specificity (0,2,0) — while the
+ * striped rule above is (0,3,1) and was therefore winning even while hovered,
+ * so exactly the alternate rows stopped highlighting. Adding the second
+ * attribute lifts these to (0,4,1).
+ * Both branches are needed and the second is the one that counts here: the
+ * target machine is a touch screen, which matches `hover: none`, where Mantine
+ * drives the highlight from `:active` rather than `:hover`. */
+@media (hover: hover) {
+  .mantine-AppShell-main tr[data-hover][data-striped]:hover {
+    background-color: var(--tr-hover-bg);
+  }
+}
+@media (hover: none) {
+  .mantine-AppShell-main tr[data-hover][data-striped]:active {
+    background-color: var(--tr-hover-bg);
+  }
+}
