@@ -29,16 +29,18 @@ textarea {
 /* Striped table rows are NOT Paper — Mantine paints them from
  * `--table-striped-color` on the row itself, so the Paper rule above leaves
  * them fully opaque and the image only shows through between the stripes.
- * Blend the row against that same token rather than redefining the token,
- * so the light/dark values Mantine picked still apply.
- * Mantine's own selector wraps everything in `:where()` (zero specificity),
- * so this one class + element + attribute comfortably wins. The sticky header
- * is deliberately left solid: a translucent one shows the rows scrolling
- * through it, which reads as a rendering bug rather than a design. */
+ *
+ * Fading that token by the surface opacity does NOT work: the stripe colour
+ * (gray-0 / dark-6) is nearly the surface colour, so diluting both by the same
+ * amount erases the difference and the stripes vanish. What made them visible
+ * was never opacity, it was the tint.
+ *
+ * So paint a fixed-alpha wash of the text colour instead: it contrasts in both
+ * themes, stays visible at ANY surface opacity, and still lets the image
+ * through. Mantine's own selector is wrapped in `:where()` (zero specificity),
+ * so one class + element + attribute wins comfortably. The sticky header is
+ * deliberately left solid: a translucent one shows rows scrolling through it,
+ * which reads as a rendering bug rather than a design. */
 .mantine-AppShell-main tr[data-striped] {
-  background-color: color-mix(
-    in srgb,
-    var(--table-striped-color) calc(var(--surface-opacity, 0.92) * 100%),
-    transparent
-  );
+  background-color: color-mix(in srgb, var(--mantine-color-text) 7%, transparent);
 }
