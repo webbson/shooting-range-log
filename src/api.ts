@@ -91,6 +91,13 @@ export const upsertGuest = (name: string, ssn: string) =>
 export const promoteGuest = (uid: number) => invoke<User>('promote_guest', { uid });
 export const hasAdmin = () => invoke<boolean>('has_admin');
 
+// ---- Danger zone ----
+
+/** Deletes every member, weapon and log row. Settings survive. */
+export const wipeDatabase = () => invoke<void>('wipe_database');
+/** Deletes checkouts, service log and debts. Members and weapons survive. */
+export const wipeTransactions = () => invoke<void>('wipe_transactions');
+
 // ---- Weapon tags ----
 
 /** Fixed tag set; i18n label key = `tag_${key}`, weapon field = camelCase `tag${Key}`. */

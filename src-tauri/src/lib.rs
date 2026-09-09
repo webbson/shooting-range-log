@@ -320,6 +320,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             db_health,
+            seed::wipe_database,
+            seed::wipe_transactions,
             commands::list_users,
             commands::list_operators,
             commands::get_user,
