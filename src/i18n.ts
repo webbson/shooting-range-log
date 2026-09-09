@@ -364,6 +364,14 @@ const resources = {
       scanner_weapon_format_hint:
         '# är en siffra i det nollutfyllda ID:t, t.ex. v#### där vapen 1 blir v0001.',
       scanner_weapon_format_invalid: 'Formatet måste ha ett prefix och minst en #.',
+      checkout_idle_seconds: 'Tid innan påminnelse (sekunder)',
+      checkout_idle_seconds_hint:
+        'Om utlämningen står halvfärdig så här länge visas en fråga om den ska slutföras eller avbrytas.',
+      idle_title: 'Är du kvar?',
+      idle_finish_prompt: 'Vill du slutföra utlämningen?',
+      idle_incomplete: 'Utlämningen är inte klar.',
+      continue_action: 'Fortsätt',
+      checkout_done_title: 'Utlämnat',
       scanner_measure: 'Mät',
       scanner_measure_title: 'Mät skanning',
       scanner_measure_prompt: 'Skanna några gånger nu — förslaget byggs på den långsammaste avläsningen.',
@@ -772,6 +780,14 @@ const resources = {
       scanner_weapon_format_hint:
         '# is one digit of the zero-padded ID, e.g. v#### where weapon 1 becomes v0001.',
       scanner_weapon_format_invalid: 'The format needs a prefix and at least one #.',
+      checkout_idle_seconds: 'Time before reminder (seconds)',
+      checkout_idle_seconds_hint:
+        'If a checkout is left half-finished this long, a prompt asks whether to finish or cancel it.',
+      idle_title: 'Still there?',
+      idle_finish_prompt: 'Do you want to finish the checkout?',
+      idle_incomplete: 'The checkout is not complete.',
+      continue_action: 'Continue',
+      checkout_done_title: 'Checked out',
       scanner_measure: 'Measure',
       scanner_measure_title: 'Measure scan',
       scanner_measure_prompt: 'Scan a few times now — the suggestion is built from the slowest read.',

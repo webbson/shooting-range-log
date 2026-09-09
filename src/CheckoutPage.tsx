@@ -64,6 +64,16 @@ export function CheckoutPage() {
   const [scanCheckin, setScanCheckin] = useState<{ loan: OpenCheckout; weapon: Weapon } | null>(null);
   // SSN scan with no user match: prefills GuestModal's SSN field.
   const [scanGuestSsn, setScanGuestSsn] = useState<string | undefined>(undefined);
+  // The weapon a selector-step scan picked. `tag` can't serve as the source of
+  // truth here: a following SSN scan leaks its digits into it (see the SSN
+  // branch below), so by the time that handler runs `matched` is garbage.
+  const [scanWeaponUid, setScanWeaponUid] = useState<number | null>(null);
+  // 5s auto-dismissed success popup, fed from the mutation's own vars so it
+  // never reads state that reset() has already cleared.
+  const [done, setDone] = useState<{ weapon: string; user: string } | null>(null);
+  // Inactivity prompt (see the idle effect below).
+  const [idlePrompt, setIdlePrompt] = useState(false);
+  const idleSeconds = useAppStore((s) => s.checkoutIdleSeconds);
 
   const weapons = useQuery({ queryKey: ['weapons'], queryFn: listWeapons });
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers });
@@ -94,17 +104,18 @@ export function CheckoutPage() {
   // radio boxes. Assigned is the default pick.
   const matched = tag ? (weapons.data ?? []).find((w) => w.active && w.displayId === tag) : undefined;
   const holder = matched ? openMap.get(matched.uid) : undefined;
-  const assignedUser: User | undefined = (() => {
-    if (!matched) return undefined;
-    const p = preferrerMap.get(matched.uid);
-    return p?.active ? p : undefined;
-  })();
-  const lastUser: User | undefined = (() => {
-    if (!matched) return undefined;
-    const last = lastUseMap.get(matched.uid);
+  const candidatesFor = (w: Weapon | undefined) => {
+    if (!w) return {};
+    const p = preferrerMap.get(w.uid);
+    const assigned = p?.active ? p : undefined;
+    const last = lastUseMap.get(w.uid);
     const u = last && (users.data ?? []).find((x) => x.uid === last.userUid);
-    return u && u.active && !u.isGuest && u.uid !== assignedUser?.uid ? u : undefined;
-  })();
+    return {
+      assigned,
+      last: u && u.active && !u.isGuest && u.uid !== assigned?.uid ? u : undefined,
+    } as { assigned?: User; last?: User };
+  };
+  const { assigned: assignedUser, last: lastUser } = candidatesFor(matched);
   // An explicit tap wins only while it still names a current candidate;
   // otherwise fall back to assigned, then last.
   const chosenUser =
@@ -113,6 +124,7 @@ export function CheckoutPage() {
     lastUser;
 
   const enterForm = (w: Weapon | undefined, uid: number | null) => {
+    setScanWeaponUid(null);
     setWeaponUid(w?.uid ?? null);
     setUserUid(uid);
     setAssign(false);
@@ -173,6 +185,14 @@ export function CheckoutPage() {
     setStep('selector');
     setTag('');
     setAssign(false);
+    setScanWeaponUid(null);
+    // Anything still open belongs to the abandoned flow.
+    setPicker(null);
+    setGuestOpen(false);
+    setScanGuestSsn(undefined);
+    setScanCheckin(null);
+    setConfirmTransfer(false);
+    setIdlePrompt(false);
   };
 
   const onError = (e: unknown) =>
@@ -185,8 +205,13 @@ export function CheckoutPage() {
   const checkoutMut = useMutation({
     mutationFn: (vars: { weaponUid: number; userUid: number; assign: boolean }) =>
       doCheckout(vars.weaponUid, vars.userUid, operator!.uid, vars.assign),
-    onSuccess: () => {
-      notifications.show({ message: t('checked_out_ok') });
+    onSuccess: (_data, vars) => {
+      const w = (weapons.data ?? []).find((x) => x.uid === vars.weaponUid);
+      const u = (users.data ?? []).find((x) => x.uid === vars.userUid);
+      setDone({
+        weapon: w ? weaponLabel(w.brand, w.model, w.caliber, w.displayId, w.active, t) : '',
+        user: u ? userLabel(u.name, u.active, t, u.isGuest) : '',
+      });
       reset();
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
@@ -221,6 +246,7 @@ export function CheckoutPage() {
   // Scanner routing. See docs/superpowers/specs/2026-09-02-scanner-support-design.md
   // section "4. Per-page behaviour → CheckoutPage".
   useScan((scan) => {
+    setDone(null); // never let the success overlay swallow the next scan
     if (scan.kind === 'weapon') {
       const w = findWeaponByCandidates(weapons.data ?? [], scan.candidates);
       if (!w || !w.active) {
@@ -243,6 +269,16 @@ export function CheckoutPage() {
         // Mirrors numpad entry: existing selector logic (candidate radio
         // boxes, direct checkout) takes it from here.
         setTag(w.displayId ?? '');
+        setScanWeaponUid(w.uid);
+      } else if (
+        // Rescanning the weapon already on the form is the confirm gesture.
+        w.uid === weaponUid &&
+        userUid != null &&
+        ev?.canCheckout &&
+        operator &&
+        !checkoutMut.isPending
+      ) {
+        checkoutMut.mutate({ weaponUid: w.uid, userUid, assign: alreadyAssigned ? false : assign });
       } else {
         setAssign(false);
         setWeaponUid(w.uid);
@@ -258,9 +294,13 @@ export function CheckoutPage() {
     // is nothing worth preserving out of `tag` here; every branch clears it
     // and moves on via enterForm(undefined, ...).
     setTag('');
+    // The weapon a preceding scan selected, if any — carried into every branch
+    // below so an SSN scan never drops it.
+    const sw =
+      scanWeaponUid != null ? (weapons.data ?? []).find((w) => w.uid === scanWeaponUid) : undefined;
     const u = findUserBySsn(users.data ?? [], scan.ssn);
     if (!u) {
-      if (step === 'selector') enterForm(undefined, null);
+      if (step === 'selector') enterForm(sw, null);
       setScanGuestSsn(scan.ssn);
       setGuestOpen(true);
       return;
@@ -269,7 +309,18 @@ export function CheckoutPage() {
       // The SSN belongs to a retired member — upsert_guest would reject it
       // with a unique-SSN error, so no "create guest" offer here.
       notifications.show({ color: 'red', message: t('scan_member_inactive', { name: u.name }) });
-      if (step === 'selector') enterForm(undefined, null);
+      if (step === 'selector') enterForm(sw, null);
+      return;
+    }
+    if (sw && step === 'selector' && operator && !checkoutMut.isPending && !openMap.get(sw.uid)) {
+      const c = candidatesFor(sw);
+      if (u.uid === c.assigned?.uid || u.uid === c.last?.uid) {
+        // Scanned weapon + one of its own candidates: no confirmation step.
+        checkoutMut.mutate({ weaponUid: sw.uid, userUid: u.uid, assign: false });
+        return;
+      }
+      // Anyone else lands on the form with both already filled in.
+      enterForm(sw, u.uid);
       return;
     }
     if (step === 'selector') enterForm(undefined, null);
@@ -335,6 +386,104 @@ export function CheckoutPage() {
     return (weapons.data ?? []).find((w) => w.uid === selectedUser.preferredWeaponUid);
   })();
 
+  // Idle prompt: a partial selection left untouched for idleSeconds. Any
+  // pointer/key activity re-arms it; the prompt itself and the success
+  // overlay stand down.
+  const hasSelection = weaponUid != null || userUid != null || matched != null;
+  useEffect(() => {
+    if (!hasSelection || idlePrompt || done) return;
+    let timer = 0;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => setIdlePrompt(true), idleSeconds * 1000);
+    };
+    arm();
+    window.addEventListener('pointerdown', arm);
+    window.addEventListener('keydown', arm);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [hasSelection, idlePrompt, done, idleSeconds, weaponUid, userUid, matched?.uid]);
+
+  useEffect(() => {
+    if (!done) return;
+    const timer = window.setTimeout(() => setDone(null), 5000);
+    return () => clearTimeout(timer);
+  }, [done]);
+
+  // A half-finished flow can only be finished from the prompt when the backend
+  // says it would actually go through — an out weapon or inactive member with
+  // both cards filled still gets the "not complete" variant.
+  const idleCanFinish = !!ev?.canCheckout && weaponUid != null && userUid != null && !!operator;
+
+  const overlays = (
+    <>
+      <CheckinConfirmModal
+        loan={scanCheckin?.loan ?? null}
+        opened={scanCheckin != null}
+        onClose={() => setScanCheckin(null)}
+        loading={scanCheckinMut.isPending}
+        onConfirm={() =>
+          scanCheckin &&
+          scanCheckinMut.mutate({ loan: scanCheckin.loan, weapon: scanCheckin.weapon, uid: userUid })
+        }
+      />
+
+      <Modal
+        opened={done != null}
+        onClose={() => setDone(null)}
+        title={t('checkout_done_title')}
+        centered
+      >
+        <Stack gap="xs">
+          <Text fz={28} fw={700} c="teal">
+            {done?.weapon}
+          </Text>
+          <Text fz="xl">{done?.user}</Text>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={idlePrompt}
+        onClose={() => setIdlePrompt(false)}
+        title={t('idle_title')}
+        centered
+      >
+        <Stack>
+          <Text fz="lg">{idleCanFinish ? t('idle_finish_prompt') : t('idle_incomplete')}</Text>
+          <Group grow>
+            <Button size="lg" variant="default" color="red" onClick={reset}>
+              {t('cancel')}
+            </Button>
+            {idleCanFinish ? (
+              <Button
+                size="lg"
+                color="teal"
+                loading={checkoutMut.isPending}
+                onClick={() => {
+                  setIdlePrompt(false);
+                  checkoutMut.mutate({
+                    weaponUid: weaponUid!,
+                    userUid: userUid!,
+                    assign: alreadyAssigned ? false : assign,
+                  });
+                }}
+              >
+                {t('confirm_checkout')}
+              </Button>
+            ) : (
+              <Button size="lg" onClick={() => setIdlePrompt(false)}>
+                {t('continue_action')}
+              </Button>
+            )}
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  );
+
   if (step === 'selector') {
     return (
       <>
@@ -345,7 +494,15 @@ export function CheckoutPage() {
       >
         <Group align="stretch" gap="xl">
           <Stack w={360} gap="md">
-            <Numpad value={tag} onChange={setTag} size="xl" placeholder={t('enter_weapon_id')} />
+            <Numpad
+              value={tag}
+              onChange={(v) => {
+                setScanWeaponUid(null); // a manual edit retires the scanned pick
+                setTag(v);
+              }}
+              size="xl"
+              placeholder={t('enter_weapon_id')}
+            />
             <Button
               size="xl"
               fullWidth
@@ -456,16 +613,7 @@ export function CheckoutPage() {
           </Stack>
         </Group>
       </Stack>
-      <CheckinConfirmModal
-        loan={scanCheckin?.loan ?? null}
-        opened={scanCheckin != null}
-        onClose={() => setScanCheckin(null)}
-        loading={scanCheckinMut.isPending}
-        onConfirm={() =>
-          scanCheckin &&
-          scanCheckinMut.mutate({ loan: scanCheckin.loan, weapon: scanCheckin.weapon, uid: userUid })
-        }
-      />
+      {overlays}
       </>
     );
   }
@@ -679,16 +827,7 @@ export function CheckoutPage() {
         initialSsn={scanGuestSsn}
       />
 
-      <CheckinConfirmModal
-        loan={scanCheckin?.loan ?? null}
-        opened={scanCheckin != null}
-        onClose={() => setScanCheckin(null)}
-        loading={scanCheckinMut.isPending}
-        onConfirm={() =>
-          scanCheckin &&
-          scanCheckinMut.mutate({ loan: scanCheckin.loan, weapon: scanCheckin.weapon, uid: userUid })
-        }
-      />
+      {overlays}
 
       <WeaponPickerModal
         opened={picker === 'weapon'}

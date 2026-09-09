@@ -33,6 +33,9 @@ interface AppState {
    *  (useScanner) stands down instead of swallowing the Enter or toasting over the
    *  very code being measured. Transient per-session state — NOT persisted. */
   scannerSuspended: boolean;
+  /** Checkout page: seconds of inactivity with a partial selection before the
+   *  "still there?" prompt appears. Persisted — per-laptop pacing. */
+  checkoutIdleSeconds: number;
   /** Page background image (workstream E): the file itself lives in this
    *  laptop's app data dir, so display settings live here too — per-laptop
    *  cosmetic config, not something to sync between machines. Defaults to
@@ -58,6 +61,7 @@ interface AppState {
   setScannerMaxGapMs: (ms: number) => void;
   setScannerWeaponFormat: (fmt: string) => void;
   setScannerSuspended: (on: boolean) => void;
+  setCheckoutIdleSeconds: (s: number) => void;
   setBackgroundEnabled: (on: boolean) => void;
   setBackgroundPosition: (pos: string) => void;
   setBackgroundSize: (size: string) => void;
@@ -77,6 +81,7 @@ export const useAppStore = create<AppState>()(
       scannerMaxGapMs: 60,
       scannerWeaponFormat: 'v####',
       scannerSuspended: false,
+      checkoutIdleSeconds: 30,
       backgroundEnabled: true,
       backgroundPosition: 'center',
       backgroundSize: 'cover',
@@ -95,6 +100,7 @@ export const useAppStore = create<AppState>()(
       setScannerMaxGapMs: (scannerMaxGapMs) => set({ scannerMaxGapMs }),
       setScannerWeaponFormat: (scannerWeaponFormat) => set({ scannerWeaponFormat }),
       setScannerSuspended: (scannerSuspended) => set({ scannerSuspended }),
+      setCheckoutIdleSeconds: (checkoutIdleSeconds) => set({ checkoutIdleSeconds }),
       setBackgroundEnabled: (backgroundEnabled) => set({ backgroundEnabled }),
       setBackgroundPosition: (backgroundPosition) => set({ backgroundPosition }),
       setBackgroundSize: (backgroundSize) => set({ backgroundSize }),
@@ -114,6 +120,7 @@ export const useAppStore = create<AppState>()(
         scannerEnabled: s.scannerEnabled,
         scannerMaxGapMs: s.scannerMaxGapMs,
         scannerWeaponFormat: s.scannerWeaponFormat,
+        checkoutIdleSeconds: s.checkoutIdleSeconds,
         backgroundEnabled: s.backgroundEnabled,
         backgroundPosition: s.backgroundPosition,
         backgroundSize: s.backgroundSize,

@@ -121,6 +121,8 @@ export function SettingsPage() {
   const [weaponFormatInput, setWeaponFormatInput] = useState(scannerWeaponFormat);
   const weaponFormatValid = isValidWeaponFormat(weaponFormatInput);
   const [measureOpen, setMeasureOpen] = useState(false);
+  const checkoutIdleSeconds = useAppStore((s) => s.checkoutIdleSeconds);
+  const setCheckoutIdleSeconds = useAppStore((s) => s.setCheckoutIdleSeconds);
   // Echo store changes (e.g. the Measure modal's "Apply") back into the
   // staging input — safe with the typing guard above since a valid keystroke
   // writes the same value the store already has.
@@ -892,6 +894,21 @@ export function SettingsPage() {
                   if (isValidWeaponFormat(v)) setScannerWeaponFormat(v);
                 }}
                 error={weaponFormatValid ? undefined : t('scanner_weapon_format_invalid')}
+                w={280}
+              />
+
+              <NumberInput
+                label={t('checkout_idle_seconds')}
+                description={t('checkout_idle_seconds_hint')}
+                value={checkoutIdleSeconds}
+                onChange={(v) => {
+                  const n = typeof v === 'number' ? v : Number(v);
+                  if (Number.isFinite(n) && n >= 5) setCheckoutIdleSeconds(n);
+                }}
+                min={5}
+                max={600}
+                clampBehavior="blur"
+                allowDecimal={false}
                 w={280}
               />
 
