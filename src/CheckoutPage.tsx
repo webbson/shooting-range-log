@@ -15,6 +15,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   listUsers,
   listWeapons,
@@ -49,7 +50,11 @@ export function CheckoutPage() {
 
   // Weapon-first flow: numpad selector step, then the member/weapon form step.
   const [step, setStep] = useState<'selector' | 'form'>('selector');
-  const [tag, setTag] = useState('');
+  // A weapon scanned on the check-in screen that turned out not to be out
+  // arrives here as nav state. CheckoutRoute keys on location.key, so this is
+  // read once on a fresh mount — same shape as scanning it here directly.
+  const navWeapon = (useLocation().state ?? {}) as { tag?: string; weaponUid?: number };
+  const [tag, setTag] = useState(navWeapon.tag ?? '');
   const [assign, setAssign] = useState(false);
   const [confirmTransfer, setConfirmTransfer] = useState(false);
   const [weaponUid, setWeaponUid] = useState<number | null>(null);
@@ -61,13 +66,13 @@ export function CheckoutPage() {
   const [chosenUserUid, setChosenUserUid] = useState<number | null>(null);
   // Scan-driven check-in: a scanned weapon that's currently out opens this
   // confirm modal instead of touching the flow directly.
-  const [scanCheckin, setScanCheckin] = useState<{ loan: OpenCheckout; weapon: Weapon } | null>(null);
+  const [scanCheckin, setScanCheckin] = useState<OpenCheckout | null>(null);
   // SSN scan with no user match: prefills GuestModal's SSN field.
   const [scanGuestSsn, setScanGuestSsn] = useState<string | undefined>(undefined);
   // The weapon a selector-step scan picked. `tag` can't serve as the source of
   // truth here: a following SSN scan leaks its digits into it (see the SSN
   // branch below), so by the time that handler runs `matched` is garbage.
-  const [scanWeaponUid, setScanWeaponUid] = useState<number | null>(null);
+  const [scanWeaponUid, setScanWeaponUid] = useState<number | null>(navWeapon.weaponUid ?? null);
   // 5s auto-dismissed success popup, fed from the mutation's own vars so it
   // never reads state that reset() has already cleared.
   const [done, setDone] = useState<{ weapon: string; user: string } | null>(null);
@@ -226,19 +231,17 @@ export function CheckoutPage() {
   // weapon and the user selected at confirm-click time, so the success
   // handler never has to re-read (possibly stale) component state.
   const scanCheckinMut = useMutation({
-    mutationFn: (vars: { loan: OpenCheckout; weapon: Weapon; uid: number | null }) =>
-      doCheckin(vars.loan.id, operator!.uid),
-    onSuccess: (_data, vars) => {
+    mutationFn: (loan: OpenCheckout) => doCheckin(loan.id, operator!.uid),
+    onSuccess: () => {
       notifications.show({ message: t('returned_ok') });
       qc.invalidateQueries({ queryKey: ['openCheckouts'] });
       qc.invalidateQueries({ queryKey: ['eval'] });
       qc.invalidateQueries({ queryKey: ['lastWeaponUsers'] });
       qc.invalidateQueries({ queryKey: ['lastShotDates'] });
-      // The weapon stays selected as now-available for the checkout in
-      // progress — jump straight to the form step so a following scan lands
-      // on the (leak-immune) form step rather than a re-polluted tag.
-      enterForm(vars.weapon, vars.uid);
-      setScanCheckin(null);
+      // Returning a weapon is its own errand, not the start of a checkout —
+      // drop back to an empty selector rather than carrying it into a flow the
+      // operator never asked for. reset() closes this modal too.
+      reset();
     },
     onError,
   });
@@ -262,7 +265,7 @@ export function CheckoutPage() {
         // Show the same matched+held banner numpad entry would, so a
         // cancelled confirm leaves the selector in a sensible state.
         setTag(w.displayId ?? '');
-        setScanCheckin({ loan, weapon: w });
+        setScanCheckin(loan);
         return;
       }
       if (step === 'selector') {
@@ -421,14 +424,11 @@ export function CheckoutPage() {
   const overlays = (
     <>
       <CheckinConfirmModal
-        loan={scanCheckin?.loan ?? null}
+        loan={scanCheckin}
         opened={scanCheckin != null}
         onClose={() => setScanCheckin(null)}
         loading={scanCheckinMut.isPending}
-        onConfirm={() =>
-          scanCheckin &&
-          scanCheckinMut.mutate({ loan: scanCheckin.loan, weapon: scanCheckin.weapon, uid: userUid })
-        }
+        onConfirm={() => scanCheckin && scanCheckinMut.mutate(scanCheckin)}
       />
 
       <Modal
