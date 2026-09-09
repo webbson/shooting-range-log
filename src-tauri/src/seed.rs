@@ -135,6 +135,29 @@ pub fn wipe_logs(conn: &Connection) -> Result<(), AppError> {
     delete_tables(conn, &["debts", "weapon_service_log", "checkouts"])
 }
 
+/// Delete every domain row (members, weapons and all logs). Settings, backup
+/// config and the schema survive. Irreversible from inside the app — the
+/// operator's escape hatch is a backup restore.
+#[tauri::command]
+pub fn wipe_database(db: tauri::State<crate::db::Db>) -> Result<(), AppError> {
+    let conn = db
+        .0
+        .lock()
+        .map_err(|_| AppError::internal("db lock poisoned"))?;
+    wipe_all(&conn)
+}
+
+/// Delete only the transaction rows (checkouts, service log, debts). Members
+/// and weapons are kept.
+#[tauri::command]
+pub fn wipe_transactions(db: tauri::State<crate::db::Db>) -> Result<(), AppError> {
+    let conn = db
+        .0
+        .lock()
+        .map_err(|_| AppError::internal("db lock poisoned"))?;
+    wipe_logs(&conn)
+}
+
 /// Wipe the dev DB and rebuild a full deterministic dataset.
 pub fn seed_dev_database(conn: &Connection) -> Result<(), AppError> {
     wipe_all(conn)?;
@@ -481,5 +504,27 @@ mod tests {
         wipe_weapons(&conn).unwrap();
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 0);
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22); // users kept
+    }
+
+    #[test]
+    fn wipe_all_empties_every_domain_table() {
+        let conn = migrated_in_memory();
+        seed_dev_database(&conn).unwrap();
+        wipe_all(&conn).unwrap();
+        for table in ["debts", "weapon_service_log", "checkouts", "weapons", "users"] {
+            assert_eq!(count(&conn, &format!("SELECT COUNT(*) FROM {table}")), 0, "{table}");
+        }
+    }
+
+    #[test]
+    fn wipe_logs_keeps_users_and_weapons() {
+        let conn = migrated_in_memory();
+        seed_dev_database(&conn).unwrap();
+        wipe_logs(&conn).unwrap();
+        for table in ["debts", "weapon_service_log", "checkouts"] {
+            assert_eq!(count(&conn, &format!("SELECT COUNT(*) FROM {table}")), 0, "{table}");
+        }
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM users"), 22);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM weapons"), 21);
     }
 }

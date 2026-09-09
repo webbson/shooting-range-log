@@ -51,10 +51,13 @@ import {
   type Settings,
   type BackupInfo,
   type BackupSource,
+  wipeDatabase,
+  wipeTransactions,
 } from './api';
 import { errorMessage } from './errors';
 import { useAppStore } from './store';
 import { classify, isValidWeaponFormat, type Scan } from './scan';
+import { useIsAdmin } from './useIsAdmin';
 
 const DEFAULT_SETTINGS: Settings = {
   s3Endpoint: null,
@@ -121,6 +124,8 @@ export function SettingsPage() {
   const [weaponFormatInput, setWeaponFormatInput] = useState(scannerWeaponFormat);
   const weaponFormatValid = isValidWeaponFormat(weaponFormatInput);
   const [measureOpen, setMeasureOpen] = useState(false);
+  const checkoutIdleSeconds = useAppStore((s) => s.checkoutIdleSeconds);
+  const setCheckoutIdleSeconds = useAppStore((s) => s.setCheckoutIdleSeconds);
   // Echo store changes (e.g. the Measure modal's "Apply") back into the
   // staging input — safe with the typing guard above since a valid keystroke
   // writes the same value the store already has.
@@ -164,6 +169,22 @@ export function SettingsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] });
       notifications.show({ color: 'green', message: t('settings_saved') });
+    },
+    onError,
+  });
+
+  // ── Danger zone ──
+  const isAdmin = useIsAdmin();
+  const setOperator = useAppStore((s) => s.setOperator);
+  const [confirmWipe, setConfirmWipe] = useState<'all' | 'logs' | null>(null);
+  const wipeMut = useMutation<void, unknown, 'all' | 'logs'>({
+    mutationFn: (scope) => (scope === 'all' ? wipeDatabase() : wipeTransactions()),
+    onSuccess: (_d, scope) => {
+      setConfirmWipe(null);
+      qc.invalidateQueries();
+      notifications.show({ color: 'green', message: t('wipe_done') });
+      // The operator's own row is gone with everything else — back to the picker.
+      if (scope === 'all') setOperator(null);
     },
     onError,
   });
@@ -659,6 +680,28 @@ export function SettingsPage() {
               )}
             </Stack>
           </Card>
+
+          {isAdmin && (
+            <Card withBorder>
+              <Stack gap="md">
+                <Title order={4} c="red">{t('danger_zone')}</Title>
+                <Group align="flex-start" gap="xl">
+                  <Stack gap={4} w={320}>
+                    <Button color="red" onClick={() => setConfirmWipe('logs')}>
+                      {t('wipe_logs_button')}
+                    </Button>
+                    <Text size="sm" c="dimmed">{t('wipe_logs_hint')}</Text>
+                  </Stack>
+                  <Stack gap={4} w={320}>
+                    <Button color="red" onClick={() => setConfirmWipe('all')}>
+                      {t('wipe_all_button')}
+                    </Button>
+                    <Text size="sm" c="dimmed">{t('wipe_all_hint')}</Text>
+                  </Stack>
+                </Group>
+              </Stack>
+            </Card>
+          )}
           </Stack>
         </Tabs.Panel>
 
@@ -895,6 +938,21 @@ export function SettingsPage() {
                 w={280}
               />
 
+              <NumberInput
+                label={t('checkout_idle_seconds')}
+                description={t('checkout_idle_seconds_hint')}
+                value={checkoutIdleSeconds}
+                onChange={(v) => {
+                  const n = typeof v === 'number' ? v : Number(v);
+                  if (Number.isFinite(n) && n >= 5) setCheckoutIdleSeconds(n);
+                }}
+                min={5}
+                max={600}
+                clampBehavior="blur"
+                allowDecimal={false}
+                w={280}
+              />
+
               <Group>
                 <Button variant="default" size="sm" onClick={() => setMeasureOpen(true)}>
                   {t('scanner_measure')}
@@ -1044,6 +1102,34 @@ export function SettingsPage() {
               color="red"
               loading={memberCommitMut.isPending}
               onClick={() => memberCommitMut.mutate()}
+            >
+              {t('yes')}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={confirmWipe != null}
+        onClose={() => setConfirmWipe(null)}
+        title={t('wipe_confirm_title')}
+        centered
+      >
+        <Stack>
+          <Text fz="lg">
+            {confirmWipe === 'all' ? t('wipe_all_hint') : t('wipe_logs_hint')}
+          </Text>
+          <Text fz="lg" fw={700} c="red">{t('wipe_irreversible')}</Text>
+          <Text fz="lg" fw={600}>{t('are_you_sure')}</Text>
+          <Group grow>
+            <Button size="lg" variant="default" onClick={() => setConfirmWipe(null)}>
+              {t('no')}
+            </Button>
+            <Button
+              size="lg"
+              color="red"
+              loading={wipeMut.isPending}
+              onClick={() => confirmWipe && wipeMut.mutate(confirmWipe)}
             >
               {t('yes')}
             </Button>

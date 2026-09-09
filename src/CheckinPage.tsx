@@ -28,6 +28,7 @@ import { useAppStore } from './store';
 import { errorMessage } from './errors';
 import { fmtDateTime } from './format';
 import { userLabel, weaponLabel } from './labels';
+import { useNavigate } from 'react-router-dom';
 import { useScan } from './useScanner';
 import { findWeaponByCandidates, findUserBySsn } from './scanMatch';
 import { DebtModal } from './DebtModal';
@@ -39,6 +40,7 @@ import { CheckinConfirmModal, CheckinLoanPreview } from './CheckinConfirmModal';
 
 export function CheckinPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const operator = useAppStore((s) => s.operator);
 
@@ -119,7 +121,8 @@ export function CheckinPage() {
       }
       const loan = (open.data ?? []).find((o) => o.weaponUid === w.uid);
       if (!loan) {
-        notifications.show({ color: 'red', message: t('scan_weapon_not_out') });
+        // Not out: the operator is starting a checkout, not returning one.
+        navigate('/checkout', { state: { tag: w.displayId, weaponUid: w.uid } });
         return;
       }
       setScanLoan(loan);
