@@ -134,7 +134,7 @@ pub(crate) fn user_create(conn: &Connection, input: NewUser) -> Result<User, App
 }
 
 fn user_update(conn: &Connection, input: UpdateUser) -> Result<User, AppError> {
-    let current = user_require(conn, input.uid)?;
+    user_require(conn, input.uid)?; // 404 before touching anything
     let display_id = norm(input.display_id);
     let name = require_name(input.name)?;
     // display_id is optional; enforce uniqueness only when one is given.

@@ -262,22 +262,6 @@ pub async fn download(settings: &Settings, key: &str) -> Result<Vec<u8>, AppErro
 /// async call that mints it, so this only needs to survive network latency.
 const PRESIGN_EXPIRY_SECS: u32 = 60;
 
-/// Delete a key via a presigned URL rather than rust-s3's native
-/// `delete_object` — see the doc comment on `delete_via_presigned_url` for why.
-pub async fn delete(settings: &Settings, key: &str) -> Result<(), AppError> {
-    let bucket = build_bucket(settings)?;
-    let client = bucket.http_client();
-    delete_via_presigned_url(&bucket, &client, key)
-        .await
-        .map_err(|detail| {
-            AppError::new(
-                "err_s3_failed",
-                format!("S3 delete failed: {detail}"),
-                serde_json::json!({ "detail": detail }),
-            )
-        })
-}
-
 /// Delete a key by issuing a plain HTTP DELETE against a presigned URL,
 /// instead of rust-s3's native `Bucket::delete_object` (which sends a
 /// natively-signed, header-authenticated request).

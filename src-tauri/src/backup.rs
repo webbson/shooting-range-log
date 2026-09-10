@@ -230,7 +230,7 @@ mod tests {
         let dir = tmp.path().to_path_buf();
 
         // Source DB with some data.
-        let mut source = migrated_in_memory();
+        let source = migrated_in_memory();
         source
             .execute(
                 "INSERT INTO users (display_id, name, is_staff, active, created_at, updated_at)
