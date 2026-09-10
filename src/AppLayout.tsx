@@ -21,8 +21,10 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { resolveResource } from '@tauri-apps/api/path';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { invoke } from '@tauri-apps/api/core';
-import { IconMaximize, IconMenu2, IconMinimize, IconPower } from '@tabler/icons-react';
+import { IconBook, IconMaximize, IconMenu2, IconMinimize, IconPower } from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
@@ -64,6 +66,12 @@ export function AppLayout() {
   useEffect(() => {
     getCurrentWindow().setFullscreen(fullscreen).catch(console.warn);
   }, [fullscreen]);
+
+  // The guide PDFs ship as bundled resources (tauri.conf.json), so the range
+  // laptop opens them with no internet.
+  const openGuide = () => {
+    resolveResource(`guide/user-guide-${language}.pdf`).then(openPath).catch(console.warn);
+  };
 
   const { toggleColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light');
@@ -320,6 +328,20 @@ export function AppLayout() {
               {fullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
             </ActionIcon>
           </Group>
+
+          <Button
+            variant="subtle"
+            size="lg"
+            justify="flex-start"
+            fullWidth
+            leftSection={<IconBook size={18} />}
+            onClick={() => {
+              openGuide();
+              closeDrawer();
+            }}
+          >
+            {t('user_guide')}
+          </Button>
 
           {isAdmin && (
             <Button

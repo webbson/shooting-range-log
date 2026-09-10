@@ -58,3 +58,6 @@ primer.md
 
 # Per-machine agent config — do not depend on a personal global gitignore
 .claude/settings.local.json
+
+# Python bytecode from the user-guide generator
+__pycache__/

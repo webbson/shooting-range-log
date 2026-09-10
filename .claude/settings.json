@@ -6,8 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit*)",
-            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(npm run check 2>&1) || { echo \"$out\" | tail -40 >&2; echo 'npm run check failed - commit blocked. Fix the warnings/tests, then commit again.' >&2; exit 2; }",
+            "command": "cmd=$(cat | sed -n 's/.*\"command\"[[:space:]]*:[[:space:]]*\"\\(.*\\)/\\1/p'); case \"$cmd\" in *\"git commit\"*) ;; *) exit 0 ;; esac; cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(npm run check 2>&1) || { echo \"$out\" | tail -40 >&2; echo 'npm run check failed - commit blocked. Fix the warnings/tests, then commit again.' >&2; exit 2; }",
             "timeout": 600,
             "statusMessage": "Running npm run check before commit..."
           }

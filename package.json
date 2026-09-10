@@ -13,7 +13,9 @@
     "test:scan": "node src/scan.check.ts",
     "lint:rust": "RUSTFLAGS=-Dwarnings cargo check --manifest-path src-tauri/Cargo.toml --all-targets",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "check": "npm run lint:rust && npm run test:rust && npm run build && npm run test:scan"
+    "check": "npm run lint:rust && npm run test:rust && npm run build && npm run test:scan",
+    "dev:mock": "VITE_MOCK_IPC=1 vite --port 1421 --strictPort",
+    "guide": "python3 docs/guide/build.py"
   },
   "dependencies": {
     "@mantine/core": "^9.3.1",

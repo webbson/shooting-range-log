@@ -61,6 +61,17 @@ English). Developed on macOS, shipped to Windows.
 - **Settings** — import, backup, scanner, timeouts, appearance (background image, surface
   opacity), and an admin danger zone that can wipe the database or just the history.
 
+## User guide
+Illustrated PDFs covering the everyday flows — checkout, check-in, members and weapons,
+with and without a barcode scanner:
+
+- **[Användarguide (svenska)](docs/user-guide-sv.pdf)**
+- **[User guide (English)](docs/user-guide-en.pdf)**
+
+Both ship with the app and open from the menu (Användarguide / User guide). They are
+generated: screenshots live in `docs/guide/img/<lang>/`, the text and callouts in
+`docs/guide/content.py`, and `npm run guide` rebuilds the PDFs.
+
 ## Stack
 Tauri 2 (Rust) · React + TypeScript + Mantine v9 · SQLite (rusqlite, bundled) ·
 TanStack Query · Zustand · react-i18next.
@@ -75,6 +86,8 @@ TanStack Query · Zustand · react-i18next.
 npm install
 npm run tauri dev        # launches the desktop app with hot reload
 npm run seed             # wipe + refill the dev database with mock data (app closed)
+npm run dev:mock         # UI only, in a browser, with a fake Tauri IPC (guide screenshots)
+npm run guide            # rebuild the user-guide PDFs from the screenshots + content.py
 ```
 The SQLite database is created automatically in the OS app-data directory on first run;
 pending migrations apply on launch.
@@ -93,6 +106,8 @@ The Windows installer (NSIS) is produced by CI on a Windows runner on `v*` tag p
 - `src/` — React + Mantine frontend.
 - `src-tauri/icons/icon.svg` — source of the app icon; the raster set is generated with
   `npm run tauri icon`.
+- `docs/guide/` — user-guide source: `build.py` (layout), `content.py` (text + callouts),
+  `img/<lang>/` (screenshots). Output: `docs/user-guide-sv.pdf`, `docs/user-guide-en.pdf`.
 - `CLAUDE.md` — architecture conventions and contributor guide.
 - `BACKLOG.md` — deferred work.
 

@@ -26,7 +26,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
@@ -34,7 +36,11 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../docs/user-guide-sv.pdf": "guide/user-guide-sv.pdf",
+      "../docs/user-guide-en.pdf": "guide/user-guide-en.pdf"
+    }
   },
   "plugins": {
     "updater": {
