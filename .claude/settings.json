@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(npm run check 2>&1) || { echo \"$out\" | tail -40 >&2; echo 'npm run check failed - commit blocked. Fix the warnings/tests, then commit again.' >&2; exit 2; }",
+            "timeout": 600,
+            "statusMessage": "Running npm run check before commit..."
+          }
+        ]
+      }
+    ]
+  }
+}

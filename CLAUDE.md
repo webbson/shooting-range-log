@@ -18,6 +18,8 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
 ## Commands
 - **All gates in one go: `npm run check`** — rustc warnings (denied), cargo tests,
   frontend typecheck+bundle, scan checks. Must be green before declaring done.
+  A `PreToolUse` hook in `.claude/settings.json` runs it before every `git commit`
+  and blocks the commit when it fails.
 - Dev (launches app): `npm run tauri dev`
 - Frontend typecheck + bundle: `npm run build`
 - Backend tests: `npm run test:rust` (= `cargo test --manifest-path src-tauri/Cargo.toml`)
