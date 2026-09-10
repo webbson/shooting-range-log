@@ -141,9 +141,17 @@ SV = {
         pagebreak(),
         h1("2. Utlämning"),
         p(
-            "Utlämning börjar alltid med vapnet. Du knappar in eller skannar vapnets ID-nummer "
-            "(numret på etiketten), och programmet föreslår vem som troligen ska låna det."
+            "En utlämning kan börja från vilket håll som helst — vapnet eller medlemmen. "
+            "Vapnet först är det snabbaste och det sidan öppnar för: du knappar in eller "
+            "skannar vapnets ID-nummer (numret på etiketten) och programmet föreslår vem som "
+            "troligen ska låna det. Börjar du i stället med medlemmen — skannar ett ID-kort "
+            "med personnummer eller söker fram namnet — fylls medlemmens tilldelade vapen i "
+            "automatiskt."
         ),
+        bullets([
+            "Vapnet först: ID:t knappas in eller skannas, låntagaren föreslås.",
+            "Medlemmen först: personnumret skannas eller namnet väljs, vapnet fylls i.",
+        ]),
         figure(
             "checkout-selector-empty.jpg",
             "Utlämningssidan innan något är valt.",
@@ -179,6 +187,28 @@ SV = {
             "Med skanner: skanna först vapnet, sedan medlemmens personnummer. Är medlemmen en av "
             "de föreslagna sker utlämningen direkt utan fler tryck. Andra medlemmar hamnar i "
             "formuläret med både vapen och medlem ifyllda."
+        ),
+        pagebreak(),
+        h2("Medlemmen först"),
+        p(
+            "Skannas ett ID-kort med personnummer utan att något vapen är valt, hoppar "
+            "programmet till formuläret med medlemmen ifylld och väljer medlemmens tilldelade "
+            "vapen. Finns inget tilldelat vapen väljs det vapen medlemmen lånade senast, men "
+            "bara om det är inne. Samma sak händer när du väljer medlemmen manuellt i listan "
+            "innan något vapen är valt."
+        ),
+        bullets([
+            "Tilldelat vapen väljs även om det är utlånat — då visas en varning om vem som "
+            "har det, så att du kan välja ett annat.",
+            "Senast lånade vapen föreslås bara när det är inne och medlemmen saknar tilldelat "
+            "vapen.",
+            "Okänt personnummer öppnar gästrutan med numret ifyllt.",
+            "Personnummer till en inaktiverad medlem ger ett felmeddelande och inget val.",
+        ]),
+        note(
+            "Ordningen spelar ingen roll: skannas vapnet först och personnumret sedan sker "
+            "utlämningen direkt om medlemmen är vapnets tilldelade eller senaste låntagare. "
+            "Skannas personnumret först fylls vapnet i och du bekräftar med Lämna ut."
         ),
         pagebreak(),
         h2("Formuläret"),
@@ -392,15 +422,19 @@ SV = {
         h1("6. Snabbreferens"),
         h2("Utan skanner"),
         bullets([
-            "Utlämning: knappa in vapnets ID → tryck på låntagaren → Lämna ut.",
+            "Utlämning, vapnet först: knappa in vapnets ID → tryck på låntagaren → Lämna ut.",
+            "Utlämning, medlemmen först: Manuellt val → tryck på medlemskortet → sök namn. "
+            "Medlemmens tilldelade vapen fylls i; byt vid behov → Lämna ut.",
             "Okänd låntagare: Manuellt val → tryck på medlemskortet → sök namn.",
             "Besökare: Gäst → personnummer och namn → Fortsätt.",
             "Återlämning: leta upp kortet → pilknappen. Eller Snabb återlämning → vapen-ID.",
         ]),
         h2("Med skanner"),
         bullets([
-            "Utlämning: skanna vapnet → skanna medlemmens personnummer. Är medlemmen tilldelad "
-            "vapnet eller lånade det senast sker utlämningen direkt.",
+            "Utlämning, vapnet först: skanna vapnet → skanna medlemmens personnummer. Är "
+            "medlemmen tilldelad vapnet eller lånade det senast sker utlämningen direkt.",
+            "Utlämning, medlemmen först: skanna ID-kortet — medlemmens tilldelade vapen fylls "
+            "i (annars senast lånade, om det är inne) → Lämna ut.",
             "Okänt personnummer: gästrutan öppnas med numret ifyllt.",
             "Återlämning: skanna vapnet — lånet stängs direkt.",
             "Skannas ett vapen som inte är ute hoppar programmet till utlämningen.",
@@ -484,9 +518,16 @@ EN = {
         pagebreak(),
         h1("2. Checkout"),
         p(
-            "Checkout always starts with the weapon. Type or scan the weapon's ID (the number on "
-            "its label) and the app suggests who is likely to borrow it."
+            "A checkout can start from either end — the weapon or the member. Weapon first is "
+            "the fastest and what the screen opens on: type or scan the weapon's ID (the number "
+            "on its label) and the app suggests who is likely to borrow it. Start with the "
+            "member instead — scan an ID card carrying a personnummer, or search the name — and "
+            "that member's assigned weapon is filled in for you."
         ),
+        bullets([
+            "Weapon first: type or scan the ID, the borrower is suggested.",
+            "Member first: scan the personnummer or pick the name, the weapon is filled in.",
+        ]),
         figure("checkout-selector-empty.jpg", "The checkout screen before anything is selected.", CO_SELECTOR, FULL),
         steps([
             "Type the weapon ID on the keypad — or scan the label.",
@@ -517,6 +558,28 @@ EN = {
             "With a scanner: scan the weapon, then the member's personnummer. If that member is "
             "one of the suggestions the checkout completes with no further taps. Any other known "
             "member lands on the form with both weapon and member filled in."
+        ),
+        pagebreak(),
+        h2("Member first"),
+        p(
+            "Scanning an ID card with a personnummer while no weapon is selected jumps to the "
+            "form with that member filled in and picks their assigned weapon. With no assigned "
+            "weapon, the one they borrowed last is picked instead — but only if it is in. "
+            "Picking the member from the list before any weapon is selected does the same."
+        ),
+        bullets([
+            "An assigned weapon is picked even when it is out — a warning then names the "
+            "current holder so you can choose another.",
+            "The last-borrowed weapon is only suggested when it is in and the member has no "
+            "assigned weapon.",
+            "An unknown personnummer opens the guest dialog with the number filled in.",
+            "A personnummer belonging to a deactivated member gives an error and selects nothing.",
+        ]),
+        note(
+            "Order does not matter: scan the weapon first and then the personnummer and the "
+            "checkout completes immediately if that member is the weapon's assigned or last "
+            "borrower. Scan the personnummer first and the weapon fills in, and you confirm "
+            "with Check out."
         ),
         pagebreak(),
         h2("The form"),
@@ -684,15 +747,19 @@ EN = {
         h1("6. Quick reference"),
         h2("Without a scanner"),
         bullets([
-            "Checkout: type the weapon ID → tap the borrower → Check out.",
+            "Checkout, weapon first: type the weapon ID → tap the borrower → Check out.",
+            "Checkout, member first: Manual choice → tap the member card → search by name. "
+            "Their assigned weapon fills in; change it if needed → Check out.",
             "Unknown borrower: Manual choice → tap the member card → search by name.",
             "Visitor: Guest → personnummer and name → Continue.",
             "Check-in: find the card → arrow button. Or Quick check-in → weapon ID.",
         ]),
         h2("With a scanner"),
         bullets([
-            "Checkout: scan the weapon → scan the member's personnummer. If that member is "
-            "assigned the weapon or borrowed it last, the checkout completes immediately.",
+            "Checkout, weapon first: scan the weapon → scan the member's personnummer. If that "
+            "member is assigned the weapon or borrowed it last, the checkout completes at once.",
+            "Checkout, member first: scan the ID card — the member's assigned weapon fills in "
+            "(otherwise the last one borrowed, if it is in) → Check out.",
             "Unknown personnummer: the guest dialog opens with the number filled in.",
             "Check-in: scan the weapon — the loan closes at once.",
             "Scanning a weapon that is not out jumps to checkout.",

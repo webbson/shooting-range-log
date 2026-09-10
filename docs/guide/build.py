@@ -126,8 +126,40 @@ class PageWriter:
 
     # -- blocks --
 
+    def measure(self, b: Block) -> float:
+        """Height a block will take — used to keep a heading with what follows."""
+        if b.kind == "h1":
+            return 48.0
+        if b.kind == "h2":
+            return 30.0
+        if b.kind == "p":
+            return len(wrap(b.text, 10, CONTENT_W)) * 14 + 5
+        if b.kind == "bullets":
+            return sum(len(wrap(i, 10, CONTENT_W - 14)) * 14 + 2 for i in b.items) + 4
+        if b.kind == "steps":
+            return sum(len(wrap(i, 10, CONTENT_W - 26)) * 14 + 4 for i in b.items) + 4
+        if b.kind == "note":
+            return len(wrap(b.text, 9.5, CONTENT_W - 26)) * 13 + 24
+        if b.kind == "figure":
+            return b.height + (len(wrap(b.text, 9, CONTENT_W)) * 12 if b.text else 0) + 14
+        return 0.0
+
     def render(self, blocks: list[Block]):
-        for b in blocks:
+        for i, b in enumerate(blocks):
+            # A heading never ends a page: reserve room for what follows it, so
+            # the instructions and the heading stay together.
+            if b.kind in ("h1", "h2"):
+                follow = 0.0
+                for nxt in blocks[i + 1 : i + 3]:
+                    if nxt.kind in ("h1", "h2", "pagebreak"):
+                        break
+                    follow += self.measure(nxt)
+                    # One figure (or ~160pt of text) is enough to keep together;
+                    # more than a page's worth would break on every heading.
+                    if follow >= 160 and nxt.kind != "figure":
+                        break
+                page_h = (FOOTER_Y - 18.0) - (MARGIN + 34.0)
+                self.need(min(self.measure(b) + follow, page_h))
             getattr(self, f"_{b.kind}")(b)
         self.new_page()
 
@@ -146,9 +178,7 @@ class PageWriter:
         self.step_no = 0
 
     def _h2(self, b):
-        # Reserve room for a first line of whatever follows, so a heading never
-        # sits alone at the foot of a page.
-        self.need(120)
+        self.need(30)
         self.y += 8
         self.text(b.text, MARGIN, self.y + 12, 13.5, INK, "bold")
         self.y += 22
