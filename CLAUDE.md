@@ -16,9 +16,13 @@ Spec: `project.md`. Deferred work: `BACKLOG.md`. Session continuity: `primer.md`
   **@mantine/form** · **@mantine/dates** · **@tabler/icons-react** · **dayjs**.
 
 ## Commands
+- **All gates in one go: `npm run check`** — rustc warnings (denied), cargo tests,
+  frontend typecheck+bundle, scan checks. Must be green before declaring done.
 - Dev (launches app): `npm run tauri dev`
-- Frontend typecheck + bundle: `npm run build`  (must be green before done)
-- Backend tests: `cargo test --manifest-path src-tauri/Cargo.toml`  (must be green before done)
+- Frontend typecheck + bundle: `npm run build`
+- Backend tests: `npm run test:rust` (= `cargo test --manifest-path src-tauri/Cargo.toml`)
+- Rust warnings as errors: `npm run lint:rust` (`RUSTFLAGS=-Dwarnings cargo check --all-targets`;
+  catches unused variables/dead code that a plain `cargo test` only prints and scrolls past)
 - Seed dev DB with mock data (**wipes** then refills): `npm run seed`
 - Windows installer: CI only (`release.yml` via tauri-action on `windows-latest`; needs the signing-key secrets) — can't cross-build from Mac.
 - Release: `/release patch|minor|major` → tag push → CI (`release.yml`) builds and publishes the installer.

@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "seed": "cargo run --manifest-path src-tauri/Cargo.toml --bin seed",
     "wipe": "cargo run --manifest-path src-tauri/Cargo.toml --bin wipe",
-    "test:scan": "node src/scan.check.ts"
+    "test:scan": "node src/scan.check.ts",
+    "lint:rust": "RUSTFLAGS=-Dwarnings cargo check --manifest-path src-tauri/Cargo.toml --all-targets",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run lint:rust && npm run test:rust && npm run build && npm run test:scan"
   },
   "dependencies": {
     "@mantine/core": "^9.3.1",
