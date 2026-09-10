@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Update } from '@tauri-apps/plugin-updater';
 import { persist } from 'zustand/middleware';
 import i18n from './i18n';
 
@@ -13,6 +14,11 @@ export interface Operator {
 }
 
 interface AppState {
+  /** Pending app update found by the periodic check, or null. Transient — the
+   *  Update object owns a download handle, so it is never persisted. */
+  update: Update | null;
+  /** True while the update modal is open (launch prompt, or the drawer button). */
+  updateOpen: boolean;
   /** Chosen at launch. Never persisted — must be re-selected each session. */
   operator: Operator | null;
   /** uid of the most recently chosen operator, persisted so the picker can
@@ -57,6 +63,8 @@ interface AppState {
    *  body colour via `color-mix` so the background shows through a little.
    *  Kept high by default so text stays readable over a busy image. */
   surfaceOpacity: number;
+  setUpdate: (update: Update | null) => void;
+  setUpdateOpen: (open: boolean) => void;
   setOperator: (op: Operator | null) => void;
   setLanguage: (lang: Lang) => void;
   setFullscreen: (on: boolean) => void;
@@ -77,6 +85,8 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      update: null,
+      updateOpen: false,
       operator: null,
       lastOperatorUid: null,
       language: 'sv',
@@ -95,6 +105,8 @@ export const useAppStore = create<AppState>()(
       surfaceOpacity: 0.92,
       // Selecting an operator also remembers them; clearing (switch) keeps the
       // last uid so the picker still defaults to it.
+      setUpdate: (update) => set({ update }),
+      setUpdateOpen: (updateOpen) => set({ updateOpen }),
       setOperator: (op) => set(op ? { operator: op, lastOperatorUid: op.uid } : { operator: op }),
       setLanguage: (language) => {
         i18n.changeLanguage(language);

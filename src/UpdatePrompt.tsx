@@ -2,29 +2,61 @@ import { useEffect, useRef, useState } from 'react';
 import { Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useTranslation } from 'react-i18next';
-import { check, type Update } from '@tauri-apps/plugin-updater';
+import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { useAppStore } from './store';
 
-// Prompt-on-launch updater: checks GitHub releases once at startup and asks the
-// operator before downloading. Startup must never block or nag — check failures
-// (offline laptop, GitHub unreachable) are logged and swallowed.
+/** How often the running app re-checks GitHub for a new release. The laptop
+ *  often stays up for a whole shift, so a launch-only check can sit on an old
+ *  version for days. */
+const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+// Updater: checks GitHub releases at startup and every few hours while running,
+// and asks the operator before downloading. A check must never block or nag —
+// failures (offline laptop, GitHub unreachable) are logged and swallowed, and
+// only the launch check opens the modal by itself. Later finds just light up
+// the menu dot and the drawer's "update now" button.
 export function UpdatePrompt() {
   const { t } = useTranslation();
-  const [update, setUpdate] = useState<Update | null>(null);
+  const update = useAppStore((s) => s.update);
+  const setUpdate = useAppStore((s) => s.setUpdate);
+  const opened = useAppStore((s) => s.updateOpen);
+  const setOpened = useAppStore((s) => s.setUpdateOpen);
   const [progress, setProgress] = useState<number | null>(null);
-  const checked = useRef(false);
+  const started = useRef(false);
 
   useEffect(() => {
-    if (checked.current) return;
-    checked.current = true;
-    check()
-      .then((u) => u && setUpdate(u))
-      .catch((e) => console.warn('[updater] check failed:', e));
-  }, []);
+    if (started.current) return;
+    started.current = true;
 
-  if (!update) return null;
+    let firstCheck = true;
+    const run = () => {
+      check()
+        .then((u) => {
+          if (!u) return;
+          setUpdate(u);
+          // Only the launch check pops the modal; a mid-shift find must not
+          // interrupt whoever is at the counter.
+          if (firstCheck) setOpened(true);
+        })
+        .catch((e) => console.warn('[updater] check failed:', e))
+        .finally(() => {
+          firstCheck = false;
+        });
+    };
+
+    run();
+    const id = window.setInterval(run, CHECK_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [setUpdate, setOpened]);
+
+  if (!update || !opened) return null;
 
   const downloading = progress !== null;
+
+  const close = () => {
+    if (!downloading) setOpened(false);
+  };
 
   const install = async () => {
     setProgress(0);
@@ -44,6 +76,7 @@ export function UpdatePrompt() {
       console.warn('[updater] install failed:', e);
       notifications.show({ color: 'red', message: t('update_failed') });
       setProgress(null);
+      setOpened(false);
       setUpdate(null);
     }
   };
@@ -51,7 +84,7 @@ export function UpdatePrompt() {
   return (
     <Modal
       opened
-      onClose={() => !downloading && setUpdate(null)}
+      onClose={close}
       title={t('update_title', { version: update.version })}
       centered
       withCloseButton={false}
@@ -68,7 +101,7 @@ export function UpdatePrompt() {
           <>
             <Text>{t('update_question')}</Text>
             <Group grow>
-              <Button size="xl" variant="default" onClick={() => setUpdate(null)}>
+              <Button size="xl" variant="default" onClick={close}>
                 {t('update_later')}
               </Button>
               <Button size="xl" onClick={install}>

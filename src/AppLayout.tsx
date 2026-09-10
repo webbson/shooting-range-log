@@ -16,18 +16,25 @@ import {
   useMantineColorScheme,
   useComputedColorScheme,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { resolveResource } from '@tauri-apps/api/path';
-import { openPath } from '@tauri-apps/plugin-opener';
 import { invoke } from '@tauri-apps/api/core';
-import { IconBook, IconMaximize, IconMenu2, IconMinimize, IconPower } from '@tabler/icons-react';
+import {
+  IconBook,
+  IconDownload,
+  IconMaximize,
+  IconMenu2,
+  IconMinimize,
+  IconPower,
+} from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
+import { errorMessage } from './errors';
 import { useIsAdmin } from './useIsAdmin';
 import { useScanner } from './useScanner.ts';
 
@@ -56,6 +63,8 @@ export function AppLayout() {
   const operator = useAppStore((s) => s.operator);
   const setOperator = useAppStore((s) => s.setOperator);
   const isAdmin = useIsAdmin();
+  const update = useAppStore((s) => s.update);
+  const setUpdateOpen = useAppStore((s) => s.setUpdateOpen);
   useScanner();
   const fullscreen = useAppStore((s) => s.fullscreen);
   const setFullscreen = useAppStore((s) => s.setFullscreen);
@@ -68,9 +77,13 @@ export function AppLayout() {
   }, [fullscreen]);
 
   // The guide PDFs ship as bundled resources (tauri.conf.json), so the range
-  // laptop opens them with no internet.
+  // laptop opens them with no internet. Rust does the opening (open_user_guide)
+  // — the plugin's JS path is ACL-scoped and failed silently on Windows.
   const openGuide = () => {
-    resolveResource(`guide/user-guide-${language}.pdf`).then(openPath).catch(console.warn);
+    invoke('open_user_guide', { lang: language }).catch((e) => {
+      console.warn('[guide]', e);
+      notifications.show({ color: 'red', message: errorMessage(e, t) });
+    });
   };
 
   const { toggleColorScheme } = useMantineColorScheme();
@@ -219,7 +232,12 @@ export function AppLayout() {
                 </Button>
               ),
             )}
-            <Indicator color="red" size={10} offset={4} disabled={!hasIssue}>
+            <Indicator
+              color={hasIssue ? 'red' : 'blue'}
+              size={10}
+              offset={4}
+              disabled={!hasIssue && !update}
+            >
               <Button
                 variant="outline"
                 color={operator ? 'blue' : 'gray'}
@@ -328,6 +346,23 @@ export function AppLayout() {
               {fullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
             </ActionIcon>
           </Group>
+
+          {update && (
+            <Button
+              variant="light"
+              color="blue"
+              size="lg"
+              justify="flex-start"
+              fullWidth
+              leftSection={<IconDownload size={18} />}
+              onClick={() => {
+                setUpdateOpen(true);
+                closeDrawer();
+              }}
+            >
+              {t('update_available', { version: update.version })}
+            </Button>
+          )}
 
           <Button
             variant="subtle"

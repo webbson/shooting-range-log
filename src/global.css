@@ -97,3 +97,32 @@ textarea {
     background-color: var(--tr-hover-bg);
   }
 }
+
+/* Cursor visibility (light mode only). The range laptop runs Windows' white
+   cursor scheme, which disappears against the app's light surfaces — in dark
+   mode it is perfectly visible, so only light mode paints its own dark arrow
+   and hand. Custom cursors only apply inside the WebView; the window chrome
+   keeps the OS cursor. `!important` because Mantine sets `cursor: pointer`
+   inline on several interactive elements. */
+[data-mantine-color-scheme='light'] {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M4%201.5%20L4%2020%20L9.2%2015.1%20L12.4%2021.5%20L15.6%2019.9%20L12.4%2013.7%20L19.5%2013.4%20Z%22%20fill%3D%22%23111%22%20stroke%3D%22%23fff%22%20stroke-width%3D%221.6%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") 4 2, default;
+}
+[data-mantine-color-scheme='light'] :is(
+    a,
+    button,
+    label,
+    select,
+    summary,
+    [role='button'],
+    [role='radio'],
+    [role='checkbox'],
+    [role='tab'],
+    [role='option'],
+    [style*='cursor: pointer'],
+    [style*='cursor:pointer']
+  ) {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2226%22%20height%3D%2226%22%20viewBox%3D%220%200%2026%2026%22%3E%3Cpath%20d%3D%22M9.5%2012.5%20V4.2%20a1.9%201.9%200%200%201%203.8%200%20V11%20h1%20V6.4%20a1.9%201.9%200%200%201%203.8%200%20V11.6%20h1%20V8.4%20a1.9%201.9%200%200%201%203.8%200%20V17%20c0%204.2-2.6%207.3-6.6%207.3%20h-2.1%20c-2.2%200-3.6-.9-4.9-2.6%20L4.6%2016%20a1.9%201.9%200%200%201%202.8-2.5%20z%22%20fill%3D%22%23111%22%20stroke%3D%22%23fff%22%20stroke-width%3D%221.5%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") 11 3, pointer !important;
+}
+[data-mantine-color-scheme='light'] :is(input, textarea) {
+  cursor: text;
+}

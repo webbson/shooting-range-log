@@ -199,6 +199,7 @@ const resources = {
       // Settings & Excel-import — loans/weapons sync (workstream C, renamed from
       // the old member-managing Excel import; matching is by personnummer only,
       // unmatched rows are skipped and reported, never created)
+      update_available: 'Uppdatera nu ({{version}})',
       user_guide: 'Användarguide (PDF)',
       nav_settings: 'Inställningar',
       settings_title: 'Inställningar',
@@ -632,6 +633,7 @@ const resources = {
       // Settings & Excel import — loans/weapons sync (workstream C, renamed from
       // the old member-managing Excel import; matching is by personal number
       // only, unmatched rows are skipped and reported, never created)
+      update_available: 'Update now ({{version}})',
       user_guide: 'User guide (PDF)',
       nav_settings: 'Settings',
       settings_title: 'Settings',

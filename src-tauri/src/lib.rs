@@ -21,6 +21,7 @@ use std::time::Duration;
 use error::AppError;
 use serde::Serialize;
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 /// Result of `backup_now`: the local snapshot always happened by the time
 /// this returns; `remote`/`remote_error` report the S3 upload + retention
@@ -53,6 +54,34 @@ fn log_backup_upload_outcome(outcome: &Result<(Option<s3::RetentionSummary>, Opt
         Ok((None, None)) => {}
         Err(e) => eprintln!("[backup] S3 upload failed: {e}"),
     }
+}
+
+/// Open the bundled user guide for the given language in the OS PDF viewer.
+///
+/// Done in Rust rather than via the opener plugin's JS API: the Rust call is not
+/// gated by the webview's ACL scope, and a failure (resource missing on a
+/// stripped install, no PDF handler registered) comes back as a real error the
+/// UI can show instead of a silently swallowed promise rejection.
+#[tauri::command]
+fn open_user_guide(app: tauri::AppHandle, lang: String) -> Result<(), AppError> {
+    let file = if lang == "en" {
+        "guide/user-guide-en.pdf"
+    } else {
+        "guide/user-guide-sv.pdf"
+    };
+    let path = app
+        .path()
+        .resolve(file, tauri::path::BaseDirectory::Resource)
+        .map_err(|e| AppError::internal(format!("cannot resolve {file}: {e}")))?;
+    if !path.exists() {
+        return Err(AppError::internal(format!(
+            "user guide not found at {}",
+            path.display()
+        )));
+    }
+    app.opener()
+        .open_path(path.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| AppError::internal(format!("cannot open {}: {e}", path.display())))
 }
 
 /// Health check: proves the Rust → SQLite pipeline by reading the applied
@@ -320,6 +349,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             db_health,
+            open_user_guide,
             seed::wipe_database,
             seed::wipe_transactions,
             commands::list_users,
