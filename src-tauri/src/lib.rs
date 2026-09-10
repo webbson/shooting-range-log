@@ -20,7 +20,9 @@ use std::time::Duration;
 
 use error::AppError;
 use serde::Serialize;
-use tauri::Manager;
+use std::sync::Mutex;
+
+use tauri::{Manager, PhysicalPosition, PhysicalSize};
 use tauri_plugin_opener::OpenerExt;
 
 /// Result of `backup_now`: the local snapshot always happened by the time
@@ -54,6 +56,73 @@ fn log_backup_upload_outcome(outcome: &Result<(Option<s3::RetentionSummary>, Opt
         Ok((None, None)) => {}
         Err(e) => eprintln!("[backup] S3 upload failed: {e}"),
     }
+}
+
+/// Windowed geometry saved when kiosk mode is entered, so leaving it puts the
+/// window back where it was instead of leaving a decorated, screen-sized window.
+#[derive(Default)]
+struct WindowedGeometry(Mutex<Option<(PhysicalPosition<i32>, PhysicalSize<u32>)>>);
+
+/// Kiosk mode: an undecorated, always-on-top window covering the current
+/// monitor. Deliberately NOT the OS fullscreen state — on Windows that switches
+/// the display mode (the screen visibly flickers) and the WebView then stops
+/// rendering the app's own cursor, which is the only visible one in light mode.
+/// Sizing the window to the monitor achieves the same kiosk look with no mode
+/// switch: no flicker, no cursor loss, taskbar still covered.
+#[tauri::command]
+fn set_kiosk(
+    window: tauri::Window,
+    saved: tauri::State<WindowedGeometry>,
+    on: bool,
+) -> Result<(), AppError> {
+    let err = |what: &str, e: tauri::Error| AppError::internal(format!("{what}: {e}"));
+
+    if on {
+        let monitor = window
+            .current_monitor()
+            .map_err(|e| err("current_monitor", e))?
+            .ok_or_else(|| AppError::internal("no monitor found for this window"))?;
+
+        // Remember the windowed geometry before covering the screen.
+        if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
+            *saved
+                .0
+                .lock()
+                .map_err(|_| AppError::internal("kiosk state poisoned"))? = Some((pos, size));
+        }
+
+        window
+            .set_decorations(false)
+            .map_err(|e| err("set_decorations", e))?;
+        window
+            .set_always_on_top(true)
+            .map_err(|e| err("set_always_on_top", e))?;
+        window
+            .set_position(*monitor.position())
+            .map_err(|e| err("set_position", e))?;
+        window
+            .set_size(*monitor.size())
+            .map_err(|e| err("set_size", e))?;
+    } else {
+        window
+            .set_always_on_top(false)
+            .map_err(|e| err("set_always_on_top", e))?;
+        window
+            .set_decorations(true)
+            .map_err(|e| err("set_decorations", e))?;
+        let previous = saved
+            .0
+            .lock()
+            .map_err(|_| AppError::internal("kiosk state poisoned"))?
+            .take();
+        if let Some((pos, size)) = previous {
+            window.set_size(size).map_err(|e| err("set_size", e))?;
+            window
+                .set_position(pos)
+                .map_err(|e| err("set_position", e))?;
+        }
+    }
+    Ok(())
 }
 
 /// Open the bundled user guide for the given language in the OS PDF viewer.
@@ -289,6 +358,7 @@ pub fn run() {
                 .join("backups");
             std::fs::create_dir_all(&backup_dir_path).ok();
             app.manage(backup::BackupDir(backup_dir_path));
+            app.manage(WindowedGeometry::default());
 
             // Production kiosk: maximize and grab focus once at startup. In dev the
             // window stays small and unfocused (config `focus: false`) so the
@@ -350,6 +420,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             db_health,
             open_user_guide,
+            set_kiosk,
             seed::wipe_database,
             seed::wipe_transactions,
             commands::list_users,

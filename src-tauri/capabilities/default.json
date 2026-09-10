@@ -7,7 +7,6 @@
   ],
   "permissions": [
     "core:default",
-    "core:window:allow-set-fullscreen",
     "core:window:allow-close",
     "opener:default",
     "dialog:default",

@@ -72,8 +72,13 @@ export function AppLayout() {
   const [drawerOpened, { close: closeDrawer, toggle: toggleDrawer }] = useDisclosure(false);
 
   // Applies the toggle and, on mount, restores the persisted mode from launch.
+  // `set_kiosk` covers the monitor with an undecorated always-on-top window
+  // rather than using OS fullscreen — see the command's doc comment: OS
+  // fullscreen flickers through a display-mode switch on Windows and kills the
+  // WebView's custom cursor. The store field is still called `fullscreen`
+  // because that is what the operator sees it as (and what is persisted).
   useEffect(() => {
-    getCurrentWindow().setFullscreen(fullscreen).catch(console.warn);
+    invoke('set_kiosk', { on: fullscreen }).catch(console.warn);
   }, [fullscreen]);
 
   // The guide PDFs ship as bundled resources (tauri.conf.json), so the range
