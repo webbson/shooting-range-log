@@ -228,7 +228,7 @@ pub(crate) fn user_set_preferred_weapon(
 /// inferred (20xx unless that lands in the future, then 19xx). Day 61–91 =
 /// samordningsnummer. Stored values are already canonical — all guest writes
 /// pass through here — so only the input needs normalizing.
-fn normalize_ssn(raw: &str) -> Result<String, AppError> {
+pub(crate) fn normalize_ssn(raw: &str) -> Result<String, AppError> {
     use chrono::Datelike;
     let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
     let full = match digits.len() {

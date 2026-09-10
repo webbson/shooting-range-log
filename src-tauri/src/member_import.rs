@@ -207,6 +207,7 @@ fn parse_rows(rows: &[Vec<Data>]) -> Result<ParsedRegister, AppError> {
                 name: None,
                 ssn: None,
                 weapon: None,
+                value: None,
             });
             continue;
         };
@@ -219,6 +220,7 @@ fn parse_rows(rows: &[Vec<Data>]) -> Result<ParsedRegister, AppError> {
                 name: Some(format!("{fname} {ename}")),
                 ssn: Some(pn),
                 weapon: None,
+                value: None,
             });
             continue;
         };
@@ -233,6 +235,7 @@ fn parse_rows(rows: &[Vec<Data>]) -> Result<ParsedRegister, AppError> {
                 name: Some(format!("{fname} {ename}")),
                 ssn: Some(pn),
                 weapon: None,
+                value: None,
             });
             continue;
         }
@@ -375,6 +378,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedRegister) -> Result<MemberImport
                         name: Some(row.name.clone()),
                         ssn: Some(row.ssn.clone()),
                         weapon: None,
+                        value: None,
                     });
                 }
                 if diff.promoted_from_guest {
@@ -385,6 +389,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedRegister) -> Result<MemberImport
                         name: Some(row.name.clone()),
                         ssn: Some(row.ssn.clone()),
                         weapon: None,
+                        value: None,
                     });
                 }
                 updates.push(PlannedUpdate { uid, row: row.clone(), diff });
@@ -435,6 +440,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedRegister) -> Result<MemberImport
                     name: Some(name.clone()),
                     ssn: None,
                     weapon: None,
+                    value: None,
                 });
             }
             continue;
@@ -460,6 +466,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedRegister) -> Result<MemberImport
                 name: Some(row.name.clone()),
                 ssn: Some(row.ssn.clone()),
                 weapon: None,
+                value: None,
             });
         }
     }
@@ -476,6 +483,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedRegister) -> Result<MemberImport
             name: None,
             ssn: None,
             weapon: None,
+            value: None,
         });
     }
 

@@ -125,6 +125,8 @@ export function SettingsPage() {
   const weaponFormatValid = isValidWeaponFormat(weaponFormatInput);
   const [measureOpen, setMeasureOpen] = useState(false);
   const checkoutIdleSeconds = useAppStore((s) => s.checkoutIdleSeconds);
+  const operatorIdleMinutes = useAppStore((s) => s.operatorIdleMinutes);
+  const setOperatorIdleMinutes = useAppStore((s) => s.setOperatorIdleMinutes);
   const setCheckoutIdleSeconds = useAppStore((s) => s.setCheckoutIdleSeconds);
   // Echo store changes (e.g. the Measure modal's "Apply") back into the
   // staging input — safe with the typing guard above since a valid keystroke
@@ -276,15 +278,29 @@ export function SettingsPage() {
         message: t('import_done', {
           weaponsCreated: result.weaponsCreated,
           loansCreated: result.loansCreated,
+          guestsCreated: result.guestsCreated,
         }),
       });
-      const generalWarnings = result.warnings.filter((w) => w.code !== 'warn_member_unmatched');
-      if (generalWarnings.length > 0) {
+      const junk = result.warnings.filter((w) => w.code === 'warn_junk_cell');
+      const generalWarnings = result.warnings.filter(
+        (w) => w.code !== 'warn_member_unmatched' && w.code !== 'warn_junk_cell',
+      );
+      const lines = [
+        ...(junk.length > 0
+          ? [
+              `${t('import_invalid_values', { count: junk.length })}: ${junk
+                .map((w) => w.value)
+                .join(', ')}`,
+            ]
+          : []),
+        ...generalWarnings.map((w) => w.message),
+      ];
+      if (lines.length > 0) {
         notifications.show({
           color: 'orange',
           autoClose: false,
           title: t('import_warnings'),
-          message: generalWarnings.map((w) => w.message).join('\n'),
+          message: lines.join('\n'),
         });
       }
       setPreview(null);
@@ -421,6 +437,7 @@ export function SettingsPage() {
           <Tabs.Tab value="import" fz="lg" py="md">{t('settings_tab_import')}</Tabs.Tab>
           <Tabs.Tab value="backup" fz="lg" py="md">{t('settings_tab_backup')}</Tabs.Tab>
           <Tabs.Tab value="scanner" fz="lg" py="md">{t('scanner')}</Tabs.Tab>
+          <Tabs.Tab value="general" fz="lg" py="md">{t('settings_tab_general')}</Tabs.Tab>
           <Tabs.Tab value="looks" fz="lg" py="md">{t('settings_tab_looks')}</Tabs.Tab>
         </Tabs.List>
 
@@ -474,6 +491,7 @@ export function SettingsPage() {
                   <Divider label={t('import_preview_title')} labelPosition="left" />
                   <Stack gap="xs">
                     <PreviewRow label={t('import_members_match')} value={preview.membersToMatch} color="gray" />
+                    <PreviewRow label={t('import_guests_create')} value={preview.guestsToCreate} color="blue" />
                     <PreviewRow label={t('import_unmatched_count')} value={preview.membersUnmatched} color="orange" />
                     <PreviewRow label={t('import_weapons_create')} value={preview.weaponsToCreate} color="blue" />
                     <PreviewRow label={t('import_weapons_existing')} value={preview.weaponsExisting} color="gray" />
@@ -538,12 +556,15 @@ export function SettingsPage() {
                   )}
 
                   {(() => {
-                    const generalWarnings = preview.warnings.filter((w) => w.code !== 'warn_member_unmatched');
-                    if (generalWarnings.length === 0) return null;
+                    const junk = preview.warnings.filter((w) => w.code === 'warn_junk_cell');
+                    const generalWarnings = preview.warnings.filter(
+                      (w) => w.code !== 'warn_member_unmatched' && w.code !== 'warn_junk_cell',
+                    );
+                    if (generalWarnings.length === 0 && junk.length === 0) return null;
                     return (
                       <Box>
                         <Text size="sm" fw={500} mb={4}>
-                          {t('import_warnings')} ({generalWarnings.length})
+                          {t('import_warnings')} ({generalWarnings.length + junk.length})
                         </Text>
                         <Box
                           mah={180}
@@ -554,6 +575,12 @@ export function SettingsPage() {
                             padding: '6px 10px',
                           }}
                         >
+                          {junk.length > 0 && (
+                            <Text size="xs" c="orange">
+                              {t('import_invalid_values', { count: junk.length })}:{' '}
+                              {junk.map((w) => w.value).join(', ')}
+                            </Text>
+                          )}
                           {generalWarnings.map((w, i) => (
                             <Text key={i} size="xs" c="orange">
                               {w.message}
@@ -938,6 +965,36 @@ export function SettingsPage() {
                 w={280}
               />
 
+              <Group>
+                <Button variant="default" size="sm" onClick={() => setMeasureOpen(true)}>
+                  {t('scanner_measure')}
+                </Button>
+              </Group>
+            </Stack>
+          </Card>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="general" pt="md">
+          {/* ── Misc settings: timeouts ── */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Title order={4}>{t('settings_general_title')}</Title>
+
+              <NumberInput
+                label={t('operator_idle_minutes')}
+                description={t('operator_idle_minutes_hint')}
+                value={operatorIdleMinutes}
+                onChange={(v) => {
+                  const n = typeof v === 'number' ? v : Number(v);
+                  if (Number.isFinite(n) && n >= 5) setOperatorIdleMinutes(n);
+                }}
+                min={5}
+                max={1440}
+                clampBehavior="blur"
+                allowDecimal={false}
+                w={280}
+              />
+
               <NumberInput
                 label={t('checkout_idle_seconds')}
                 description={t('checkout_idle_seconds_hint')}
@@ -952,12 +1009,6 @@ export function SettingsPage() {
                 allowDecimal={false}
                 w={280}
               />
-
-              <Group>
-                <Button variant="default" size="sm" onClick={() => setMeasureOpen(true)}>
-                  {t('scanner_measure')}
-                </Button>
-              </Group>
             </Stack>
           </Card>
         </Tabs.Panel>

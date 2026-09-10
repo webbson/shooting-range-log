@@ -1,11 +1,13 @@
 //! Excel import: parse xlsx → preview → commit historical weapon/loan data.
 //!
-//! Loans/weapons only — this sync never creates, updates, or deactivates a
-//! member (that is workstream D's job, via a separate member-list import).
-//! Rows are matched to existing members by personnummer only, compared on the
-//! last 10 digits via `commands::ssn_tail10` (member SSNs are not stored
-//! canonically — `user_create` trims, `user_upsert_guest` canonicalises).  A
-//! row that matches no member is skipped, never created, and reported as a
+//! Loans/weapons plus guests — this sync never updates or deactivates an
+//! existing member (that is workstream D's job, via a separate member-list
+//! import).  Rows are matched to existing members by personnummer only,
+//! compared on the last 10 digits via `commands::ssn_tail10` (member SSNs are
+//! not stored canonically — `user_create` trims, `user_upsert_guest`
+//! canonicalises).  A row that matches no member but carries a *valid*
+//! personnummer is created as a guest and imported normally; a row whose
+//! personnummer is missing or unparsable is skipped and reported as a
 //! `warn_member_unmatched` warning carrying enough to identify the person.
 //!
 //! Three-layer architecture (each testable in isolation):
@@ -26,7 +28,8 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::commands::{
-    ssn_tail10, user_create, user_set_preferred_weapon, weapon_create,
+    normalize_ssn, ssn_tail10, user_create, user_set_preferred_weapon, user_upsert_guest,
+    weapon_create,
 };
 use crate::db::Db;
 use crate::error::AppError;
@@ -48,21 +51,39 @@ pub struct ImportWarning {
     pub name: Option<String>,
     pub ssn: Option<String>,
     pub weapon: Option<String>, // ", "-joined weapon numbers referenced by the row
+    /// The offending cell value — populated only for `warn_junk_cell`, so the
+    /// UI can render "N invalid values: a, b, c" instead of one line each.
+    pub value: Option<String>,
 }
 
 impl ImportWarning {
     fn simple(row: u32, code: &str, message: String) -> Self {
-        ImportWarning { row, code: code.into(), message, name: None, ssn: None, weapon: None }
+        ImportWarning { row, code: code.into(), message, name: None, ssn: None, weapon: None, value: None }
+    }
+
+    fn junk(row: u32, value: String, message: String) -> Self {
+        ImportWarning {
+            row,
+            code: "warn_junk_cell".into(),
+            message,
+            name: None,
+            ssn: None,
+            weapon: None,
+            value: Some(value),
+        }
     }
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportPreview {
-    /// Rows that matched no member — skipped, never created. See warnings
-    /// (code `warn_member_unmatched`) for who, and `import_export_unmatched`
-    /// to export the list.
+    /// Rows whose personnummer is missing or invalid — skipped, never created.
+    /// See warnings (code `warn_member_unmatched`) for who, and
+    /// `import_export_unmatched` to export the list.
     pub members_unmatched: u32,
+    /// Rows with a valid personnummer that matches no existing user — created
+    /// as guests on commit, then imported like any matched member.
+    pub guests_to_create: u32,
     pub members_to_match: u32,
     pub weapons_to_create: u32,
     pub weapons_existing: u32,
@@ -77,6 +98,7 @@ pub struct ImportPreview {
 #[serde(rename_all = "camelCase")]
 pub struct ImportResult {
     pub members_unmatched: u32,
+    pub guests_created: u32,
     pub members_matched: u32,
     pub weapons_created: u32,
     pub weapons_matched: u32,
@@ -130,6 +152,9 @@ struct LoanAction {
 struct ImportPlan {
     /// Matched members only: sheet row → existing user uid.
     row_to_uid: HashMap<u32, i64>,
+    /// Unmatched rows with a valid personnummer: (sheet row, name, ssn).
+    /// `execute` creates each as a guest and treats the row as matched.
+    guests: Vec<(u32, String, String)>,
     /// Matched members' favorite-weapon rows: (sheet row, weapon number).
     favorites: Vec<(u32, String)>,
     weapons: Vec<WeaponAction>,
@@ -277,9 +302,9 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             None => None,
             Some(v) if is_weapon_no(&v) => Some(v),
             Some(v) => {
-                warnings.push(ImportWarning::simple(
+                warnings.push(ImportWarning::junk(
                     row_num,
-                    "warn_junk_cell",
+                    v.clone(),
                     format!("Row {row_num}: non-numeric value '{v}' in vapen column ignored"),
                 ));
                 None
@@ -306,9 +331,9 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
                     }
                 }
                 Some(v) if !is_weapon_no(v) => {
-                    warnings.push(ImportWarning::simple(
+                    warnings.push(ImportWarning::junk(
                         row_num,
-                        "warn_junk_cell",
+                        v.clone(),
                         format!("Row {row_num}: non-numeric value '{v}' ignored"),
                     ));
                 }
@@ -364,17 +389,6 @@ pub fn parse_xlsx(path: &Path, sheet_name: &str) -> Result<ParsedSheet, AppError
             name_to_idx.insert(norm_name, idx);
             members.push(ParsedMember { row: row_num, name, ssn, ssn_key, favorite_weapon_no, loans });
         }
-    }
-
-    let name_only = members.iter().filter(|m| m.ssn_key.is_none()).count();
-    if name_only > 0 {
-        warnings.push(ImportWarning::simple(
-            0,
-            "info_name_only_members",
-            format!(
-                "{name_only} member(s) have no personnummer and cannot be matched — skipped"
-            ),
-        ));
     }
 
     Ok(ParsedSheet { members, warnings })
@@ -438,12 +452,17 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
     };
 
     let mut row_to_uid: HashMap<u32, i64> = HashMap::new();
+    let mut guests: Vec<(u32, String, String)> = Vec::new();
     let mut warnings = parsed.warnings.clone();
 
     for pm in &parsed.members {
         match pm.ssn_key.as_ref().and_then(|k| ssn_map.get(k)).copied() {
             Some(uid) => {
                 row_to_uid.insert(pm.row, uid);
+            }
+            // Valid personnummer, no such user → create a guest on commit.
+            None if pm.ssn.as_deref().map(|s| normalize_ssn(s).is_ok()).unwrap_or(false) => {
+                guests.push((pm.row, pm.name.clone(), pm.ssn.clone().unwrap()));
             }
             None => {
                 let mut weapon_nos: Vec<String> = pm
@@ -460,7 +479,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
                     row: pm.row,
                     code: "warn_member_unmatched".into(),
                     message: format!(
-                        "Row {}: {} ({}) matches no member — weapon(s) {} — skipped",
+                        "Row {}: {} ({}) has no usable personnummer — weapon(s) {} — skipped",
                         pm.row,
                         pm.name,
                         pm.ssn.as_deref().unwrap_or("no ssn"),
@@ -469,18 +488,23 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
                     name: Some(pm.name.clone()),
                     ssn: pm.ssn.clone(),
                     weapon: Some(weapon_field),
+                    value: None,
                 });
             }
         }
     }
 
-    // Collect weapon numbers referenced by MATCHED members only (loans +
-    // favorites) — an unmatched row's weapons must never be created, since
+    // Rows that will have a user after commit: matched members + new guests.
+    let guest_rows: HashSet<u32> = guests.iter().map(|(row, _, _)| *row).collect();
+    let imported_row = |row: u32| row_to_uid.contains_key(&row) || guest_rows.contains(&row);
+
+    // Collect weapon numbers referenced by IMPORTED rows only (loans +
+    // favorites) — a failed row's weapons must never be created, since
     // its loan is never inserted (would otherwise orphan weapon rows).
     let all_weapon_nos: HashSet<String> = parsed
         .members
         .iter()
-        .filter(|pm| row_to_uid.contains_key(&pm.row))
+        .filter(|pm| imported_row(pm.row))
         .flat_map(|m| m.loans.iter().map(|l| l.weapon_no.clone()).chain(m.favorite_weapon_no.clone()))
         .collect();
 
@@ -501,10 +525,11 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
     let mut favorites: Vec<(u32, String)> = Vec::new();
 
     for pm in &parsed.members {
-        let user_uid = match row_to_uid.get(&pm.row) {
-            Some(&u) => u,
-            None => continue,
-        };
+        if !imported_row(pm.row) {
+            continue;
+        }
+        // A brand-new guest has no prior loans, so nothing to dedup against.
+        let user_uid = row_to_uid.get(&pm.row).copied();
 
         if let Some(no) = &pm.favorite_weapon_no {
             favorites.push((pm.row, no.clone()));
@@ -517,9 +542,11 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
                 .flatten();
 
             let date_key = loan.checked_out_at[..10.min(loan.checked_out_at.len())].to_string();
-            let skip = match weapon_uid_opt {
-                Some(weapon_uid) => existing_loans.contains(&(user_uid, weapon_uid, date_key)),
-                None => false,
+            let skip = match (user_uid, weapon_uid_opt) {
+                (Some(user_uid), Some(weapon_uid)) => {
+                    existing_loans.contains(&(user_uid, weapon_uid, date_key))
+                }
+                _ => false,
             };
 
             loan_actions.push(LoanAction {
@@ -534,6 +561,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
 
     Ok(ImportPlan {
         row_to_uid,
+        guests,
         favorites,
         weapons: weapon_actions,
         loans: loan_actions,
@@ -544,6 +572,7 @@ fn build_plan(conn: &Connection, parsed: &ParsedSheet) -> Result<ImportPlan, App
 fn plan_to_preview(plan: &ImportPlan) -> ImportPreview {
     ImportPreview {
         members_unmatched: plan.warnings.iter().filter(|w| w.code == "warn_member_unmatched").count() as u32,
+        guests_to_create: plan.guests.len() as u32,
         members_to_match: plan.row_to_uid.len() as u32,
         weapons_to_create: plan.weapons.iter().filter(|w| w.existing_uid.is_none()).count() as u32,
         weapons_existing: plan.weapons.iter().filter(|w| w.existing_uid.is_some()).count() as u32,
@@ -623,6 +652,27 @@ fn execute(
     // anything fails the operator record is also rolled back.
     let import_uid = ensure_import_operator(&tx)?;
 
+    // Create guests for unmatched rows with a valid personnummer, then treat
+    // those rows exactly like matched ones. A row that still fails (e.g. the
+    // SSN turns out to belong to an active member) is warned about and
+    // skipped — one bad row must not roll back the whole import.
+    let mut warnings = plan.warnings.clone();
+    let mut row_to_uid = plan.row_to_uid.clone();
+    let mut guests_created = 0u32;
+    for (row, name, ssn) in &plan.guests {
+        match user_upsert_guest(&tx, name.clone(), ssn.clone()) {
+            Ok(u) => {
+                row_to_uid.insert(*row, u.uid);
+                guests_created += 1;
+            }
+            Err(e) => warnings.push(ImportWarning::simple(
+                *row,
+                "warn_guest_create_failed",
+                format!("Row {row}: could not create guest '{name}' — {} — skipped", e.message),
+            )),
+        }
+    }
+
     let mut wno_to_uid: HashMap<String, i64> = HashMap::new();
     let mut weapons_created = 0u32;
     let mut weapons_matched = 0u32;
@@ -659,9 +709,9 @@ fn execute(
             loans_skipped += 1;
             continue;
         }
-        let user_uid = match plan.row_to_uid.get(&loan.member_row) {
+        let user_uid = match row_to_uid.get(&loan.member_row) {
             Some(&u) => u,
-            None => continue, // unmatched — never reached, build_plan excludes these
+            None => continue, // failed row (or guest creation failed) — skip
         };
         let weapon_uid = match wno_to_uid.get(&loan.weapon_no) {
             Some(&w) => w,
@@ -699,9 +749,8 @@ fn execute(
     // Set favorite weapons for matched members — after members and weapons
     // are guaranteed to exist. Never overwrites a pre-existing preference
     // (skip silently). First row wins within-file: on conflict, warn and continue.
-    let mut warnings = plan.warnings.clone();
     for (row, no) in &plan.favorites {
-        let user_uid = match plan.row_to_uid.get(row) {
+        let user_uid = match row_to_uid.get(row) {
             Some(&u) => u,
             None => continue,
         };
@@ -761,6 +810,7 @@ fn execute(
 
     Ok(ImportResult {
         members_unmatched,
+        guests_created,
         members_matched,
         weapons_created,
         weapons_matched,
@@ -923,11 +973,12 @@ mod tests {
 
     #[test]
     fn unmatched_row_is_skipped_and_reported() {
+        // Unparsable personnummer → not importable, not a guest.
         let conn = migrated_in_memory();
         let sheet = parsed_sheet(vec![make_member(
             4,
             "Nobody Here",
-            Some("19800101-1231"),
+            Some("12345"),
             vec![make_loan("36", "2025-08-06", true)],
         )]);
 
@@ -936,6 +987,7 @@ mod tests {
         assert_eq!(preview.loans_to_create, 0);
         assert_eq!(preview.weapons_to_create, 0);
         assert_eq!(preview.members_unmatched, 1);
+        assert_eq!(preview.guests_to_create, 0);
         let warn = preview.warnings.iter().find(|w| w.code == "warn_member_unmatched");
         assert!(warn.is_some());
         assert_eq!(warn.unwrap().weapon.as_deref(), Some("36"));
@@ -1239,12 +1291,56 @@ mod tests {
     // ── unmatched export ──
 
     #[test]
+    fn valid_ssn_without_member_becomes_guest_and_imports_loans() {
+        let conn = migrated_in_memory();
+        let sheet = parsed_sheet(vec![make_member(
+            4,
+            "Ny Skytt",
+            Some("19800101-1231"),
+            vec![make_loan("36", "2025-08-06", true)],
+        )]);
+
+        let plan = build_plan(&conn, &sheet).unwrap();
+        let preview = plan_to_preview(&plan);
+        assert_eq!(preview.guests_to_create, 1);
+        assert_eq!(preview.members_unmatched, 0);
+        assert_eq!(preview.loans_to_create, 1);
+        assert_eq!(preview.weapons_to_create, 1);
+
+        let result = execute(&conn, &plan, false).unwrap();
+        assert_eq!(result.guests_created, 1);
+        assert_eq!(result.loans_created, 1);
+
+        let (uid, is_guest): (i64, bool) = conn
+            .query_row(
+                "SELECT uid, is_guest FROM users WHERE name = 'Ny Skytt'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert!(is_guest);
+        let loans: i64 = conn
+            .query_row("SELECT COUNT(*) FROM checkouts WHERE user_uid = ?1", params![uid], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(loans, 1);
+
+        // Second run: the guest is now a known user — loan dedups, no new guest.
+        let plan2 = build_plan(&conn, &sheet).unwrap();
+        assert_eq!(plan2.guests.len(), 0);
+        let result2 = execute(&conn, &plan2, false).unwrap();
+        assert_eq!(result2.loans_created, 0);
+        assert_eq!(result2.loans_skipped, 1);
+    }
+
+    #[test]
     fn unmatched_csv_has_bom_and_semicolons() {
         let conn = migrated_in_memory();
         let sheet = parsed_sheet(vec![make_member(
             4,
             "Nobody",
-            Some("19800101-1231"),
+            Some("12345"),
             vec![make_loan("36", "2025-08-06", true)],
         )]);
         let plan = build_plan(&conn, &sheet).unwrap();
@@ -1253,6 +1349,6 @@ mod tests {
         assert!(content.starts_with('\u{FEFF}'));
         let lines: Vec<&str> = content.trim_start_matches('\u{FEFF}').split("\r\n").collect();
         assert_eq!(lines[0], "Rad;Namn;Personnummer;Vapen-ID");
-        assert!(lines[1].starts_with("4;Nobody;19800101-1231;36"));
+        assert!(lines[1].starts_with("4;Nobody;12345;36"));
     }
 }

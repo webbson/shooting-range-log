@@ -36,6 +36,9 @@ interface AppState {
   /** Checkout page: seconds of inactivity with a partial selection before the
    *  "still there?" prompt appears. Persisted — per-laptop pacing. */
   checkoutIdleSeconds: number;
+  /** Minutes of no pointer/key activity before the chosen operator is cleared
+   *  and the picker reappears. Persisted — per-laptop shift length. */
+  operatorIdleMinutes: number;
   /** Page background image (workstream E): the file itself lives in this
    *  laptop's app data dir, so display settings live here too — per-laptop
    *  cosmetic config, not something to sync between machines. Defaults to
@@ -62,6 +65,7 @@ interface AppState {
   setScannerWeaponFormat: (fmt: string) => void;
   setScannerSuspended: (on: boolean) => void;
   setCheckoutIdleSeconds: (s: number) => void;
+  setOperatorIdleMinutes: (m: number) => void;
   setBackgroundEnabled: (on: boolean) => void;
   setBackgroundPosition: (pos: string) => void;
   setBackgroundSize: (size: string) => void;
@@ -82,6 +86,7 @@ export const useAppStore = create<AppState>()(
       scannerWeaponFormat: 'v####',
       scannerSuspended: false,
       checkoutIdleSeconds: 30,
+      operatorIdleMinutes: 180,
       backgroundEnabled: true,
       backgroundPosition: 'center',
       backgroundSize: 'cover',
@@ -101,6 +106,7 @@ export const useAppStore = create<AppState>()(
       setScannerWeaponFormat: (scannerWeaponFormat) => set({ scannerWeaponFormat }),
       setScannerSuspended: (scannerSuspended) => set({ scannerSuspended }),
       setCheckoutIdleSeconds: (checkoutIdleSeconds) => set({ checkoutIdleSeconds }),
+      setOperatorIdleMinutes: (operatorIdleMinutes) => set({ operatorIdleMinutes }),
       setBackgroundEnabled: (backgroundEnabled) => set({ backgroundEnabled }),
       setBackgroundPosition: (backgroundPosition) => set({ backgroundPosition }),
       setBackgroundSize: (backgroundSize) => set({ backgroundSize }),
@@ -121,6 +127,7 @@ export const useAppStore = create<AppState>()(
         scannerMaxGapMs: s.scannerMaxGapMs,
         scannerWeaponFormat: s.scannerWeaponFormat,
         checkoutIdleSeconds: s.checkoutIdleSeconds,
+        operatorIdleMinutes: s.operatorIdleMinutes,
         backgroundEnabled: s.backgroundEnabled,
         backgroundPosition: s.backgroundPosition,
         backgroundSize: s.backgroundSize,

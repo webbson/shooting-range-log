@@ -204,8 +204,11 @@ const resources = {
       settings_tab_import: 'Synk / Import',
       settings_tab_backup: 'Säkerhetskopiering',
       settings_tab_looks: 'Utseende',
+      settings_tab_general: 'Övrigt',
+      settings_general_title: 'Tider och timeouts',
       import_title: 'Synka lån och vapen',
-      import_desc: 'Synkronisera lån och vapen mot ett Excel-ark. Medlemmar skapas eller ändras inte.',
+      import_desc:
+        'Synkronisera lån och vapen mot ett Excel-ark. Rader med giltigt personnummer utan medlem läggs upp som gäst; befintliga medlemmar ändras inte.',
       import_pick_file: 'Välj Excel-fil',
       import_no_file: 'Ingen fil vald',
       import_select_sheet: 'Ark',
@@ -221,11 +224,14 @@ const resources = {
       import_warnings: 'Varningar',
       import_open_loans_warning: '{{count}} lånposter saknar återlämningstid och skulle lämnas öppna.',
       import_mark_open_returned: 'Markera alla som återlämnade samma dag',
-      import_done: 'Synk klar — {{weaponsCreated}} nya vapen, {{loansCreated}} lånposter',
+      import_done:
+        'Synk klar — {{weaponsCreated}} nya vapen, {{loansCreated}} lånposter, {{guestsCreated}} nya gäster',
+      import_guests_create: 'Nya gäster (av personnummer)',
+      import_invalid_values: 'Felaktiga värden ({{count}})',
       err_import_sheet_not_found: "Arknamnet '{{sheet}}' hittades inte i filen.",
-      import_unmatched_count: 'Rader utan matchning',
+      import_unmatched_count: 'Rader utan giltigt personnummer',
       import_unmatched_row: '{{name}} ({{ssn}}) – {{weapon}}',
-      import_export_unmatched: 'Exportera rader utan matchning',
+      import_export_unmatched: 'Exportera rader utan giltigt personnummer',
 
       // Member import (workstream D) — separate import from the club's member
       // export (Svenska Lag); creates/updates members and sets admin status,
@@ -364,6 +370,9 @@ const resources = {
       scanner_weapon_format_hint:
         '# är en siffra i det nollutfyllda ID:t, t.ex. v#### där vapen 1 blir v0001.',
       scanner_weapon_format_invalid: 'Formatet måste ha ett prefix och minst en #.',
+      operator_idle_minutes: 'Logga ut operatör efter (minuter)',
+      operator_idle_minutes_hint:
+        'Om ingen rör appen så här länge nollställs vald operatör och operatörsvalet visas igen.',
       checkout_idle_seconds: 'Tid innan påminnelse (sekunder)',
       checkout_idle_seconds_hint:
         'Om utlämningen står halvfärdig så här länge visas en fråga om den ska slutföras eller avbrytas.',
@@ -627,8 +636,11 @@ const resources = {
       settings_tab_import: 'Sync / Import',
       settings_tab_backup: 'Backup',
       settings_tab_looks: 'Looks',
+      settings_tab_general: 'Misc',
+      settings_general_title: 'Timeouts',
       import_title: 'Sync loans & weapons',
-      import_desc: 'Sync loans and weapons against an Excel sheet. Members are never created or changed.',
+      import_desc:
+        'Sync loans and weapons against an Excel sheet. Rows with a valid personnummer but no member are added as guests; existing members are never changed.',
       import_pick_file: 'Choose Excel file',
       import_no_file: 'No file selected',
       import_select_sheet: 'Sheet',
@@ -644,11 +656,14 @@ const resources = {
       import_warnings: 'Warnings',
       import_open_loans_warning: '{{count}} loan records have no return date and would be left open.',
       import_mark_open_returned: 'Mark all as returned on the same day',
-      import_done: 'Sync complete — {{weaponsCreated}} new weapons, {{loansCreated}} loan records',
+      import_done:
+        'Sync complete — {{weaponsCreated}} new weapons, {{loansCreated}} loan records, {{guestsCreated}} new guests',
+      import_guests_create: 'New guests (from personnummer)',
+      import_invalid_values: 'Invalid values ({{count}})',
       err_import_sheet_not_found: "Sheet '{{sheet}}' not found in the file.",
-      import_unmatched_count: 'Unmatched rows',
+      import_unmatched_count: 'Rows without a valid personnummer',
       import_unmatched_row: '{{name}} ({{ssn}}) – {{weapon}}',
-      import_export_unmatched: 'Export unmatched rows',
+      import_export_unmatched: 'Export rows without a valid personnummer',
 
       // Member import (workstream D) — separate import from the club's member
       // export (Svenska Lag); creates/updates members and sets admin status,
@@ -787,6 +802,9 @@ const resources = {
       scanner_weapon_format_hint:
         '# is one digit of the zero-padded ID, e.g. v#### where weapon 1 becomes v0001.',
       scanner_weapon_format_invalid: 'The format needs a prefix and at least one #.',
+      operator_idle_minutes: 'Log out operator after (minutes)',
+      operator_idle_minutes_hint:
+        'If nobody touches the app for this long, the chosen operator is cleared and the operator picker reappears.',
       checkout_idle_seconds: 'Time before reminder (seconds)',
       checkout_idle_seconds_hint:
         'If a checkout is left half-finished this long, a prompt asks whether to finish or cancel it.',

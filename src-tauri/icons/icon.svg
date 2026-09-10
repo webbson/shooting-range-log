@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#2f6f8f"/>
+  <!-- logbook page, near-edge-to-edge -->
+  <rect x="44" y="44" width="424" height="424" rx="52" fill="#f4f1e8"/>
+  <rect x="44" y="44" width="424" height="96" rx="52" fill="#1b2733"/>
+  <rect x="44" y="92" width="424" height="48" fill="#1b2733"/>
+  <!-- pistol (first-revision shapes, scaled up) -->
+  <g fill="#1b2733">
+    <rect x="90" y="222" width="300" height="50" rx="18"/>
+    <path d="M142 272h66l-27 94c-5 15-18 25-34 25h-15c-18 0-30-18-24-35z"/>
+    <rect x="300" y="196" width="90" height="28" rx="14"/>
+    <rect x="106" y="190" width="40" height="38" rx="12"/>
+  </g>
+  <!-- crosshair with centre dot -->
+  <g stroke="#e8574a" stroke-width="24" fill="none" stroke-linecap="round">
+    <circle cx="352" cy="350" r="78" fill="#f4f1e8"/>
+    <circle cx="352" cy="350" r="78"/>
+    <path d="M352 248v34M352 418v34M250 350h34M420 350h34"/>
+  </g>
+  <circle cx="352" cy="350" r="17" fill="#e8574a"/>
+</svg>

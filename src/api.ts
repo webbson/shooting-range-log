@@ -348,10 +348,13 @@ export interface ImportWarning {
   name: string | null;
   ssn: string | null;
   weapon: string | null;
+  /** The offending cell value — populated only for warn_junk_cell. */
+  value: string | null;
 }
 
 export interface ImportPreview {
   membersUnmatched: number;
+  guestsToCreate: number;
   membersToMatch: number;
   weaponsToCreate: number;
   weaponsExisting: number;
@@ -363,6 +366,7 @@ export interface ImportPreview {
 
 export interface ImportResult {
   membersUnmatched: number;
+  guestsCreated: number;
   membersMatched: number;
   weaponsCreated: number;
   weaponsMatched: number;

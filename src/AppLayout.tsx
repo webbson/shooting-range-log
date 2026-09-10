@@ -11,7 +11,6 @@ import {
   Modal,
   Stack,
   Drawer,
-  Burger,
   Indicator,
   Divider,
   useMantineColorScheme,
@@ -23,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
-import { IconMaximize, IconMinimize, IconPower } from '@tabler/icons-react';
+import { IconMaximize, IconMenu2, IconMinimize, IconPower } from '@tabler/icons-react';
 import { useAppStore, type Lang } from './store';
 import { dbHealth, listBackups, listOpenCheckouts } from './api';
 import { OperatorPicker } from './OperatorPicker';
@@ -74,6 +73,28 @@ export function AppLayout() {
     const id = setInterval(() => setClock(new Date().toLocaleTimeString('sv-SE')), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Idle logout: no pointer/key activity for operatorIdleMinutes clears the
+  // operator, so the picker reappears. Deps stay coarse (`!!operator`) — the
+  // clock re-renders once a second and would otherwise re-arm forever.
+  const operatorIdleMinutes = useAppStore((s) => s.operatorIdleMinutes);
+  const hasOperator = !!operator;
+  useEffect(() => {
+    if (!hasOperator) return;
+    let timer = 0;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => setOperator(null), operatorIdleMinutes * 60_000);
+    };
+    arm();
+    window.addEventListener('pointerdown', arm);
+    window.addEventListener('keydown', arm);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [hasOperator, operatorIdleMinutes, setOperator]);
 
   const health = useQuery({ queryKey: ['db_health'], queryFn: dbHealth });
   const backups = useQuery({
@@ -191,12 +212,19 @@ export function AppLayout() {
               ),
             )}
             <Indicator color="red" size={10} offset={4} disabled={!hasIssue}>
-              <Burger
-                opened={drawerOpened}
-                onClick={toggleDrawer}
-                aria-label={t('menu')}
+              <Button
+                variant="outline"
+                color={operator ? 'blue' : 'gray'}
                 size="lg"
-              />
+                px="md"
+                maw={220}
+                aria-label={t('menu')}
+                onClick={toggleDrawer}
+                leftSection={<IconMenu2 size={20} />}
+                styles={{ label: { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+              >
+                {operator?.name ?? t('no_operator')}
+              </Button>
             </Indicator>
           </Group>
         </Group>
